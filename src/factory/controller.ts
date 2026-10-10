@@ -1,0 +1,529 @@
+// Factory UI controller: routes, scroll track, halls, free mode, globe UI, drawers,
+// header menu, hash navigation and the flat (no-3D) fallback page.
+import { INDS, ECO, CAREER_CFG } from '../data/content';
+import type * as THREE from 'three';
+import type { FactoryApi, P3, ScreenPoint, StopCopy, TalentUnit } from '../bridge';
+import type { CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
+
+type El = HTMLElement;
+/** A camera pose for the workforce hub: position and look-at. */
+interface WfPose { p: number[]; l: number[] }
+/** A control mirrored into the 3D scene (PHS) and/or the stop drawer and globe control bar. */
+interface Ctl {
+  label?: string; el?: El; o?: CSS3DObject; src?: () => El | null; fn?: () => void; at?: [string, number][];
+  tg?: number; noObj?: number; cls?: string; html?: string; par?: string; pin?: number; fix?: number; sw?: number;
+  pos?: P3; cam?: P3; face?: P3; z?: number; flat?: number; ww?: number; pxW?: number;
+  cond?: () => boolean; upd?: (e: Ctl, a: boolean) => void; db?: HTMLButtonElement; rb?: HTMLButtonElement; sc0?: number; k?: number;
+}
+/** A stop board: copy shown in the drawer and, when placed, as a 3D board in the scene. */
+interface Board {
+  r: string; s: number; h: string; p?: string; pts?: string[]; mv?: string[]; x?: [string, string][]; track?: number; noSign?: number;
+  place?: { pos: P3; ww: number; face?: P3; twf?: number; par?: string }; keep?: [P3, P3][];
+  w?: El; bd?: ChildNode | null; o?: CSS3DObject; pose?: P3[]; bx?: number; px?: number; tw?: number;
+}
+type PlacedBoard = Board & { w: El; bd: ChildNode | null; o: CSS3DObject; pose: P3[]; bx: number; px: number };
+interface Rect { l: number; t: number; r: number; b: number }
+/** A career-path card placed beside the scene (layout pass in step()). */
+interface CorPlace { t: { c: El; p: ScreenPoint; w: number; hh: number }; o: number; x: number; y: number; l: number; r: number; tp: number; b: number }
+
+export function initController(): void {
+  const $=<T extends El=El>(id:string)=>document.getElementById(id) as T;
+  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const B1=3.8,SEG=1.3,INTRO_END=B1+.55;
+  const HOLD:Record<string,[number,number]>={career:[5,3.6]},HL=(r:string)=>HOLD[r]?HOLD[r][1]:0,topOf=(r:string,i:number)=>((HOLD[r]&&i>HOLD[r][0])?i+HOLD[r][1]:i)*SEG*innerHeight,dwell=(x:number)=>{const i=Math.floor(x);return i+sm(.3,.7,x-i)};
+  const LABELS:Record<string,string[]>={career:['Intake','Assessment','Your Path','Career Launch','Career Pro','Career Accelerate','ETAF™','Opportunity'],globe:['Professions','Journey','Who is this for?'],workforce:['Dock','Verified Talent','PODs','Workforce Capability','Campus','Ecosystem','Compare']};
+  const BLOCKS=[...document.querySelectorAll<El>('.cp:not(.wm)')].map((el,i)=>({el,r:'career',s:i})).concat([...document.querySelectorAll<El>('.cp.wm')].map((el,i)=>({el,r:'workforce',s:i})));
+  const sm=(a:number,b:number,x:number)=>{const t=Math.min(1,Math.max(0,(x-a)/(b-a)));return t*t*(3-2*t)};
+  const ease=(t:number)=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+  const track=$('track'),rail=$('rail'),setTrack=(u:number)=>track.style.height=((u+1)*100)+'vh';setTrack(INTRO_END);
+  let pendLine:string|null=null,stWho:string|null=null,stCat='For students',podI=0,podLock=false,podLastW=0,wasAtPods=false,podWf:number|null=null,podFly=false,flyE=1;
+  let mode='intro',route:string|null=null,flyT0=0,backT0=0,gT0=0,gNext:string|null=null,pending=null,yS=scrollY,lastRA=-1,lastRB=-1,dots:El[]=[],sel=-1;
+  const jump=(top:number)=>{scrollTo({top,behavior:'instant'});yS=top};
+  function buildRail(r:string){rail.innerHTML='';LABELS[r].forEach((l,i)=>{const b=document.createElement('button');b.type='button';b.innerHTML='<i></i><span>'+l+'</span>';b.setAttribute('aria-label','Go to '+l);b.onclick=()=>{if(r==='workforce'){wfGo(i);return}if(r==='globe'){if(mode==='globe')globeRail(i)}else if(mode==='route')scrollTo({top:topOf(r,i),behavior:reduce?'auto':'smooth'})};rail.appendChild(b)});dots=[...rail.children] as El[]}
+  function choose(r:string){if(mode!=='intro'||!window.FACTORY)return;stCat=stWho||(r==='career'?'For students':'For startups');stWho=null;window.FACTORY.setHover(null);spine(false);window.FACTORY.snapshot();podFly=true;route=r;mode='fly';flyT0=performance.now();buildRail(r);setTrack(r==='workforce'?0:(LABELS[r].length-1+HL(r))*SEG+.6);jump(0)}
+  function toGlobe(){const F=window.FACTORY;if(!F||(mode!=='intro'&&mode!=='route'&&mode!=='hub'))return;closeDrawer();F.setHover(null);spine(false);F.globeBegin('in');mode='gIn';gT0=performance.now();route=null;buildRail('globe');setTrack(0);jump(0);closeSide()}
+  function leaveGlobe(next:string|null){const F=window.FACTORY!;if(mode!=='globe'&&mode!=='gIn')return;closeWho();closeSide();F.globeBegin('out');mode='gOut';gT0=performance.now();gNext=next}
+  function back(){if(menuOpen){closeMenu();return}if(cd.classList.contains('open')){closeDrawer();return}if(!$('handoff').hidden){hideHandoff();return}if(flatOpen&&!flatAuto){closeFlat();return}if(whoOpen){closeWho();return}if(side.classList.contains('open')){closeSide();return}const F=window.FACTORY;if(!F)return;if(mode==='free'||mode==='arrive'){backToStation();return}if(mode==='globe'||mode==='gIn'){leaveGlobe(null);return}if(mode==='hub'){if(wfAt!==0){wfGo(0);return}F.pod(false);F.snapshot();mode='back';backT0=performance.now();return}if(mode!=='route'&&mode!=='fly')return;F.snapshot();mode='back';backT0=performance.now()}
+  function finishBack(){window.__showStation&&window.__showStation();mode='intro';route=null;setTrack(INTRO_END);jump(INTRO_END*innerHeight)}
+  $('doorCareer').onclick=()=>choose('career');
+  const atPods=()=>false;
+  const podGo=(d:number)=>{const n=Math.max(0,Math.min(2,podI+d));if(n===podI)return false;podI=n;return true};
+  const podEnter=(i:number)=>{stWho=['For students','For universities','For startups'][i];if(i===0){podWf=null;choose('career')}else{podWf=i===1?4:2;choose('workforce')}};
+  addEventListener('wheel',e=>{if(!atPods())return;let d=Math.abs(e.deltaY)>=Math.abs(e.deltaX)?e.deltaY:e.deltaX;if(!d)return;const now=performance.now(),quiet=now-podLastW>200;podLastW=now;if(podLock&&quiet)podLock=false;
+    if(!podLock&&d<0&&podI===0)return;e.preventDefault();if(podLock)return;podGo(Math.sign(d));podLock=true},{passive:false,capture:true});
+  let pty:number|null=null,pDone=false;addEventListener('touchstart',e=>{pty=atPods()?e.touches[0].clientY:null;pDone=false},{passive:true});
+  addEventListener('touchmove',e=>{if(pty==null||!atPods())return;const d=pty-e.touches[0].clientY;if(d<0&&podI===0&&!pDone)return;e.preventDefault();if(!pDone&&Math.abs(d)>36){podGo(Math.sign(d));pDone=true}},{passive:false});
+  addEventListener('keydown',e=>{if(!atPods()||(e.target as Element).closest&&(e.target as Element).closest('input,textarea,select,#menu'))return;const k=e.key;let d=0;if(k==='ArrowDown'||k==='ArrowRight'||k==='PageDown')d=1;else if(k==='ArrowUp'||k==='ArrowLeft'||k==='PageUp')d=-1;if(!d||(d<0&&podI===0))return;e.preventDefault();podGo(d)});
+  setTimeout(function wirePods(){const F=window.FACTORY;if(!F||!F.podEls){setTimeout(wirePods,300);return}F.podEls().forEach((el,i)=>{el.addEventListener('click',()=>{if(!atPods())return;if(i===F.podCentre()&&i===podI)podEnter(i);else podI=i});el.addEventListener('focus',()=>{if(atPods())podI=i})})},300);$('doorWork').onclick=()=>choose('workforce');$('doorGlobe').onclick=toGlobe;
+  document.querySelectorAll<El>('.backBtn,#hdrBack').forEach(b=>b.onclick=back);
+  const side=$('gSide'),nodeWrap=$('nodes');
+  const nodeEls=INDS.map((d,i)=>{const b=document.createElement('button');b.type='button';b.className='node';b.innerHTML='<b></b><span></span>';b.firstChild!.textContent=d.name;b.lastChild!.textContent=d.line;b.onclick=()=>openSide(i);nodeWrap.appendChild(b);return b});
+  const escG=(s:string)=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'),PHG='<span class="ph">[PLACEHOLDER]</span>';
+  const LVN=['AI Awareness','AI Productivity','For Your Profession','Applied Projects','Career Readiness'],LVD=['What AI is, what it can and cannot do, and how to use it safely.','Everyday AI tools for writing, research, analysis and planning.','AI applied to the workflows of your profession.','Real projects that produce work you can show.','Evidence of capability that employers can check.'];
+  let lvl=0,whoOpen=false,who=0,lastSel=0;const ring=$('gRing');
+  ring.innerHTML='<svg viewBox="-150 -150 300 300" aria-hidden="true"><line id="gLead" x1="0" y1="0" x2="0" y2="0" stroke="#C9A33A" stroke-width="1.5" stroke-dasharray="4 4"></line><circle r="118" fill="none" stroke="#C9A33A" stroke-width="1.5"></circle><circle id="gDot" r="5" fill="#C9A33A"></circle></svg>'+LVN.map((n,i)=>{const k=(-90+i*72)*Math.PI/180;const c=Math.cos(k),tf=c>.3?'translate(-17px,-50%)':c<-.3?'translate(calc(-100% + 17px),-50%)':'translate(-50%,-50%)',fd=c<-.3?';flex-direction:row-reverse;padding:6px 6px 6px 11px':'';return'<button type="button" data-lv="'+i+'" style="left:'+Math.round(c*118)+'px;top:'+Math.round(Math.sin(k)*118)+'px;transform:'+tf+fd+'"><i>'+(i+1)+'</i>'+n+'</button>'}).join('');
+  ring.querySelectorAll<El>('[data-lv]').forEach(b=>b.onclick=()=>{lvl=+b.dataset.lv!;paintLv()});
+  function paintLv(){if(sel<0)return;const d=INDS[sel];ring.querySelectorAll<El>('[data-lv]').forEach(b=>{const on=+b.dataset.lv! ===lvl;b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on))});const wf=lvl===2&&!d.ph?'<ul>'+d.uses.map(u=>'<li>'+escG(u)+'</li>').join('')+'</ul>':'<p>'+PHG+'</p>';$('gLvD').innerHTML='<small>Level '+(lvl+1)+' of 5</small><b>'+LVN[lvl]+'</b><p>'+LVD[lvl]+'</p><small>Workflows</small>'+wf+'<small>Outputs</small><p>'+PHG+'</p>';paintGo()}
+  function paintGo(){const n=sel>=0?INDS[sel].name:'';$('gGo').innerHTML=($<HTMLInputElement>('gOrg').checked?'Bring AI Capability to My Team':'Explore AI for '+escG(n))+' <span>→</span>';$('gHand').hidden=true}
+  $('gOrg').onchange=paintGo;$('gGo').onclick=()=>{$('gHandT').textContent=$('gGo').textContent!.replace(/\s*→$/,'');$('gHand').hidden=false};
+  const gQ=$<HTMLInputElement>('gQ'),gList=$('gList');
+  gList.innerHTML=INDS.map((d,i)=>'<li data-gl="'+i+'"><button type="button" data-gi="'+i+'">'+escG(d.name)+'<i aria-hidden="true">›</i></button></li>').join('')+'<li class="none" hidden>No profession matches.</li>';
+  const gItems=[...gList.querySelectorAll<El>('[data-gi]')];gItems.forEach(b=>b.onclick=()=>openSide(+b.dataset.gi!));
+  function paintList(){gItems.forEach(b=>b.classList.toggle('on',+b.dataset.gi! ===sel))}
+  const visItems=()=>gItems.filter(b=>!(b.parentNode as El).hidden);
+  gQ.addEventListener('input',()=>{const q=gQ.value.trim().toLowerCase();gItems.forEach(b=>{(b.parentNode as El).hidden=!!q&&!INDS[+b.dataset.gi!].name.toLowerCase().includes(q)});gList.querySelector<El>('.none')!.hidden=visItems().length>0});
+  gQ.addEventListener('keydown',e=>{const v=visItems();if(e.key==='ArrowDown'&&v.length){e.preventDefault();v[0].focus()}else if(e.key==='Enter'&&v.length){e.preventDefault();v[0].click()}});
+  gList.addEventListener('keydown',e=>{const v=visItems(),k=v.indexOf(document.activeElement as El);if(k<0)return;if(e.key==='ArrowDown'){e.preventDefault();(v[k+1]||v[k]).focus()}else if(e.key==='ArrowUp'){e.preventDefault();(k?v[k-1]:gQ).focus()}});
+  function openSide(i:number){if(whoOpen)closeWho(true);sel=i;lastSel=i;lvl=0;const d=INDS[i];$('gName').textContent=d.name;if(d.ph)$('gLine').innerHTML=PHG;else $('gLine').textContent=d.line;$<HTMLInputElement>('gOrg').checked=false;paintLv();side.classList.add('open');nodeEls.forEach((n,k)=>n.classList.toggle('on',k===i));paintList();window.FACTORY!.focusNode(i);window.FACTORY!.setPanel(1);window.FACTORY!.setSel(i)}
+  const PW:[string,string,string,number][]=[['Everyone','Anyone starting with AI, at any stage of their career.','Self-paced modules with live sessions, open to all.',0],['Professionals','Working professionals applying AI in the role they hold.','Profession tracks through the five levels, ending in applied projects.',0],['Engineers','Engineers and graduates who build AI systems.','The Career route: Entry Assessment, Career Pro pods and ETAF™ verification.',-1],['Leaders','Executives and managers leading AI adoption.','Leadership cohorts and strategy workshops.',0],['Enterprises','Organisations building AI capability across their teams.','Corporate academy, L&D as a service or Product Engineering PODs.',1],['Government & Education','Ministries, agencies, universities and schools.','Sector programmes and Campus Talent Factories.',2]];
+  const WB=['Explore Programme','Bring AI to My Team','Discuss Enterprise Delivery'];
+  $('radial').insertAdjacentHTML('beforeend',PW.map((p,i)=>{const k=(-90+i*60)*Math.PI/180;return'<button type="button" data-pw="'+i+'" style="left:'+Math.round(150+Math.cos(k)*102)+'px;top:'+Math.round(150+Math.sin(k)*102)+'px">'+escG(p[0])+'</button>'}).join(''));
+  document.querySelectorAll<El>('[data-pw]').forEach(b=>b.onclick=()=>{who=+b.dataset.pw!;paintWho()});
+  function whoHand(n:string){$('whoHandT').textContent=n;$('whoHand').hidden=false}
+  function paintWho(){const p=PW[who];document.querySelectorAll<El>('[data-pw]').forEach(b=>{const on=+b.dataset.pw! ===who;b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on))});$('whoHub').textContent='AI for '+p[0];
+    $('whoD').innerHTML='<small>Audience</small><p>'+escG(p[1])+'</p><small>Delivery shape</small><p>'+escG(p[2])+'</p><small>Next step</small><p>'+(p[3]<0?'Enter the Career route':WB[p[3]])+'</p>';
+    $('whoActs').innerHTML=(p[3]<0?'<button class="cta" type="button" data-wb="c">Enter the Career route <span>→</span></button>':'')+WB.map((n,i)=>'<button class="cta'+(i===p[3]?'':' ghost')+'" type="button" data-wb="'+i+'">'+n+(i===p[3]?' <span>→</span>':'')+'</button>').join('');
+    $('whoHand').hidden=true;$('whoActs').querySelectorAll<El>('[data-wb]').forEach(b=>b.onclick=()=>{const k=b.dataset.wb!;if(k==='c')leaveGlobe('career');else if(k==='1')leaveGlobe('workforce');else whoHand(WB[+k])})}
+  function openWho(){if(mode!=='globe')return;if(side.classList.contains('open'))closeSide();whoOpen=true;$('gWho').classList.add('open');paintWho();window.FACTORY!.setPanel(1);const b=document.querySelector<El>('[data-pw="'+who+'"]');b&&b.focus({preventScroll:true})}
+  function closeWho(keep?:boolean){whoOpen=false;$('gWho').classList.remove('open');if(!keep&&window.FACTORY)window.FACTORY.setPanel(0)}
+  function globeRail(i:number){if(i===0){closeWho();closeSide()}else if(i===1)openSide(sel>=0?sel:lastSel);else openWho()}
+  $('whoBtn').onclick=openWho;$('whoClose').onclick=()=>closeWho();
+  function closeSide(){sel=-1;side.classList.remove('open');nodeEls.forEach(n=>n.classList.remove('on'));paintList();if(window.FACTORY){window.FACTORY.setPanel(whoOpen?1:0);window.FACTORY.setSel(-1)}}
+  side.querySelector<El>('.gClose')!.onclick=closeSide;
+  const GIN=6200,xf=$('xf'),lift=$('lift');const skipLift=()=>{if(mode==='gIn'&&!reduce)gT0=performance.now()-GIN};
+  addEventListener('pointerdown',e=>{if(mode==='gIn'&&!(e.target as Element).closest('header'))skipLift()},true);addEventListener('keydown',e=>{if(mode==='gIn'&&e.key!=='Escape'&&e.key!=='Tab')skipLift()});
+  addEventListener('keydown',e=>{if(e.key==='Escape')back()});
+  let drag:{x:number;y:number}|null=null;
+  addEventListener('pointerdown',e=>{if(mode!=='globe'||(e.target as Element).closest('button,a,input,select,#gSide,#gWho,#gRing,#finGlobe,header,.p3,.b3,#ctl,#radial'))return;drag={x:e.clientX,y:e.clientY};document.body.style.cursor='grabbing'});
+  addEventListener('pointermove',e=>{if(!drag)return;window.FACTORY!.drag(e.clientX-drag.x,e.clientY-drag.y);drag.x=e.clientX;drag.y=e.clientY});
+  const endDrag=()=>{drag=null;document.body.style.cursor=mode==='globe'?'grab':''};addEventListener('pointerup',endDrag);addEventListener('pointercancel',endDrag);
+  const tags=[...document.querySelectorAll<El>('.tag')],doors=[$('doorCareer'),$('doorWork'),$('doorGlobe')];
+  const anchor=(el:El)=>el.dataset.anchor!.split(',').map(Number) as P3;
+  const sA=$('sceneA'),sB=$('sceneB'),tA=$('textA'),tB=$('textB'),svgA=$('svgA'),svgB=$('svgB'),cv=$('c'),title=$('title'),hint=$('hint'),hdrLogo=$('hdrLogo'),hdrBack=$('hdrBack'),gTitle=$('finGlobe'),gHint=$('gHint');
+  const crumb=$('crumb'),menu=$('menu'),menuBtn=$('menuBtn'),flat=$('flat');let menuOpen=false,flatOpen=false,flatAuto=false;
+  const sF=$('sceneF'),svgF=$('svgF'),tB2=$('textB2'),ask=$('ask'),bldg=$('bldg'),zones=[...document.querySelectorAll('.zone')];let fl:[Element,[P3,P3]][]|null=null,spOn=false,spT0=0;
+  function spine(on:boolean){if(on&&!spOn)spT0=performance.now();spOn=on;window.FACTORY&&window.FACTORY.setSpine(on)}
+  bldg.addEventListener('pointerenter',()=>spine(true));bldg.addEventListener('pointerleave',()=>spine(false));bldg.addEventListener('focus',()=>spine(true));bldg.addEventListener('blur',()=>spine(false));bldg.onclick=()=>spine(true);
+  [['doorCareer','career'],['doorWork','workforce'],['doorGlobe','globe']].forEach(([id,k])=>{const d=$(id),on=()=>window.FACTORY&&window.FACTORY.setHover(k),off=()=>window.FACTORY&&window.FACTORY.setHover(null);d.addEventListener('pointerenter',on);d.addEventListener('focus',on);d.addEventListener('pointerleave',off);d.addEventListener('blur',off)});
+  const ZA=[[-16,10.5,-4],[-5.5,10.5,-4],[5.5,10.5,-4],[16,10.5,-4]];
+  const cd=$('cDrawer'),cors=[...document.querySelectorAll<El>('.cor')],CFG=CAREER_CFG,REC='pro',PATHN:Record<string,string>={launch:'Career Launch',pro:'Career Pro',accel:'Career Accelerate'};let hasResult=false,curS=0;
+  function openDrawer(k:string,t?:string,e?:string){cd.querySelectorAll<El>('[data-d]').forEach(x=>x.hidden=x.dataset.d!==k);if(k==='ph'){$('phT').textContent=t!;$('phE').textContent=e||'Build My Career'}cd.classList.add('open');setTimeout(()=>$('cdClose').focus(),60)}
+  function closeDrawer(){cd.classList.remove('open')}
+  $('cdClose').onclick=closeDrawer;
+  function goStop(i:number){closeDrawer();if(mode==='route'&&route==='career')scrollTo({top:topOf('career',i),behavior:reduce?'auto':'smooth'})}
+  function ctaLabel(k:string){if(!hasResult)return 'Take the Entry Assessment';if(PATHN[k])return k===REC?'Continue '+PATHN[k]:(k==='accel'?'Discuss Eligibility':'View Programme Details');return k==='etaf'?'View My Readiness Journey':'Continue My Application'}
+  function refreshCareer(){document.querySelectorAll<El>('[data-path]').forEach(b=>b.innerHTML=ctaLabel(b.dataset.path!)+' <span>→</span>');
+    cors.forEach(c=>{const k=c.dataset.k;if(!k)return;c.classList.toggle('rec',hasResult&&k===REC);c.classList.toggle('cmp',hasResult&&k!==REC);c.querySelector('small')!.textContent=!hasResult?'Recommended after assessment':k===REC?'Recommended · SAMPLE':'Available to compare'});
+    $('cpLocked').hidden=hasResult;$('cpResult').hidden=!hasResult}
+  document.querySelectorAll<El>('[data-path]').forEach(b=>b.addEventListener('click',()=>{const k=b.dataset.path!;if(!hasResult){goStop(1);return}const i=({launch:3,pro:4,accel:5} as Record<string,number>)[k];if(k===REC){goStop(Math.round(curS)===i?i+1:i);return}openDrawer('ph',ctaLabel(k),PATHN[k]||(k==='etaf'?'ETAF™ Assurance':'Opportunity'))}));
+  document.querySelectorAll('[data-go-assess]').forEach(b=>b.addEventListener('click',()=>goStop(1)));
+  document.querySelectorAll<El>('[data-drawer]').forEach(b=>b.onclick=()=>openDrawer(b.dataset.drawer!));
+  document.querySelectorAll<El>('[data-ph]').forEach(b=>b.onclick=()=>openDrawer('ph',b.dataset.ph,b.dataset.phe));
+  document.querySelectorAll<El>('[data-drive]').forEach(b=>{b.textContent=CFG.drive.label;b.onclick=()=>{if(CFG.drive.url)location.href=CFG.drive.url;else openDrawer('drive')}});$('driveT').textContent=CFG.drive.label;
+  $('startA').innerHTML=CFG.assessment.label+' <span>→</span>';
+  function hideHandoff(){$('handoff').hidden=true;$('aScan').style.display='flex'}
+  $('startA').onclick=()=>{$('aScan').style.display='none';$('handoff').hidden=false;const u=CFG.assessment.url;$<HTMLAnchorElement>('assessLink').href=u||'#';$('assessPh').hidden=!!u;$('hoBack').focus()};
+  $('assessLink').onclick=e=>{if(!CFG.assessment.url)e.preventDefault()};$('hoBack').onclick=hideHandoff;
+  $('contRec').onclick=()=>goStop(4);
+  $('sampleT').onchange=e=>{hasResult=(e.target as HTMLInputElement).checked;refreshCareer()};
+  refreshCareer();
+  let floorX=-1,curStage=-1;const ticks=new Set<number>(),ppRows=[...document.querySelectorAll('#pp>div')],lpW=$('lpW'),lpB=$('lp'),lpL=$('lpList');
+  const STN=[['Fundamentals lab','Fundamentals + AI fluency.'],['AI productivity console','Hands-on labs with AI tools.'],['Collaboration zone','Communication and problem solving.'],['Project bench','Hands-on projects that build your portfolio.'],['Career readiness booth','Resume, interview and workplace coaching.']];
+  const PODS=['AI/ML','Data','Cloud/DevOps','Cybersecurity','Full Stack','ServiceNow','IoT / Engineering AI'];
+  const STG=[['Discover','Frame the industry problem, its users and constraints with the client.'],['Design','Shape the architecture and plan the sprint.'],['Build','Write and review the code across AI, data, cloud and security work.'],['Test & Secure','Test the build and check it against security requirements.'],['Deploy & Operate','Release to a live environment and monitor it.'],['Demo & Validate','Demo to the client and validate against the original problem.']];
+  const SRN=[['Assessments','Career Launch'],['Artifacts & code','Career Pro'],['Project delivery','Product Engineering floor'],['Performance data','Product Engineering floor'],['Observed behaviour','Career Launch'],['Credentials','Career Pro']];
+  lpL.innerHTML=STN.map(s=>'<li>'+s[0]+'</li>').join('');
+  $('podBtns').innerHTML=PODS.map((p,i)=>'<button class="opt" type="button" data-pod="'+i+'" data-hit="pod'+i+'">'+p+'</button>').join('');
+  $('stgBtns').innerHTML=STG.map((p,i)=>'<button class="opt" type="button" data-stg="'+i+'" data-hit="stg'+i+'">'+(i+1)+' · '+p[0].replace('&','&amp;')+'</button>').join('');
+  $('srBtns').innerHTML=SRN.map((p,i)=>'<button class="opt" type="button" data-sr="'+i+'" data-hit="sr'+i+'">'+p[0].replace('&','&amp;')+'</button>').join('');
+  function paintPass(){const n=ticks.size;lpB.querySelectorAll('.tk i').forEach((d,i)=>d.classList.toggle('on',ticks.has(i)));$('lpN').textContent=n+' / 5';lpL.querySelectorAll('li').forEach((l,i)=>l.classList.toggle('on',ticks.has(i)));document.querySelectorAll<El>('[data-st]').forEach(b=>b.classList.toggle('done',ticks.has(+b.dataset.st!)));window.FACTORY&&window.FACTORY.setTicks([...ticks])}
+  function selStation(i:number){ticks.add(i);paintPass();document.querySelectorAll<El>('[data-st]').forEach(b=>b.classList.toggle('on',+b.dataset.st! ===i));$('stDet').innerHTML='<small>Station '+(i+1)+' of 5 · evidence added to your Learner Passport</small><b>'+STN[i][0]+'</b><p>'+STN[i][1]+'</p>'}
+  function openPod(i:number){$('podT').textContent=PODS[i];document.querySelectorAll<El>('[data-pod]').forEach(b=>b.classList.toggle('on',+b.dataset.pod! ===i));openDrawer('pod')}
+  function showStage(i:number){document.querySelectorAll<El>('[data-stg]').forEach(b=>b.classList.toggle('on',+b.dataset.stg! ===i));$('stgDet').innerHTML='<small>Stage '+(i+1)+' of 6</small><b>'+STG[i][0].replace('&','&amp;')+'</b><p>'+STG[i][1]+'</p><small>Evidence produced</small><p><span class="ph">[PLACEHOLDER]</span></p>'}
+  function goStage(i:number){showStage(i);curStage=i;if(mode==='route'&&route==='career')scrollTo({top:(5+i/5*HOLD.career[1])*SEG*innerHeight+2,behavior:reduce?'auto':'smooth'})}
+  function glance(i:number){document.querySelectorAll<El>('[data-sr]').forEach(b=>b.classList.toggle('on',+b.dataset.sr! ===i));window.FACTORY&&window.FACTORY.glance(i)}
+  document.querySelectorAll<El>('[data-st]').forEach(b=>b.onclick=()=>selStation(+b.dataset.st!));
+  document.querySelectorAll<El>('[data-pod]').forEach(b=>b.onclick=()=>openPod(+b.dataset.pod!));
+  document.querySelectorAll<El>('[data-stg]').forEach(b=>b.onclick=()=>goStage(+b.dataset.stg!));
+  document.querySelectorAll<El>('[data-sr]').forEach(b=>{b.onclick=()=>glance(+b.dataset.sr!);b.title='Created in '+SRN[+b.dataset.sr!][1]});
+  showStage(0);curStage=0;
+  lpB.onclick=()=>{lpL.hidden=!lpL.hidden;lpB.setAttribute('aria-expanded',String(!lpL.hidden))};
+  const HITSTOP:Record<number,number>={3:1,4:1,5:1,6:1},hitKey=(e:MouseEvent)=>{if(mode==='hub'&&route==='workforce'&&wfAt===0&&wfArr&&window.FACTORY&&!(e.target as Element).closest('button,a,input,select,label,.cp,#cDrawer,header,#rail,#menu,.b3,.p3,#ctl'))return window.FACTORY.pick(e.clientX,e.clientY,'w0');if(mode!=='route'||route!=='career'||!window.FACTORY||(e.target as Element).closest('button,a,input,select,label,.cp,#cDrawer,header,#rail,.cor,#lpW,#menu,.b3,.p3,#ctl'))return null;const st=Math.round(curS);return HITSTOP[st]&&Math.abs(curS-st)<.3?window.FACTORY.pick(e.clientX,e.clientY,st):null};
+  let hovK:string|null=null;addEventListener('pointermove',e=>{const k=hitKey(e);if(k===hovK)return;hovK=k;if(route==='workforce')setBayHv(k&&k.startsWith('bay')?+k.slice(3):-1);document.querySelectorAll<El>('[data-hit]').forEach(b=>b.classList.toggle('hov',b.dataset.hit===k));document.body.style.cursor=k?'pointer':(mode==='globe'?'grab':'')});
+  addEventListener('click',e=>{const k=hitKey(e);if(!k)return;const n=+k.replace(/\D+/,'');if(k.startsWith('bay')){wfGo(n+1);return}if(k.startsWith('stg'))goStage(n);else if(k.startsWith('st'))selStation(n);else if(k.startsWith('pod'))openPod(n);else if(k.startsWith('sr'))glance(n)});
+  let wfShift=0,wfAt=0,wfFrom:(WfPose&{i:number})|null=null,wfT0=0,wfArr=true,lastPose:(WfPose&{i:number})|null=null,bayHv=-1,wfFil='all',eng=0,dom='All',band='All';
+  const lerp3=(a:number[],b:number[],e:number)=>[a[0]+(b[0]-a[0])*e,a[1]+(b[1]-a[1])*e,a[2]+(b[2]-a[2])*e];
+  const FXW=[22,15.6,9.2,2.8,-3.6,-10],WFP:([P3,P3]|null)[]=[[[54,8,-13.5],[30,3.5,-13.5]],[[29.4,2.6,-5.6],[19,1.1,-5.6]],null,[[-9,4.5,-1.5],[-21.9,2.2,-14]],[[-35,12.5,3],[-50,3,-23]],[[-6,62,6],[-6,27,-31]],[[62,11,-13.5],[30,4,-13.5]]];
+  function wfPose(i:number):{p:P3;l:P3}{if(i===3){const tx=Math.tan(25*Math.PI/180)*Math.min(1.9,Math.max(1.3,innerWidth/innerHeight)),a=-46*Math.PI/180-Math.atan(tx/3);return{p:WFP[3]![0],l:[-9+18*Math.sin(a),2.2,-1.5-18*Math.cos(a)]}}if(i!==2)return{p:WFP[i]![0],l:WFP[i]![1]};const F=window.FACTORY,g=F?F.podG():-1;let x;if(g<0)x=FXW[0]+(-g)*9.5;else{const k=Math.min(4,Math.floor(g));x=FXW[k]+(FXW[k+1]-FXW[k])*(g-k)}const px=Math.min(26,x);return{p:[px,3.2,-22.8],l:[px,1.3,-32.5]}}
+  function wfGo(i:number){if(mode!=='hub'||i===wfAt)return;closeDrawer();const F=window.FACTORY;wfFrom=lastPose?{p:lastPose.p.slice(),l:lastPose.l.slice(),i:wfAt}:null;wfAt=i;wfT0=performance.now();wfArr=false;setBayHv(-1);if(F){F.pod(i===2);if(i===2)F.podJump(-1.62);F.wfStop(i);if(i===3||i===4)F.campusIn()}}
+  const WFAM=["Verified Talent (TaaS)","Product Engineering PODs","Workforce Capability","Campus Talent Factory","Ecosystem at Scale"],WPREV=['Consume verified capability.','Bring an industry problem.','Upgrade the team you already have.','Build the future talent supply.','Regional and sector capability building.'],FIL:Record<string,number[]>={all:[0,1,2,3,4],ent:[0,1,2],uni:[1,3],gov:[2,3,4]};
+  const bayTip=$('bayTip');
+  function setBayHv(i:number){bayHv=i;document.querySelectorAll<El>('[data-bay]').forEach(b=>b.classList.toggle('hov',+b.dataset.bay! ===i));if(i>=0){bayTip.firstChild!.textContent='0'+(i+1)+' · '+WFAM[i];bayTip.lastChild!.textContent=WPREV[i]}}
+  document.querySelectorAll<El>('[data-bay]').forEach(b=>{const i=+b.dataset.bay!;b.addEventListener('pointerenter',()=>setBayHv(i));b.addEventListener('focus',()=>setBayHv(i));b.addEventListener('pointerleave',()=>setBayHv(-1));b.addEventListener('blur',()=>setBayHv(-1));b.onclick=()=>wfGo(i+1)});
+  document.querySelectorAll<El>('[data-fil]').forEach(b=>b.onclick=()=>{wfFil=b.dataset.fil!;document.querySelectorAll('[data-fil]').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll<El>('[data-bay]').forEach(x=>x.classList.toggle('dim',!FIL[wfFil].includes(+x.dataset.bay!)))});
+  const DOMS=['AI/ML','Data','Cloud/DevOps','Cybersecurity','Full Stack'],STC:Record<string,string>={Available:'#C9A33A',Deployed:'#1E4632','In Training':'#FFFFFF'};
+  const UNITD:TalentUnit[]=([[0,2,'Available'],[1,1,'Deployed'],[2,3,'Available'],[3,2,'In Training'],[4,1,'Available'],[0,3,'Deployed'],[1,2,'Available'],[2,1,'In Training'],[3,3,'Available'],[4,2,'Deployed'],[0,1,'In Training'],[2,2,'Available']] as [number,number,string][]).map(([d,b,s],i)=>({id:'U-'+String(i+1).padStart(2,'0'),dom:DOMS[d],band:'Band '+b,state:s}));
+  const ENGL=['Reserve individual verified units.','Reserve a cross-functional squad as one unit.','Draw on senior expertise when you need it.','EmpowerED builds and runs the team, then transfers it to you.'];
+  $('domBtns').innerHTML=['All'].concat(DOMS).map(d=>'<button class="opt'+(d==='All'?' on':'')+'" type="button" data-dom="'+d+'">'+(d==='All'?'All domains':d)+'</button>').join('');
+  $('bandBtns').innerHTML=['All','Band 1','Band 2','Band 3'].map(d=>'<button class="opt'+(d==='All'?' on':'')+'" type="button" data-band="'+d+'">'+(d==='All'?'All bands':d)+'</button>').join('');
+  $('shelf').innerHTML=UNITD.map(u=>'<div class="unit"><b>'+u.id+'</b><span>'+u.dom+'</span><span>'+u.band+'</span><span class="st" style="--c:'+STC[u.state]+'">'+u.state+'</span></div>').join('');
+  const unitEls=[...document.querySelectorAll('.unit')];
+  function paintShelf(){const grp=eng===1?[0,1,2,4,6]:eng===2?UNITD.map((u,i)=>u.band==='Band 3'?i:-1).filter(i=>i>=0):[];UNITD.forEach((u,i)=>{u.off=(dom!=='All'&&u.dom!==dom)||(band!=='All'&&u.band!==band);unitEls[i].classList.toggle('off',u.off);unitEls[i].classList.toggle('grp',grp.includes(i))});$('engLine').textContent=ENGL[eng];window.FACTORY&&window.FACTORY.setUnits(UNITD)}
+  document.querySelectorAll<El>('[data-dom]').forEach(b=>b.onclick=()=>{dom=b.dataset.dom!;document.querySelectorAll('[data-dom]').forEach(x=>x.classList.toggle('on',x===b));paintShelf()});
+  document.querySelectorAll<El>('[data-band]').forEach(b=>b.onclick=()=>{band=b.dataset.band!;document.querySelectorAll('[data-band]').forEach(x=>x.classList.toggle('on',x===b));paintShelf()});
+  document.querySelectorAll<El>('[data-eng]').forEach(b=>b.onclick=()=>{eng=+b.dataset.eng!;document.querySelectorAll('[data-eng]').forEach(x=>x.classList.toggle('on',x===b));paintShelf()});
+  paintShelf();setTimeout(paintShelf,1500);
+  $('modelBtn').onclick=()=>openDrawer('model');
+  const STGN=['Discover','Design','Build','Test & Secure','Deploy & Operate','Demo & Validate'],ROLES=['Product/BA','AI/ML','Data','Full Stack','Cloud','Cyber'];
+  $('wStg').innerHTML=STGN.map((n,i)=>'<button class="opt" type="button" data-wst="'+i+'">'+(i+1)+' · '+n.replace('&','&amp;')+'</button>').join('');
+  document.querySelectorAll<El>('[data-wst]').forEach(b=>b.onclick=()=>window.FACTORY&&window.FACTORY.podJump(+b.dataset.wst!));
+  $('podReplay').onclick=()=>window.FACTORY&&window.FACTORY.podJump(-1.62);
+  const TYPES:Record<string,number[]>={'New product or platform':[0,3],'Data and analytics':[2,1],'AI or automation':[1,2],'Cloud migration or modernisation':[4,3],'Security hardening':[5,4]},OUTS:Record<string,number[]>={'Product / PoC':[2,5],'Talent capability evidence':[2,3],'Deployment pipeline':[4,3]};
+  const escW=(s:string)=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  $('cfgInd').innerHTML=INDS.map(d=>'<option>'+escW(d.name)+'</option>').join('');$('cfgType').innerHTML=Object.keys(TYPES).map(k=>'<option>'+k+'</option>').join('');$('cfgOut').innerHTML=Object.keys(OUTS).map(k=>'<option>'+escW(k)+'</option>').join('');
+  function paintCfg(){const ld=TYPES[$<HTMLSelectElement>('cfgType').value],em=OUTS[$<HTMLSelectElement>('cfgOut').value];$('cfgPrev').innerHTML='<small>Illustrative POD · '+escW($<HTMLSelectElement>('cfgInd').value)+'</small><div class="opts">'+ROLES.map((r,i)=>'<span class="opt'+(ld.includes(i)?' lead':'')+'">'+r+(ld.includes(i)?' · lead':'')+'</span>').join('')+'</div><small>Lifecycle emphasis</small><div class="opts">'+STGN.map((n,i)=>'<span class="opt'+(em.includes(i)?' lead':'')+'">'+escW(n)+'</span>').join('')+'</div>'}
+  ['cfgInd','cfgType','cfgOut'].forEach(id=>$(id).onchange=paintCfg);paintCfg();
+  function wform(t:string){$('wfT').textContent=t;$<HTMLInputElement>('pfInd').value=$<HTMLSelectElement>('cfgInd').value;$<HTMLInputElement>('pfOut').value=$<HTMLSelectElement>('cfgOut').value;$('wfSum').textContent=t==='Design My POD'?'Configurator: '+$<HTMLSelectElement>('cfgInd').value+' · '+$<HTMLSelectElement>('cfgType').value+' · '+$<HTMLSelectElement>('cfgOut').value+' (illustrative).':'';openDrawer('wform')}
+  window.__wform=wform;window.__goForm=(i,tt)=>goForm(i,tt);$('probBtn').onclick=()=>wform('Bring Us a Problem');$('designBtn').onclick=()=>wform('Design My POD');
+  const MODS=['AI foundations','Copilots & prompting','Data literacy','Workflow automation','Responsible AI','Applied ML','LLM app engineering','MLOps & cloud AI'],LVLS=['Aware','Practitioner','Builder'];
+  const LFN:Record<string,number[]>={'Finance':[1,1,1.2,1.1,1.1,.8,.5,.5],'HR & People':[1,1.1,.9,1,1.2,.5,.4,.3],'Operations':[1,1,1.1,1.3,1,.9,.6,.6],'Sales & Marketing':[1,1.3,1.1,1,.9,.7,.5,.3],'Customer Service':[1,1.3,.8,1.2,1,.5,.6,.3],'IT & Engineering':[.8,1,1.1,1.2,1,1.3,1.4,1.4],'Leadership':[1.2,.9,1,.8,1.3,.5,.3,.3]};
+  const LOUT:Record<string,[number[],number[]]>={'Everyday productivity with AI':[[1,.9,.1],[3,3,2,1,2,0,0,0]],'Automate team workflows':[[.5,1,.5],[2,2,2,3,2,1,1,0]],'Better data-driven decisions':[[.6,1,.4],[2,1,3,1,2,2,0,0]],'Build AI products in-house':[[.2,.5,1],[1,1,2,1,2,3,3,3]],'Govern AI responsibly':[[1,.8,.2],[2,1,1,0,3,1,0,1]]};
+  $('lensFn').innerHTML=Object.keys(LFN).map(k=>'<option>'+escW(k)+'</option>').join('');$('lensOut').innerHTML=Object.keys(LOUT).map(k=>'<option>'+k+'</option>').join('');
+  let lensDeep=false;
+  function paintLens(){const f=LFN[$<HTMLSelectElement>('lensFn').value],[Lv,w]=LOUT[$<HTMLSelectElement>('lensOut').value];let bs=0;const rows=MODS.map((m,i)=>{const c=Lv.map((l,j)=>{const v=Math.min(3,Math.round(w[i]*f[i]*l));if(j===2)bs+=v;return v});return{m,c}});lensDeep=bs>=7;
+    $('heat').innerHTML='<span></span>'+LVLS.map(l=>'<span class="hh">'+l+'</span>').join('')+rows.map(r=>'<span class="hm'+(Math.max(...r.c)>=2?' key':'')+'">'+escW(r.m)+'</span>'+r.c.map(v=>'<i class="h'+v+'" title="'+['No need','Light','Moderate','High'][v]+'"></i>').join('')).join('');
+    $('lensV').innerHTML=lensDeep?'<small>Lens reading</small><b>Deep technical capability</b><p>The need concentrates at Builder level. A Product Engineering POD builds it on a real problem, with your people in the team.</p><button class="opt" type="button" id="lensGo">See Product Engineering PODs →</button>':'<small>Lens reading</small><b>Broad AI fluency</b><p>The need sits at Aware and Practitioner level, across the whole team. Start with AI for Everyone, then add academy modules.</p><button class="opt" type="button" id="lensGo">Go to AI for Everyone ↑</button>';
+    $('lensGo').onclick=()=>lensDeep?wfGo(2):toGlobe();window.FACTORY&&window.FACTORY.setTeam($<HTMLSelectElement>('lensFn').value)}
+  ['lensFn','lensOut'].forEach(id=>$(id).onchange=paintLens);paintLens();setTimeout(paintLens,1500);
+  const CONS=['AI Centres of Excellence','Curriculum pathway','Faculty development','Student PODs','Labs','Industry problem statements','ETAF™ validation','Talent pipeline'];
+  const ACTS:[string,number[],string][]=[['University',[0,1,4],'Hosts the AI Centre of Excellence and labs, and co-owns the curriculum pathway.'],['Industry',[5,3,7],'Brings real problem statements, mentors Student PODs and hires from the talent pipeline.'],['EmpowerED',[1,2,3,6],'Designs the curriculum pathway, develops faculty, runs Student PODs and validates student work through ETAF™.'],['Government / Ecosystem',[0,4,7],'Backs centres of excellence and labs, and links the talent pipeline to regional priorities.']];
+  let act=0,con=-1;
+  $('actBtns').innerHTML=ACTS.map((a,i)=>'<button class="opt" type="button" data-act="'+i+'">'+escW(a[0])+'</button>').join('');
+  $('conBtns').innerHTML=CONS.map((c,i)=>'<button class="opt" type="button" data-con="'+i+'">'+escW(c)+'</button>').join('');
+  function paintAct(){document.querySelectorAll<El>('[data-act]').forEach(b=>b.classList.toggle('on',+b.dataset.act! ===act));document.querySelectorAll<El>('[data-con]').forEach(b=>{const i=+b.dataset.con!;b.classList.toggle('lead',ACTS[act][1].includes(i));b.classList.toggle('sel',i===con)});$('actV').innerHTML='<small>'+escW(ACTS[act][0])+' contributes</small><p>'+escW(ACTS[act][2])+'</p>';window.FACTORY&&(window.FACTORY.setCampus(ACTS[act][1],con),window.FACTORY.setActor(act))}
+  document.querySelectorAll<El>('[data-act]').forEach(b=>b.onclick=()=>{act=+b.dataset.act!;con=-1;paintAct()});
+  document.querySelectorAll<El>('[data-con]').forEach(b=>b.onclick=()=>{const i=+b.dataset.con!;con=con===i?-1:i;if(con===3&&window.FACTORY)window.FACTORY.podCross();paintAct()});
+  paintAct();setTimeout(paintAct,1500);
+  $('campReplay').onclick=()=>window.FACTORY&&window.FACTORY.campusIn(true);
+  let eSec=0,eMode=0;const eAct:Record<string,number>={c:1,i:1,g:1};
+  $('secBtns').innerHTML=ECO.sect.map((s,i)=>'<button class="opt" type="button" data-sec="'+i+'">'+s+'</button>').join('');
+  function ecoLinks(){const N=ECO.nodes,idx=N.map((n,i)=>i).filter(i=>eAct[N[i][0]]&&N[i][3].includes(eSec));if(eMode===1)return idx;const cap:Record<string,number>={c:1,i:2,g:1};return idx.filter(i=>cap[N[i][0]]-->0)}
+  function paintEco(){document.querySelectorAll<El>('[data-sec]').forEach(b=>b.classList.toggle('on',+b.dataset.sec! ===eSec));document.querySelectorAll<El>('[data-ea]').forEach(b=>b.classList.toggle('on',!!eAct[b.dataset.ea!]));document.querySelectorAll<El>('[data-em]').forEach(b=>b.classList.toggle('on',+b.dataset.em! ===eMode));
+    const Lk=ecoLinks(),cnt=(t:string)=>Lk.filter(i=>ECO.nodes[i][0]===t).length,nc=cnt('c');
+    $('ecoStats').innerHTML=[[nc,'Campuses'],[cnt('i'),'Employers'],[cnt('g'),'Agencies'],[Lk.length?(eMode?nc*120:24):0,'Learners, first cohort']].map(([v,k])=>'<div><b>'+v+'</b><span>'+k+'</span></div>').join('');
+    $('ecoLine').textContent=!Lk.length?'Switch on at least one actor to see the links.':eMode?'A regional hub links every campus, employer and agency working on '+ECO.sect[eSec]+'.':'A pilot POD starts small: one campus, two employers and one agency around a single '+ECO.sect[eSec]+' problem.';
+    window.FACTORY&&window.FACTORY.setNet({sec:eSec,act:Object.assign({},eAct),mode:eMode,links:Lk})}
+  document.querySelectorAll<El>('[data-sec]').forEach(b=>b.onclick=()=>{eSec=+b.dataset.sec!;paintEco()});
+  document.querySelectorAll<El>('[data-ea]').forEach(b=>b.onclick=()=>{const k=b.dataset.ea!;eAct[k]=eAct[k]?0:1;paintEco()});
+  document.querySelectorAll<El>('[data-em]').forEach(b=>b.onclick=()=>{eMode=+b.dataset.em!;paintEco()});
+  paintEco();setTimeout(paintEco,1500);
+  $('caseBtn').onclick=()=>openDrawer('case');
+  const ENGN=['Individual Talent','Dedicated POD','Expert-on-Demand','Build–Operate–Transfer'];
+  function selText(i:number){if(i===0)return'Engagement model: '+ENGN[eng]+' · Domain: '+dom+' · Band: '+band;if(i===1)return'Industry: '+$<HTMLSelectElement>('cfgInd').value+' · Problem type: '+$<HTMLSelectElement>('cfgType').value+' · Outcome: '+$<HTMLSelectElement>('cfgOut').value;if(i===2)return'Function: '+$<HTMLSelectElement>('lensFn').value+' · Outcome: '+$<HTMLSelectElement>('lensOut').value+' · Lens reading: '+(lensDeep?'Deep technical capability':'Broad AI fluency');if(i===3)return'Actor: '+ACTS[act][0]+' · Contributions: '+ACTS[act][1].map(k=>CONS[k]).join(', ')+(con>=0?' · Starting with: '+CONS[con]:'');return'Sector: '+ECO.sect[eSec]+' · Shape: '+(eMode?'Regional hub':'Pilot POD')+' · Actors: '+[['c','Campuses'],['i','Industry'],['g','Government']].filter(a=>eAct[a[0]]).map(a=>a[1]).join(', ')}
+  function goForm(i:number,title:string,fromCmp?:boolean){const s=selText(i)+(fromCmp&&cmp.length>1?' · Compared with: '+cmp.filter(k=>k!==i).map(k=>WFAM[k]).join(', '):'');
+    if(i===0){$('mSum').textContent=s;const f=$<HTMLFormElement>('modelForm');if(f){if(dom!=='All')f.domain.value=dom;if(band!=='All')f.band.value=band;f.shape.value=eng===1?'Squad':'Individual role'}openDrawer('model')}
+    else if(i===1){wform(title||'Bring Us a Problem');$('wfSum').textContent=s}
+    else{$('bfE').textContent=WFAM[i];$('bfT').textContent=title;$<HTMLTextAreaElement>('bfSel').value=s;$('bForm').hidden=false;$('bfDone').hidden=true;openDrawer('bform')}}
+  $('bForm').addEventListener('submit',e=>{e.preventDefault();const ft=e.target as HTMLFormElement,fd=new FormData(ft);ft.hidden=true;$('bfDone').hidden=false;$('bfDone').textContent='Thanks, '+fd.get('name')+'. We will reply to '+fd.get('email')+'. Hand-off destination [PLACEHOLDER].';ft.reset()});
+  $('assessBtn').onclick=()=>goForm(2,'Assess My Workforce');$('acadBtn').onclick=()=>goForm(2,'Design a Corporate Academy');
+  $('campBtn').onclick=()=>goForm(3,'Build a Campus Talent Factory');$('spodBtn').onclick=()=>{con=3;paintAct();window.FACTORY&&window.FACTORY.podCross();goForm(3,'Launch a Student POD')};
+  $('sectBtn').onclick=()=>goForm(4,'Design a Sector Talent Program');$('hubBtn').onclick=()=>{eMode=1;paintEco();goForm(4,'Explore a Regional Talent Hub')};
+  const NEXT=['Model My Requirement','Bring Us a Problem','Assess My Workforce','Build a Campus Talent Factory','Design a Sector Talent Program'],CMPR=['Best when','Engagement shape','What EmpowerED produces','What you contribute','Evidence / assurance'];
+  const CMPD=[['You need verified people in roles now, without running a hiring cycle.','Individual talent, a dedicated POD, expert-on-demand or build–operate–transfer.','Deployment-ready talent matched to your roles.','Role requirements, onboarding and day-to-day direction.','An ETAF™ readiness passport for every unit.'],
+    ['You have a real problem and want a working product or PoC.','A cross-functional POD taking the problem through six stages, Discover to Demo & Validate.','A product or PoC, capability evidence and a deployment pipeline.','The problem statement, access to data and a product owner.','Stage demos and ETAF™ evidence from the build.'],
+    ['Your existing teams need AI capability in the roles they hold.','A corporate academy, L&D as a service or a Human + AI workforce programme.','Reskilled teams, mapped to the modules each function needs.','Team access, time for learning and the outcomes to target.','Baseline and post-programme capability assessment.'],
+    ['You want a future talent supply built with a university.','A campus extension of the Factory: centre of excellence, curriculum pathway and Student PODs.','Industry-ready graduates and a talent pipeline.','Campus, faculty, labs or problem statements, depending on your role.','ETAF™ validation of student work.'],
+    ['You are building capability across a sector or region.','A pilot POD or a regional hub linking campuses, industry and government.','A sector talent programme and a regional pipeline.','Sector priorities, convening power and programme sponsorship.','Programme reporting across linked partners.']];
+  let cmp:number[]=[];
+  function toggleCmp(i:number){const k=cmp.indexOf(i);if(k>=0)cmp.splice(k,1);else if(cmp.length<3)cmp.push(i);cmp.sort((a,b)=>a-b);paintCmp()}
+  function paintCmp(){document.querySelectorAll<El>('.cmpRow').forEach(el=>{const i=+el.dataset.cmp!,on=cmp.includes(i),full=!on&&cmp.length>=3;el.innerHTML='<button class="opt'+(on?' on':'')+'" type="button" data-ct="'+i+'"'+(full?' disabled':'')+'>'+(on?'✓ In compare':full?'Compare full (3/3)':'+ Add to compare')+'</button>'+(cmp.length?'<button class="backBtn" type="button" data-cgo>View comparison ('+cmp.length+'/3) →</button>':'')});
+    $('cmpBtns').innerHTML=WFAM.map((n,i)=>{const on=cmp.includes(i);return'<button class="opt'+(on?' on':'')+'" type="button" data-ct="'+i+'"'+(!on&&cmp.length>=3?' disabled':'')+'>0'+(i+1)+' · '+escW(n)+'</button>'}).join('');
+    $('cmpT').innerHTML=!cmp.length?'<p class="cempty">Add up to three bays with “Add to compare” on any bay, or pick them above.</p>':'<div class="ctab" style="--n:'+cmp.length+'"><span class="cl" style="border-bottom:2px solid #C9A33A"></span>'+cmp.map(i=>'<div class="ch"><small>0'+(i+1)+'</small><b>'+escW(WFAM[i])+'</b><button type="button" data-ct="'+i+'" aria-label="Remove '+escW(WFAM[i])+'">×</button></div>').join('')+CMPR.map((r,k)=>'<span class="cl">'+r+'</span>'+cmp.map(i=>'<p>'+escW(CMPD[i][k])+'</p>').join('')).join('')+'<span class="cl">Next step</span>'+cmp.map(i=>'<div><button class="cta" type="button" data-nx="'+i+'">'+NEXT[i]+' <span>→</span></button></div>').join('')+'</div>';
+    document.querySelectorAll<El>('[data-ct]').forEach(b=>b.onclick=()=>toggleCmp(+b.dataset.ct!));document.querySelectorAll<El>('[data-cgo]').forEach(b=>b.onclick=()=>wfGo(6));document.querySelectorAll<El>('[data-nx]').forEach(b=>b.onclick=()=>goForm(+b.dataset.nx!,NEXT[+b.dataset.nx!],true))}
+  paintCmp();
+  const podEls=[...document.querySelectorAll('#nodeBtns .opt')],loopEls=[...document.querySelectorAll('#loop span')];
+  function wfFrame(F:FactoryApi,now:number,W:number,H:number){const on=route==='workforce'&&(mode==='hub'||mode==='fly');F.setWf(on);if(!on){F.pod(false);vis(bayTip,0);return}
+    const atDock=mode==='hub'&&wfAt===0&&wfArr;if(atDock&&W>900){const pr=$('w0p').getBoundingClientRect().right+30,p=F.project(32,2.5,-3.5);if(Number.isFinite(p.x)){if(p.x<pr)wfShift=Math.min(18,wfShift+.25);else if(p.x>pr+80&&wfShift>0)wfShift=Math.max(0,wfShift-.25)}}else if(W<=900)wfShift=0;F.setBays(atDock?bayHv:-1,wfAt===6?cmp:[],wfAt===6&&cmp.length?[0,1,2,3,4].filter(i=>!cmp.includes(i)):FIL[wfFil].length===5?[]:[0,1,2,3,4].filter(i=>!FIL[wfFil].includes(i)));
+    if(atDock&&bayHv>=0){const p=F.project(30.1,6,[-3.5,-8.5,-13.5,-18.5,-23.5][bayHv]);bayTip.style.transform='translate('+Math.min(Math.max(p.x-130,12),W-272)+'px,'+Math.max(p.y-bayTip.offsetHeight-14,72)+'px)';vis(bayTip,1);bayTip.style.pointerEvents='none'}else vis(bayTip,0);
+    if(wfAt===1){const k=Math.floor(now/1300)%4;loopEls.forEach((l,i)=>l.classList.toggle('on',i===k))}
+    if(wfAt===2){const tp=F.podTime(),g=F.podG();podEls.forEach((n,i)=>{n.classList.toggle('asm',tp<2.8+i*.3);n.classList.toggle('lit',tp>=2.8+i*.3)});const cs=g<0?-1:Math.round(g);document.querySelectorAll<El>('[data-wst]').forEach(b=>b.classList.toggle('on',+b.dataset.wst! ===cs))}}
+  const sW=$('sceneW'),tW=$('textW'),svgW=$('svgW');let lastRW=-1,flowT0=null;
+  const vis=(el:El,o:number)=>{el.style.opacity=String(o);el.style.visibility=o>.01?'visible':'hidden';el.style.pointerEvents=o>.5?'auto':'none'};
+  const t0=performance.now();
+  function step(now:number,snap:boolean){
+    if(mode==='intro'&&pendLine){const Hh=innerHeight;if(scrollY<4*Hh-1)jump(4*Hh);else if(scrollY>=INTRO_END*Hh-8&&window.FACTORY){const k=pendLine;pendLine=null;boardGo(k)}}
+    const tgt=scrollY;yS=(reduce||snap)?tgt:yS+(tgt-yS)*.16;if(Math.abs(tgt-yS)<.4)yS=tgt;
+    const W=innerWidth,H=innerHeight,v=yS/H,F=window.FACTORY,intro=mode==='intro';
+    const rA=reduce?1:Math.min(1,(now-t0)/1800);if(rA!==lastRA){svgA.style.setProperty('--r',String(rA));lastRA=rA}
+    const oA=intro?1-sm(2,2.45,v):0;sA.style.opacity=String(oA);sA.style.visibility=oA>0?'visible':'hidden';
+    if(oA>0){const tw=tA.scrollWidth,pa=Math.min(1,Math.max(0,v/2.1));tA.style.transform=reduce?'translate('+(W-tw)/2+'px,-50%)':'translate('+(W*.45-pa*(tw+W*.35))+'px,-50%)'}
+    const oB=intro?sm(2,2.45,v)*(1-sm(3.3,3.8,v)):0;sB.style.opacity=String(oB);sB.style.visibility=oB>0?'visible':'hidden';
+    const rB=reduce?1:sm(2.1,3,v);if(Math.abs(rB-lastRB)>.001){svgB.style.setProperty('--r',String(rB));lastRB=rB}
+    const oTB=reduce?1:sm(2.35,2.8,v);tB.style.opacity=String(oTB);tB.style.transform='translate(-50%,'+(1-oTB)*24+'px)';
+    tB2.style.opacity=String(reduce?1:sm(2.72,2.98,v));svgB.style.opacity=String(intro&&!reduce?1-sm(3.0,3.3,v):1);
+    cv.style.opacity=String(intro?sm(3.3,3.8,v):1);
+    hint.style.opacity=String(intro?1-sm(3.45,3.75,v):0);{const ph=$('podHint');if(ph)ph.style.opacity=String(intro&&pendLine?1-sm(4.1,4.28,v):0);const at=atPods();if(at&&!wasAtPods){podLock=true;podLastW=performance.now()}wasAtPods=at}
+    const sRaw=(v-B1)/SEG;let s=-9,last=0,liftO=0,xfO=0;
+    if(F){
+      if(intro){if(v>2.9){F.poseIntro(reduce?0:1-sm(3.0,4.0,v));F.podPose(0,podI);F.render('intro',sRaw)}}
+      else if(mode==='gIn'||mode==='gOut'){const gi=mode==='gIn',raw=Math.min(1,(now-gT0)/(gi?(reduce?1400:GIN):2600)),t=reduce&&!gi?1:raw;if(gi&&reduce){liftO=1-Math.abs(raw*2-1);xfO=liftO;F.globeStep(raw<.5?0:1)}else{if(gi)liftO=sm(.04,.16,raw)*(1-sm(.8,.94,raw));F.globeStep(t)}F.render('globe',0);
+        if(t>=1){if(mode==='gIn'){F.globeArrive();mode='globe';document.body.style.cursor='grab'}else{F.globeReset();document.body.style.cursor='';finishBack();if(gNext){const n=gNext;gNext=null;choose(n)}}}}
+      else if(mode==='globe'){F.globeHold();F.render('globe',0)}
+      else if(mode==='free'||mode==='arrive')freeStep(F,now);
+      else{
+        const st=F.stops(route!);last=st.length-1;let k=0;
+        if(mode==='fly'){const t=reduce?1:Math.min(1,(now-flyT0)/(st[0]?2600:1600));flyE=t;k=st[0]?ease(t)*st[0]:-1-ease(t);if(t>=1){podFly=false;if(route==='workforce'){mode='hub';wfAt=0;wfFrom=null;if(podWf!=null){const n=podWf;podWf=null;requestAnimationFrame(()=>wfGo(n))}}else mode='route'}else if(scrollY>1)jump(0)}
+        if(mode==='hub'){const t=reduce||!wfFrom?1:Math.min(1,(now-wfT0)/1800),e=ease(t),tg=wfPose(wfAt);let P,L;if(wfFrom&&t<1){P=lerp3(wfFrom.p,tg.p,e);P[1]+=Math.sin(Math.PI*e)*(wfAt===0||wfFrom.i===0?4:8);L=lerp3(wfFrom.l,tg.l,e)}else{P=tg.p;L=tg.l}lastPose={p:P,l:L,i:wfAt};wfArr=t>=1;F.poseAt(P,L);s=wfAt}
+        if(mode==='route'){const vp=Math.max(0,v/SEG),hs=HOLD[route!];floorX=-1;if(hs&&vp>hs[0]){if(vp<hs[0]+hs[1]){s=hs[0];const u=(vp-hs[0])/hs[1];floorX=reduce?Math.round(u*5):dwell(u*5)}else s=vp-hs[1]}else s=vp;s=Math.min(last,s);
+          if(floorX>=0)k=st[hs[0]]+floorX;else{const sc=reduce?Math.round(s):s,i=Math.min(last-1,Math.floor(sc)),f=sc-i,fe=reduce?(f<.5?0:1):sm(.12,.88,f),k0=(hs&&i===hs[0])?st[i]+5:st[i];k=k0+fe*(st[i+1]-k0)}}
+        if(mode==='back'){const t=reduce?1:Math.min(1,(now-backT0)/2200);F.poseBack(t);F.render('route',0);if(t>=1)finishBack()}
+        else{if(mode==='hub'){}else if(k<0)F.poseFly(route!,-1-k);else F.poseRoute(route!,k);if(mode==='fly'&&podFly&&!reduce)F.fromSnap(sm(0,.55,flyE));F.render('route',0)}
+      }
+    }
+    let oW=0;if(false){if(mode==='fly')oW=reduce?1:sm(.45,1,(now-flyT0)/1600);else if(mode==='route')oW=1-sm(.3,.75,s)}
+    sW.style.opacity=String(oW);sW.style.visibility=oW>0?'visible':'hidden';
+    if(oW>0){const rW=reduce?1:Math.min(1,Math.max(0,(now-flyT0-700)/1400));if(rW!==lastRW){svgW.style.setProperty('--r',String(rW));lastRW=rW}const tw=tW.scrollWidth,fin=reduce?1:ease(Math.min(1,Math.max(0,(now-flyT0-700)/1100))),sc=mode==='route'?Math.max(0,s):0;tW.style.transform='translate('+(reduce?(W-tw)/2:(W-tw)/2+(1-fin)*W*.6-sc*(W+tw)*.7)+'px,-50%)'}
+    if(F)wfFrame(F,now,W,H);
+    freeUI(F,now);
+    const oCh=mode==='intro'&&F?sm(.1,.35,sRaw):0;
+    vis(title,mode==='intro'?sm(-.1,.2,sRaw):0);ask.style.opacity=String(oCh);
+    if(F&&F.outline&&!fl){const S=F.outline();svgF.innerHTML=S.map(()=>'<line pathLength="1" class="ln" style="--d:'+(Math.random()*.3).toFixed(3)+'"></line>').join('');fl=[...svgF.children].map((el,i)=>[el,S[i]])}
+    const oF=intro&&F?sm(2.98,3.12,v)*(1-sm(3.7,4.1,v)):0;sF.style.opacity=String(oF);sF.style.visibility=oF>0?'visible':'hidden';
+    if(oF>0&&fl){svgF.style.setProperty('--r',String(reduce?1:sm(3.0,3.45,v)));fl.forEach(([el,[a,b]])=>{const p=F!.project(...a),q=F!.project(...b);el.setAttribute('x1',p.x.toFixed(1));el.setAttribute('y1',p.y.toFixed(1));el.setAttribute('x2',q.x.toFixed(1));el.setAttribute('y2',q.y.toFixed(1))})}
+    if(oCh>0){const c=([[-30,0,0],[30,0,0],[-30,16,0],[30,16,0],[30,16,-60]] as P3[]).map(a=>F!.project(...a)),xs=c.map(p=>p.x),ys=c.map(p=>p.y),l=Math.min(...xs),tp=Math.min(...ys);bldg.style.transform='translate('+l+'px,'+tp+'px)';bldg.style.width=(Math.max(...xs)-l)+'px';bldg.style.height=(Math.max(...ys)-tp)+'px'}
+    vis(bldg,0);
+    {const zw=$('zones');let o=0;if(oCh>0&&spOn){o=oCh;const p=F!.project(0,11.2,-4),w=zw.offsetWidth,x=Math.min(Math.max(p.x-w/2,12),W-w-12),y=Math.max(p.y-zw.offsetHeight,72);zw.style.transform='translate('+x+'px,'+y+'px)'}zw.style.opacity=String(o);zones.forEach((z,i)=>z.classList.toggle('on',o>0&&now-spT0>i*380))}
+    doors.forEach(d=>{let o=0;if(o>0){const p=F!.project(...anchor(d));if(!p.vis)o=0;const dy=Math.max(p.y,64+d.offsetHeight+26);d.style.transform='translate('+p.x+'px,'+dy+'px) translate(-50%,calc(-100% - 18px))'}vis(d,o)});
+    tags.forEach(t=>{let o=0;if(mode==='route'&&t.dataset.route===route){o=1-sm(.25,.45,Math.abs(s-(+t.dataset.stop!)));if(o>0){const p=F!.project(...anchor(t));if(!p.vis)o=0;const x=Math.min(Math.max(p.x,24),W-360),y=Math.min(Math.max(p.y,t.dataset.route==='workforce'?64+((t.lastChild as El).offsetHeight||245)+30:230),H-110);t.style.transform='translate('+x+'px,'+y+'px)'}}vis(t,o)});
+    let oReg=0;curS=s;
+    if(F&&F.setCrate){const car=route==='career'&&mode==='route';F.setCrate(car&&s>3.6?(floorX>=0?floorX:s<5?-1+sm(4.3,5,s):5):null);F.setWalk(car&&s>6.2);
+      if(car&&Math.abs(s-6)<.45)F.etaf(true);else if(!car||Math.abs(s-6)>.8)F.etaf(false);
+      const lit=F.etafLit();ppRows.forEach((r,i)=>r.classList.toggle('in',i<lit));
+      const cs=floorX>=0?Math.round(floorX):s>5?5:0;if(cs!==curStage){curStage=cs;showStage(cs)}}
+    vis(lpW,route==='career'&&(mode==='route'||mode==='fly')?1:0);if(route!=='career'&&!lpL.hidden){lpL.hidden=true;lpB.setAttribute('aria-expanded','false')}
+    if(F&&F.setCareer){const cf=route==='career'?(mode==='fly'?1:mode==='route'?1-sm(2.3,2.8,s):0):0;F.setCareer(cf,hasResult,(((route==='career'&&(mode==='route'||mode==='fly'))||(route==='workforce'&&mode==='hub'))&&W>=768)?(cd.classList.contains('open')?1.2:1):0)}
+    {const oc=0;
+     if(oc>0){const pr=$(Math.abs(s-2)<Math.abs(s)?'cp2':'cp0').getBoundingClientRect(),wide=W>900,placed:CorPlace[]=[];
+      cors.map(c=>{const p=F!.project(...anchor(c)),w=(c.firstChild as El).offsetWidth,hh=(c.firstChild as El).offsetHeight;return{c,p,w,hh}}).sort((a,b)=>a.p.x-b.p.x).forEach(t=>{let o=oc;if(!t.p.vis)o=0;
+       let x=t.p.x,y=t.p.y;const minX=(wide?pr.right+12:10)+t.w/2,minY=(wide?64:pr.bottom+12)+t.hh+18;x=Math.min(Math.max(x,minX),W-10-t.w/2);y=Math.min(Math.max(y,minY),H-100);
+       placed.push({t,o,x,y,l:x-t.w/2,r:x+t.w/2,tp:y-12-t.hh,b:y-12})});
+      const clash=placed.some((a,i)=>placed.some((b,j)=>j>i&&a.l<b.r+8&&a.r>b.l-8&&a.tp<b.b+8&&a.b>b.tp-8));
+      if(clash){const L=wide?pr.right+12:10;let cx=L,cy=wide?72:pr.bottom+12,rowH=0;const ord=['gate','launch','pro','accel'];
+       placed.sort((a,b)=>ord.indexOf(a.t.c.dataset.k||'gate')-ord.indexOf(b.t.c.dataset.k||'gate')).forEach(q=>{if(cx+q.t.w>W-10&&cx>L){cx=L;cy+=rowH+8;rowH=0}q.x=cx+q.t.w/2;q.y=cy+q.t.hh+12;cx+=q.t.w+8;rowH=Math.max(rowH,q.t.hh)})}
+      placed.forEach(q=>{q.t.c.classList.toggle('flow',clash);q.t.c.style.transform='translate('+q.x+'px,'+q.y+'px)';vis(q.t.c,q.o)})}
+}
+    if(F)b3Frame(F,W,H,s);
+    stopFrame(now,s);
+    BLOCKS.forEach(b=>{const o=((mode==='route'||mode==='hub')&&route===b.r)?1-sm(.2,.45,Math.abs(s-b.s)):0;vis(b.el,o)});
+    hdrLogo.style.opacity=String(1-oReg);hdrLogo.style.pointerEvents=oReg>.5?'none':'auto';
+    hdrBack.style.display=((mode!=='intro'&&mode!=='gIn')||(flatOpen&&!flatAuto))?'inline-flex':'none';const cr=flatOpen?'FACTORY · TEXT VIEW':(mode==='globe'||mode==='gIn'||mode==='gOut')?'AI FOR EVERYONE':route==='career'?'FACTORY · CAREER':route==='workforce'?'FACTORY · WORKFORCE':'FACTORY';if(crumb.textContent!==cr)crumb.textContent=cr;
+    vis(rail,(mode==='route'||mode==='fly'||mode==='globe'||mode==='hub')?1:0);
+    const gl=mode==='globe',act=gl?(whoOpen?2:sel>=0?1:0):Math.round(Math.max(0,s));dots.forEach((d,i)=>{d.classList.toggle('on',i===act);d.classList.toggle('done',!gl&&i<act);if(i===act)d.setAttribute('aria-current','step');else d.removeAttribute('aria-current')});
+    vis(lift,liftO);xf.style.opacity=String(xfO);
+    const inG=mode==='globe';vis(gTitle,inG?((side.classList.contains('open')||whoOpen)?0:1):0);gHint.style.opacity=String(inG&&!side.classList.contains('open')&&!whoOpen?1:0);
+    if(inG&&F){const rs=[gTitle.getBoundingClientRect()];if(side.classList.contains('open'))rs.push(side.getBoundingClientRect());if(whoOpen)rs.push($('gWho').getBoundingClientRect());
+      const placed:number[][]=[];F.nodes().map((p,i):[ScreenPoint,number]=>[p,i]).sort((a,b)=>+(b[1]===sel)-+(a[1]===sel)||b[0].face!-a[0].face!).forEach(([p,i])=>{const el=nodeEls[i],w=el.offsetWidth,h=el.offsetHeight,x=p.x+w+22>W-10?p.x-w-12:p.x+12,y=p.y-h/2;let o=p.vis&&p.face!>.12?Math.min(1,(p.face!-.12)*5):0;if(x<10||x+w>W-10||y<64||y+h>H-64)o=0;if(i!==sel)rs.forEach(r=>{if(x<r.right+8&&x+w>r.left-8&&y<r.bottom+8&&y+h>r.top-8)o=0});else o=0;if(sel>=0&&i!==sel)o*=.2;if(o>0){if(placed.some(r=>x<r[2]+6&&x+w>r[0]-6&&y<r[3]+6&&y+h>r[1]-6))o=0;else placed.push([x,y,x+w,y+h])}el.style.transform='translate('+x+'px,'+y+'px)';vis(el,o)});
+      if(sel>=0&&ringO){const p=F.nodes()[sel];placeW(F,ringO,F.gNode(sel),0);vis(ring,p.face!>0?1:0)}else vis(ring,0);if(radO){if(whoOpen){placeW(F,radO,F.gFront(),1);vis(rad,1)}else vis(rad,0)}}
+    else{nodeEls.forEach(e=>vis(e,0));vis(ring,0);vis(rad,0)}
+  }
+  let b3=false,BDS:PlacedBoard[]=[],PHS:Ctl[]=[],ringO:CSS3DObject|null=null,radO:CSS3DObject|null=null,ctlKey:string|null=null,curCtl:Ctl[]=[],sheetB:PlacedBoard|null=null,b3Act:PlacedBoard|null=null;
+  const ctl=$('ctl'),sheet=$('sheet'),rad=$('radial'),qs=(x:string)=>document.querySelector<El>(x),ex=(x:unknown)=>String(x).replace(/&/g,'&amp;').replace(/</g,'&lt;'),txt=(el:Element|null)=>el?el.textContent.replace(/^\s*\d+\s*·\s*/,'').trim():'';
+  const BD:Board[]=[
+   {r:'career',s:0,h:'Your career path starts with where you are.',p:'The Factory assesses your current capability first, then recommends the path that fits.',mv:['#cp0 [data-drawer="how"]']},
+   {r:'career',s:1,h:'Start where you are.',p:'The Entry Assessment maps your baseline capability, your gaps, the role direction that fits you, and how ready you are today. No score is shown until it is complete.',mv:['#aScan .acts','#handoff']},
+   {r:'career',s:2,h:'Your path unlocks after the assessment.',mv:['#cp2 label.tgl','#cpLocked'],x:[['View sample result','result']]},
+   {r:'career',s:3,h:'Build your foundation. Become job-ready.',pts:['Portfolio development','Interview preparation','Placement assistance (no guarantee)'],mv:['#stDet','#cp3 .acts']},
+   {r:'career',s:4,place:{pos:[10.7,8.2,-39],ww:3},h:'Specialise in a role. Build real-world capability.',p:'Each pod builds depth in one role. Select a pod to see what you build there.',mv:['#cp4 .note','#cp4 .acts']},
+   {r:'career',s:5,h:'Build for real.',p:'Gain industry experience. Accelerate your career.',pts:['POD assignments','6+ months industry exposure','1:1 expert coaching'],mv:['#stgDet','#cp5 .note','#cp5 .acts'],track:1},
+   {r:'career',s:6,h:'Evidence in. Readiness out.',p:'Evidence from Career Launch, Career Pro and the Product Engineering floor arrives at the assurance core. A gate lights only when its evidence arrives.',mv:['#cp6 .acts'],x:[['View readiness passport','pp']]},
+   {r:'career',s:7,h:'Leave the Factory ready.',pts:['Career Launch: placement assistance, no guarantee','Career Pro: role-aligned placement support','Career Accelerate: targeted premium-role opportunities'],mv:['#cp7 .c3 .note','#cp7 .acts','#cp7 .backBtn']},
+   {r:'workforce',s:0,h:'What do you need the Factory to produce?',p:'Click a bay sign to enter. The floor signs at the entrance change emphasis only; every bay stays open.'},
+   {r:'workforce',s:1,h:'Verified capability, on demand.',pts:['Build before demand','Verify before deployment','Supply and consume'],mv:['#engLine','#loop','#w1p p.note:not(#engLine)','#w1p .acts','#w1p .cmpRow']},
+   {r:'workforce',s:2,h:'Bring us a problem.',p:'A problem crate rolls onto the floor. A cross-functional POD assembles around it and takes it through six stages.',pts:['Product / PoC','Talent capability evidence','Deployment pipeline'],mv:['#w2p .acts','#podReplay','#w2p .cmpRow'],x:[['Configure a POD','cfg']],track:1},
+   {r:'workforce',s:3,place:{pos:[-12.4,3.6,-9.8],ww:3.2,face:[-5.27,4.87,-2.9],twf:.28},keep:[[[-26.6,0,-19],[-22,5.1,-4.9]]],h:'Upgrade the team you already have.',p:'Teams enter the reskilling line in the roles they hold today and leave with AI capability built into them.',pts:['Corporate Academies','L&amp;D as a Service','Human + AI Workforce'],mv:['#w3p .acts','#w3p .cmpRow'],x:[['Open the capability lens','lens']]},
+   {r:'workforce',s:4,h:'Build the future talent supply.',p:'Choose an actor on a plinth at the courtyard entrance to see what it brings.',mv:['#w4p .acts','#campReplay','#w4p .cmpRow']},
+   {r:'workforce',s:5,h:'Regional and sector capability building.',p:'One pilot POD or regional hub links campuses, industry and government around a sector priority. Numbers are ILLUSTRATIVE.',mv:['#w5p .legend','#ecoStats','#ecoLine','#caseBtn','#w5p .acts','#w5p .cmpRow']},
+   {r:'workforce',s:6,h:'Which model fits?',p:'Add up to three bays with “Add to compare” on any bay board, then open the table.',x:[['Open the comparison','cmp']]}];
+  const STOPC:Record<string,StopCopy[]>={career:[
+    ['The intake','Your career path starts with where you are. The Factory assesses your current capability first, then recommends the path that fits.',['Entry Assessment first','Path matched to you','No score until complete'],'How the assessment works'],
+    ['Entry assessment','The Entry Assessment maps your baseline capability, your gaps, the role direction that fits you, and how ready you are today.',['Baseline capability','Capability gaps','Readiness today'],'Open the Entry Assessment'],
+    ['Your path','Career Launch, Career Pro and Career Accelerate stay locked until the Entry Assessment recommends the one that fits you.',['Career Launch','Career Pro','Career Accelerate'],'See your path options'],
+    ['Build your foundation','Become job-ready. Each station you inspect in Foundation Hall adds an evidence tick to your Learner Passport.',['Portfolio development','Interview preparation','Placement assistance (no guarantee)'],'Explore the stations'],
+    ['Specialise in a role','Each pod builds depth in one role. Select a pod to see what you build there.',['One role per pod','Role-specific projects','Track list [PLACEHOLDER]'],'Explore the pods'],
+    ['Build in a POD','An industry problem arrives from the Workforce side. The squad owns the engineering; a mentor guides. Scroll to follow it across the floor.',['POD assignments','6+ months industry exposure','1:1 expert coaching'],'Follow the six stages'],
+    ['ETAF™ assurance','Evidence from Career Launch, Career Pro and the Product Engineering floor arrives at the assurance core. A gate lights only when its evidence arrives.',['Evidence from every floor','Gates light on evidence','Readiness passport'],'View readiness passport'],
+    ['Leave ready','Every path ends at the opportunity dock, with support matched to the path you took.',['Launch: placement assistance','Pro: role-aligned support','Accelerate: premium roles'],'Talk to Career Team']],
+   workforce:[
+    ['The dock','What do you need the Factory to produce? Choose a bay to enter. Filters change emphasis only; every bay stays open.',['5 bays','Filter by who you are','Every bay stays open'],'Choose a bay'],
+    ['Verified talent','Verified capability, on demand. Talent is built before demand and verified before deployment.',['Build before demand','Verify before deployment','Supply and consume'],'Engagement models'],
+    ['Bring us a problem','A problem crate rolls onto the floor. A cross-functional POD assembles around it and takes it through six stages.',['Product / PoC','Talent capability evidence','Deployment pipeline'],'Configure a POD'],
+    ['Upgrade your team','Teams enter the reskilling line in the roles they hold today and leave with AI capability built into them.',['Corporate Academies','L&D as a Service','Human + AI Workforce'],'Open the capability lens'],
+    ['Campus talent factory','A campus plugs into the Factory as an extension. Choose an actor to see what it brings.',['Campus extension','Student PODs','Future talent supply'],'Meet the campus actors'],
+    ['Ecosystem at scale','One pilot POD or regional hub links campuses, industry and government around a sector priority. Numbers are illustrative.',['Campuses','Industry','Government'],'Design a sector programme'],
+    ['Which model fits?','Add up to three bays with “Add to compare”, then open the table.',['Up to 3 bays','Side by side','Add from any bay'],'Open the comparison']]};
+  const DRS:[string,string,string,string[]][]=[['result','Your Path','Sample result',['#cpResult']],['pp','ETAF™ Assurance','Readiness passport',['#pp']],['cfg','Product Engineering PODs','POD configurator · ILLUSTRATIVE',['#w2p .cfg','#cfgPrev']],['lens','Workforce Capability','Capability lens · ILLUSTRATIVE',['#w3p .cfg','#heat','#lensV']],['cmp','Compare','Which model fits?',['#cmpBtns','#cmpT']]];
+  function fire(e:Ctl){if(e.fn)e.fn();else{const x=e.src&&e.src();x&&x.click()}}
+  function stateOf(x:El|null|undefined){return x?((x as HTMLInputElement).type==='checkbox'?(x as HTMLInputElement).checked:(x.classList.contains('on')||x.classList.contains('sel'))):false}
+  function build3D(F:FactoryApi){b3=true;
+    DRS.forEach(([k,e,h,sels])=>{const sec=document.createElement('section');sec.dataset.d=k;sec.hidden=true;sec.innerHTML='<div class="eyebrow">'+e+'</div><h3>'+h+'</h3>';sels.forEach(x=>{const n=qs(x);if(n)sec.appendChild(n)});cd.appendChild(sec)});
+    const CP=(r:string,st:number):P3=>r==='career'?F.routeWP('career',st)[0]:wfPose(st).p;
+    BDS=BD.map((b):PlacedBoard=>{const sec=document.createElement('section');sec.dataset.d='S'+b.r+b.s;sec.hidden=true;sec.innerHTML='<div class="eyebrow">'+(LABELS[b.r][b.s]||'')+'</div><h3>'+b.h+'</h3>'+(b.p?'<p class="sp">'+b.p+'</p>':'')+'<div class="sctl" role="group" aria-label="Controls at this stop"></div>';cd.appendChild(sec);const w=document.createElement('div');w.className='b3';w.innerHTML='<div class="bd">'+(b.noSign?'':'<div class="hs" aria-hidden="true"><b>'+b.h+'</b></div>')+'<div class="scr">'+(b.p?'<p class="bt" aria-hidden="true">'+b.p+'</p>':'')+(b.pts?'<ul class="bp" aria-hidden="true">'+b.pts.map(x=>'<li>'+x+'</li>').join('')+'</ul>':'')+'<div class="mv"></div></div></div>';
+      const mv=sec;(b.mv||[]).forEach(x=>{const n=qs(x);if(n)mv.appendChild(n)});(b.x||[]).forEach(([tt,d])=>{const bt=document.createElement('button');bt.type='button';bt.className='cta ghost';bt.dataset.open=d;bt.innerHTML=tt+' <span>→</span>';bt.onclick=()=>openDrawer(d);mv.appendChild(bt)});
+      const o=F.css(w,b.place&&b.place.par),wp2=b.r==='workforce'?wfPose(b.s):null,pose:P3[]=wp2?[wp2.p,wp2.l]:F.routeWP('career',b.s);if(b.place)F.aim(o,b.place.pos,b.place.face||pose[0],1,0,b.place.ww,440);else F.fitBoard(o,pose[0],pose[1],440);o.visible=false;return Object.assign(b,{w,bd:w.firstChild,o,pose,bx:o.position.x,px:pose[0][0]})});
+    $('srCopy').innerHTML=BD.map(b=>'<section><h2>'+b.h+'</h2>'+(b.p?'<p>'+b.p+'</p>':'')+(b.pts?'<ul>'+b.pts.map(x=>'<li>'+x+'</li>').join('')+'</ul>':'')+'</section>').join('');
+    const add=(e:Ctl)=>{try{if(!e.noObj){let el=e.el;if(!el){const btn=!!(e.src||e.fn);el=document.createElement(btn?'button':'div');if(btn){(el as HTMLButtonElement).type='button';el.tabIndex=-1;el.setAttribute('aria-hidden','true')}el.className=e.cls||'pc';el.innerHTML=e.html||ex(e.label)}
+      el.classList.add('p3');if(el.tagName==='BUTTON')el.onclick=()=>fire(e);if(e.ww)el.style.width=e.pxW+'px';e.el=el;const o=F.css(el,e.par);F.aim(o,e.pos!,e.face||e.cam,e.z||1,e.flat,e.ww,e.pxW);o.visible=false;e.o=o}PHS.push(e)}catch(err){console.warn('3D control skipped',e.label,err)}return e};
+    const grp=(g:Ctl,sel:string)=>{const box=document.createElement('div');box.className=g.cls!;box.innerHTML=g.html||'';add(Object.assign({},g,{el:box}));[...document.querySelectorAll<El>(sel)].forEach(b=>{const bt=document.createElement('button');bt.type='button';bt.tabIndex=-1;bt.setAttribute('aria-hidden','true');bt.className=g.sw?'sw':'chip';bt.innerHTML=(g.sw?'<i></i>':'')+ex(b.textContent);const e:Ctl={el:bt,src:()=>b,label:b.textContent!,tg:1,at:g.at,noObj:1};bt.onclick=()=>fire(e);box.appendChild(bt);PHS.push(e)})};
+    const c0=CP('career',0);
+    cors.forEach(c=>{const k=c.dataset.k||'gate';add({el:c,pos:anchor(c),cam:c0,z:.8,at:[['career',0],['career',2]],src:()=>c.querySelector('[data-go-assess],[data-path]'),label:({gate:'Assessment Gate',launch:'Career Launch',pro:'Career Pro',accel:'Career Accelerate'} as Record<string,string>)[k]})});
+    ([['Baseline',6.6,-1],['Gaps',7.5,1],['Role direction',8.5,-1],['Readiness',8.5,1]] as [string,number,number][]).forEach(([n,y,sd])=>add({label:n,cls:'rtag',pin:1,pos:[-21+sd*1.8,y,-40.3],cam:CP('career',1),z:.9,at:[['career',1]],upd:e=>e.el!.classList.toggle('lit',Math.abs(F.scanY()-y)<.4)}));
+    add({noObj:1,label:'Preview a sample result',src:()=>$('sampleT'),tg:1,at:[['career',2]]});
+    [[-10.8,-45.4],[-5.8,-46.4],[-2.8,-43.8],[-10.4,-39.2],[-3.4,-39]].forEach(([x,z],i)=>{const g=()=>qs('#stBtns [data-st="'+i+'"]');add({label:txt(g()),pos:[x,8.9,z],cam:CP('career',3),z:.85,at:[['career',3]],src:g})});
+    [0,1,2,3,4,5,6].forEach(i=>{const a=(-33+i*41/6)*Math.PI/180,g=()=>qs('#podBtns [data-pod="'+i+'"]');add({label:txt(g()),cls:'pc sign',pin:1,pos:[7+9.9*Math.sin(a),8.5,-31.5-9.9*Math.cos(a)],cam:CP('career',4),ww:1.15,pxW:160,at:[['career',4]],src:g})});
+    [22,15.6,9.2,2.8,-3.6,-10].forEach((x,i)=>{const cs=()=>qs('#stgBtns [data-stg="'+i+'"]');add({label:(i+1)+' · '+txt(cs()),cls:'pc floor',pin:1,pos:[x,.05,-28.3],flat:1,ww:4.8,pxW:280,cam:CP('career',5),at:[['career',5],['workforce',2]],src:()=>route==='workforce'?qs('[data-wst="'+i+'"]'):cs()})});
+    {const c6=CP('career',6),RR=[4,3.7,3.6,3.6,3.7,4];F.gates().forEach(([gx,gz],i)=>{const g=()=>qs('#srBtns [data-sr="'+i+'"]'),dx=gx-21,dz=gz+43.8,L=Math.hypot(dx,dz)||1,fc=dx/L*(c6[0]-gx)+dz/L*(c6[2]-gz)>0,r=RR[i]||3.6;add({label:txt(g()),cls:'pc gsign',noObj:fc?0:1,pos:[21+dx/L*r,6.2,-43.8+dz/L*r],cam:c6,ww:.9,pxW:130,at:[['career',6]],src:g})})}
+    [0,1,2,3,4].forEach(i=>add({noObj:1,label:txt(qs('#bayBtns [data-bay="'+i+'"]')),src:()=>qs('#bayBtns [data-bay="'+i+'"]'),at:[['workforce',0]]}));
+    [['ent','Enterprise'],['uni','University'],['gov','Government']].forEach(([k,n],i)=>add({label:n,cls:'pc stand',pos:[32.5+i*2.6,1.2,-1.5],cam:CP('workforce',0),z:.85,at:[['workforce',0]],tg:1,src:()=>qs('[data-fil="'+k+'"]'),fn:()=>{const x=qs('[data-fil="'+k+'"]')!;(x.classList.contains('on')?qs('[data-fil="all"]')!:x).click()}}));
+    grp({cls:'pgrp v',html:'<span class="gl">ENGAGEMENT MODEL</span>',pos:[20.5,5.6,-1.2],cam:CP('workforce',1),z:.6,sw:1,at:[['workforce',1]]},'#engBtns [data-eng]');
+    grp({cls:'pgrp strip',pos:[19.42,3.9,-5.75],face:[40,3.9,-5.75],ww:6.2,pxW:640,at:[['workforce',1]]},'#domBtns [data-dom],#bandBtns [data-band]');
+    UNITD.forEach((u,i)=>{const r=Math.floor(i/4),c=i%4,y=.44+r*1.2,z=-3.3-c*1.5;add({html:'<b>'+u.id+'</b><span>'+ex(u.dom)+'</span><span>'+u.band+'</span><span>'+u.state+'</span>',cls:'utag',fix:1,pos:[19.99,y,z],face:[40,y,z],ww:.98,pxW:100,at:[['workforce',1]],cond:()=>route==='workforce',upd:(e,a)=>{e.el!.style.opacity=String((a?1:.3)*(u.off?.22:1))}})});
+    add({noObj:1,label:'Replay',fn:()=>$('podReplay').click(),at:[['workforce',2]]});
+    add({noObj:1,label:'Capability lens',fn:()=>openDrawer('lens'),at:[['workforce',3]]});
+    const CP4=CP('workforce',4),APOS:P3[]=[[-54,11.6,-29.6],[-37,2.6,-10.6],[-45,11.2,-17.6],[-67,3.2,-7]];
+    [-60,-56,-52,-48].forEach((x,i)=>{const g=()=>qs('#actBtns [data-act="'+i+'"]');add({label:txt(g()),cls:'pc stand',pos:[x,1.75+(i%2)*.95,-14.3],cam:CP4,z:.9,par:'campus',tg:1,at:[['workforce',4]],src:g,cond:()=>F.campusOn()})});
+    {const cb=document.createElement('div');cb.className='scr cbd';cb.appendChild($('actV'));add({el:cb,pos:APOS[0],cam:CP4,z:1.4,par:'campus',pin:1,at:[['workforce',4]],cond:()=>F.campusOn(),upd:e=>{if(e.k!==act){e.k=act;F.aim(e.o!,APOS[act],CP4,1.4)}}})}
+    grp({cls:'pgrp',html:'<span class="gl">SECTOR PRIORITY</span>',pos:[4,28.1,-12.6],flat:1,cam:CP('workforce',5),z:1,par:'net',at:[['workforce',5]],cond:()=>F.netA()>.3},'#secBtns [data-sec]');
+    grp({cls:'pgrp',html:'<span class="gl">ACTORS · SHAPE</span>',pos:[4,28.1,-17],flat:1,cam:CP('workforce',5),z:1,par:'net',at:[['workforce',5]],cond:()=>F.netA()>.3},'#eaBtns [data-ea],#emBtns [data-em]');
+    [-3.5,-8.5,-13.5,-18.5,-23.5].forEach((z,i)=>add({label:txt(qs('#bayBtns [data-bay="'+i+'"]')),html:'+ COMPARE',pos:[30.1,3.9,z],face:[60,3.9,z],cam:CP('workforce',6),z:.8,tg:1,at:[['workforce',6]],src:()=>qs('#cmpBtns [data-ct="'+i+'"]')}));
+    ringO=F.css(ring,'world');radO=F.css(rad,'world');vis(rad,0)}
+  let stShown:string|null=null,stOp=0,stFade=0,drwCtl:Ctl[]=[],stShift=0,stLast=0,stW=0,stH=0;
+  const stopL=$('stopL'),sAct=stopL.querySelector<El>('.sAct')!;
+  function stopFill(key:string|null){if(!key)return;const r=key.replace(/\d+$/,''),i=+key.match(/\d+$/)![0],d=STOPC[r][i];
+    stopL.querySelector('.sCat')!.textContent=stCat;stopL.querySelector('.sTtl')!.textContent=d[0];stopL.querySelector('.sPar')!.textContent=d[1];
+    [...stopL.querySelectorAll('.sChips li')].forEach((li,k)=>li.textContent=d[2][k]||'');sAct.firstChild!.textContent=d[3];sAct.onclick=()=>openStop(r,i)}
+  function openStop(r:string,i:number){const k=r+i,sec=cd.querySelector('[data-d="S'+k+'"]');if(!sec)return;const box=sec.querySelector('.sctl')!;box.innerHTML='';
+    drwCtl=PHS.filter(e=>(e.src||e.fn)&&e.at!.some(([rr,st])=>rr+st===k));drwCtl.forEach(e=>{const b=document.createElement('button');b.type='button';b.textContent=e.label!;b.onclick=()=>fire(e);if(e.tg)b.setAttribute('aria-pressed','false');e.db=b;box.appendChild(b)});
+    sec.querySelector('.eyebrow')!.textContent=stCat+' · '+(LABELS[r][i]||'');openDrawer('S'+k)}
+  function stopFrame(now:number,s:number){let key:string|null=null,o=0;
+    if(route&&STOPC[route]&&(mode==='route'||mode==='hub')){const st=mode==='hub'?wfAt:Math.round(Math.max(0,s));if(STOPC[route][st]){key=route+st;o=(mode==='hub'?wfArr:Math.abs(s-st)<.3)?1:0}}
+    const set=(v:number)=>{if(v===stOp)return;stOp=v;stopL.style.opacity=String(v);stopL.classList.toggle('on',v>0);stopL.setAttribute('aria-hidden',v>0?'false':'true');sAct.tabIndex=v>0?0:-1};
+    if(key!==stShown){if(stOp>0){set(0);stFade=now}else if(now-stFade>320){stopFill(key);stShown=key}}else set(o);
+    const F=window.FACTORY,C=F&&F.cam&&F.cam();if(!C)return;const W=innerWidth,H=innerHeight;let want=0;
+    if(key){const a=stopL.querySelector('.sTop')!.getBoundingClientRect().bottom,b=stopL.querySelector('.sBot')!.getBoundingClientRect().top;want=Math.round(H/2-(a+b)/2)}
+    stShift+=(want-stShift)*.12;if(Math.abs(want-stShift)<.5)stShift=want;
+    if(stShift!==stLast||W!==stW||H!==stH){stLast=stShift;stW=W;stH=H;if(Math.abs(stShift)<.5)C.clearViewOffset();else C.setViewOffset(W,H,0,stShift,W,H);C.updateProjectionMatrix()}}
+  function placeW(F:FactoryApi,o:CSS3DObject,pos:THREE.Vector3,left:number){const C=F.cam();o.position.copy(pos);if(left){const fw=C.position.clone();C.getWorldDirection(fw);fw.cross(C.up).normalize();o.position.addScaledVector(fw,-o.position.distanceTo(C.position)*.26)}o.lookAt(C.position);o.scale.setScalar(o.position.distanceTo(C.position)*.001036*.95)}
+  function buildCtl(key:string){ctl.innerHTML='';curCtl=key==='glv'?[...document.querySelectorAll<El>('#gRing [data-lv]')].map(b=>({label:b.textContent!.replace(/^\d+/,''),src:()=>b,tg:1})):key==='gpw'?[...document.querySelectorAll<El>('[data-pw]')].map(b=>({label:'AI for '+b.textContent,src:()=>b,tg:1})):key?PHS.filter(e=>(e.src||e.fn)&&e.at!.some(([r,st])=>r+st===key)):[];
+    curCtl.forEach(e=>{const b=document.createElement('button');b.type='button';b.textContent=e.label!;b.onclick=()=>fire(e);if(e.tg)b.setAttribute('aria-pressed','false');e.rb=b;ctl.appendChild(b)})}
+  function b3Frame(F:FactoryApi,W:number,H:number,s:number){if(!b3){if(!F.css)return;build3D(F)}
+    const C=F.cam(),cp=C.position,fw=cp.clone(),wp=cp.clone();C.getWorldDirection(fw);
+    const inScene=!!route&&(mode==='route'||mode==='hub'||mode==='fly'||mode==='back'),mob=W<768;
+    const on=(r:string,st:number)=>inScene&&route===r&&Math.abs(s-st)<.3&&(mode==='route'||(mode==='hub'&&wfArr));
+    const show=(o:CSS3DObject,el:El,a:boolean,ok:boolean,r:string)=>{if(!inScene||mob||ok===false||(!a&&r&&r!==route)){o.visible=false;return false}o.getWorldPosition(wp);wp.sub(cp);const d=wp.length();if(d<2||d>(a?90:45)||wp.dot(fw)/d<.3){o.visible=false;return false}o.visible=true;el.style.opacity=a?'1':'.3';el.classList.toggle('act',a);el.classList.toggle('off',!a);if(el.inert!==!a)el.inert=!a;return true};
+    let act=null as PlacedBoard|null;
+    BDS.forEach(b=>{const a=on(b.r,b.s);if(a)act=b;b.o.visible=false});
+    PHS.forEach(e=>{if(!e.o)return;const a=e.at!.some(([r,st])=>on(r,st));if(show(e.o,e.el!,a,a&&(e.cond?e.cond():true),e.at![0][0])&&e.upd)e.upd(e,a)});
+    if(act&&!mob&&((mode==='route'&&Math.abs(s-Math.round(s))<.05)||(mode==='hub'&&wfArr))){
+      const sl=$('stopL'),L=12,T=sl.querySelector('.sTop')!.getBoundingClientRect().bottom+10,B=sl.querySelector('.sBot')!.getBoundingClientRect().top-10,rt=fw.clone().cross(C.up).normalize(),up=rt.clone().cross(fw).normalize(),kk=2*Math.tan(C.fov*Math.PI/360)/H*.5;
+      {const r=act!.w.getBoundingClientRect();if(false&&r.height&&(r.bottom>B+1||r.top<T-1||r.right>W-11||r.left<11)){const f=Math.min(1,(B-T)/r.height,(W-24)/r.width);act!.o.scale.multiplyScalar(1-(1-f)*.5);const h2=r.height*f,w2=r.width*f,c0=(r.top+r.bottom)/2,c1=Math.min(Math.max(c0,T+h2/2),B-h2/2),x0=(r.left+r.right)/2,x1=Math.min(Math.max(x0,12+w2/2),W-12-w2/2);act!.o.getWorldPosition(wp);const k=wp.distanceTo(cp)*kk;act!.o.position.addScaledVector(up,-(c1-c0)*k).addScaledVector(rt,(x1-x0)*k)}}
+      const R=W-12;
+      const rectOf=(e:Ctl)=>(e.el!.classList.contains('cor')&&e.el!.firstElementChild?e.el!.firstElementChild:e.el!).getBoundingClientRect();
+      const live=PHS.filter(e=>e.o&&e.o.visible&&e.el!.classList.contains('act')),obs:Rect[]=[],hit=(x:number,y:number,w:number,h:number)=>obs.some(q=>x<q.r+6&&x+w>q.l-6&&y<q.b+6&&y+h>q.t-6);
+      live.filter(e=>e.pin||e.fix).forEach(e=>{const r=rectOf(e);if(!r.width)return;const out=r.bottom>B||r.right>R||r.left<L||r.top<T;if(e.fix)e.el!.style.visibility=out?'hidden':'';if(!(e.fix&&out))obs.push({l:r.left,t:r.top,r:r.right,b:r.bottom})});
+      (act.keep||[]).forEach(([p,q])=>{let l=1e9,tp=1e9,rr=-1e9,bb=-1e9;for(let i=0;i<8;i++){const s=F.project(i&1?q[0]:p[0],i&2?q[1]:p[1],i&4?q[2]:p[2]);l=Math.min(l,s.x);rr=Math.max(rr,s.x);tp=Math.min(tp,s.y);bb=Math.max(bb,s.y)}obs.push({l,t:tp,r:rr,b:bb})});
+      if(false){const r0=act!.w.getBoundingClientRect();if(r0.width){if(act!.tw===undefined)act!.tw=Math.min(W-24,Math.max(300,W*(act!.place!.twf||.34)));const tw=act!.tw!,g=tw/r0.width;if(Math.abs(g-1)>.01)act!.o.scale.multiplyScalar(1+(g-1)*.5)}const r=act!.w.getBoundingClientRect(),w=r.width,h=r.height;if(w){let best:number[]|null=null,bd=1e9;for(let a=-14;a<=14;a++)for(let b=-10;b<=10;b++){const x=r.left+a*20,y=r.top+b*16;if(x<L||x+w>W-12||y<T||y+h>B)continue;const d=a*a*400+b*b*256;if(d<bd&&!hit(x,y,w,h)){bd=d;best=[x,y]}}
+        if(!best)act!.tw=Math.max(260,act!.tw!*.97);if(best){const dx=best![0]-r.left,dy=best![1]-r.top;if(Math.abs(dx)>.5||Math.abs(dy)>.5){act!.o.getWorldPosition(wp);const k=wp.distanceTo(cp)*kk;act!.o.position.addScaledVector(rt,dx*k).addScaledVector(up,-dy*k)}obs.push({l:best![0],t:best![1],r:best![0]+w,b:best![1]+h})}else obs.push({l:r.left,t:r.top,r:r.right,b:r.bottom})}}
+      live.filter(e=>!e.pin&&!e.fix).forEach(e=>{const r=rectOf(e),w=r.width,h=r.height;if(!w)return;
+        const cx=Math.min(Math.max(r.left,L),Math.max(L,R-w)),cy=Math.min(Math.max(r.top,T),Math.max(T,B-h));let best:number[]|null=null,bd=1e9;
+        for(let a=-10;a<=10;a++)for(let b=-10;b<=10;b++){const x=cx+a*18,y=cy+b*14;if(x<L||x+w>R||y<T||y+h>B)continue;const d=a*a*324+b*b*196;if(d<bd&&!hit(x,y,w,h)){bd=d;best=[x,y]}}
+        if(!best){if(e.sc0===undefined)e.sc0=e.o!.scale.x;if(e.o!.scale.x>e.sc0*.5)e.o!.scale.multiplyScalar(.97);best=[cx,cy]}const dx=best[0]-r.left,dy=best[1]-r.top;obs.push({l:best[0],t:best[1],r:best[0]+w,b:best[1]+h});
+        if(Math.abs(dx)>.5||Math.abs(dy)>.5){e.o!.getWorldPosition(wp);const k=wp.distanceTo(cp)*kk;e.o!.position.addScaledVector(rt,dx*k).addScaledVector(up,-dy*k)}})}
+    const sb=null as PlacedBoard|null;if(sb!==sheetB){if(sheetB)sheetB.w.appendChild(sheetB.bd!);if(sb)sheet.appendChild(sb.bd!);sheetB=sb}
+    if(sb){const rt=rail.getBoundingClientRect().top,ct=ctl.childElementCount?ctl.getBoundingClientRect().top:rt;sheet.style.bottom=Math.round(H-Math.min(rt,ct)+8)+'px'}vis(sheet,sb?1:0);
+    const key=mode==='globe'?(whoOpen?'gpw':sel>=0?'glv':''):act?act.r+act.s:'';if(key!==ctlKey){ctlKey=key;buildCtl(key)}
+    vis(ctl,curCtl.length&&mode==='globe'?1:0);
+    if(act!==b3Act){if(act)act.tw=undefined;b3Act=act;if(act)$('srNow').textContent=act.h}}
+  setInterval(()=>{drwCtl.forEach(e=>{if(!e.db)return;const v=stateOf(e.src&&e.src());e.db.classList.toggle('on',v);if(e.tg)e.db.setAttribute('aria-pressed',String(v))});curCtl.forEach(e=>{if(!e.rb)return;const v=stateOf(e.src&&e.src());e.rb.classList.toggle('on',v);if(e.tg)e.rb.setAttribute('aria-pressed',String(v))});
+    PHS.forEach(e=>{if(!e.src||!e.el||e.el.classList.contains('cor'))return;const x=e.src();if(!x)return;e.el.classList.toggle('sel',stateOf(x));e.el.classList.toggle('lead',x.classList.contains('lead'))});
+    document.querySelectorAll<El>('[data-open="result"]').forEach(b=>b.hidden=!hasResult)},200);
+  addEventListener('resize',()=>{const F=window.FACTORY;if(!b3||!F)return;BDS.forEach(b=>{if(b.place)return;F.fitBoard(b.o,b.pose[0],b.pose[1],440);b.bx=b.o.position.x})});
+  function loop(now:number){requestAnimationFrame(loop);step(now,false)}
+  requestAnimationFrame(loop);
+  window.__step=()=>step(performance.now()+99999,true);
+  window.__choose=choose;window.__factMode=()=>mode;window.__stopC=()=>STOPC;window.__openStop=(r,i)=>openStop(r,i);window.__setCat=c=>{stCat=c};window.__rideIn=k=>arrive(k);
+  const HALLS:[string,string][]=[['DEVELOP','Where the Career Line begins.'],['ENGINEER','Where PODs build real products.'],['VERIFY','Where ETAF turns work into proof.'],['DEPLOY','Where talent and products go out.']],HX=[-16,-5.5,5.5,16],ARX:Record<string,number>={career:-16,build:-5.5,workforce:-44},FY=9.5,FZ=16,LZ=-8;
+  let freeLine:string|null=null,freeX=0,freeTgt=0,freeZ=FZ,arrT0=0,fDrag:{x:number;y:number;t:number;m:boolean}|null=null,fLast=0;
+  const fx=document.createElement('button');fx.id='fExplore';fx.type='button';fx.textContent='Explore the Factory';document.body.appendChild(fx);
+  const fMap=document.createElement('nav');fMap.id='fMap';fMap.setAttribute('aria-label','Factory map');fMap.innerHTML='<button class="mChg" type="button">‹ Back to the station</button><ol>'+HALLS.map((x,i)=>'<li><button type="button" data-h="'+i+'">'+x[0]+'</button></li>').join('')+'</ol>';document.body.appendChild(fMap);
+  const fHB=[...fMap.querySelectorAll<El>('[data-h]')];fHB.forEach((b,i)=>b.onclick=()=>flyHall(i));fMap.querySelector<El>('.mChg')!.onclick=()=>backToStation();
+  const hLabs=HALLS.map((x,i)=>{const b=document.createElement('button');b.type='button';b.className='fHall';b.innerHTML='<b>'+x[0]+'</b><span>'+x[1]+'</span>';b.onclick=()=>flyHall(i);document.body.appendChild(b);return b});
+  [fx,fMap,...hLabs].forEach(el=>vis(el,0));
+  fx.onclick=()=>{if(mode!=='arrive')return;mode='free';arrT0=-1e9;try{fMap.querySelector<El>('.mChg')!.focus({preventScroll:true})}catch(e){}};
+  function flyHall(i:number){if(mode==='free')freeTgt=HX[i]}
+  function arrive(k:string){const F=window.FACTORY;if(!F)return;window.__guide&&window.__guide.factory();if(cd.classList.contains('open'))closeDrawer();freeLine=k;freeX=freeTgt=ARX[k]!=null?ARX[k]:HX[0];freeZ=FZ+24;arrT0=performance.now();fLast=0;route=null;pendLine=null;mode='arrive';if(k==='workforce'){F.setWf(true);F.campusIn(true)}}
+  window.__factoryReset=()=>{fDrag=null;freeLine=null;document.body.style.cursor='';[fx,fMap,...hLabs].forEach(el=>vis(el,0));if(cd.classList.contains('open'))closeDrawer();closeFlat();resetToIntro()};
+  function backToStation(){window.__guide&&window.__guide.end();fDrag=null;freeLine=null;document.body.style.cursor='';[fx,fMap,...hLabs].forEach(el=>vis(el,0));resetToIntro()}
+  function freeStep(F:FactoryApi,now:number){const dt=fLast?Math.min(.1,(now-fLast)/1000):0;fLast=now;
+    if(mode==='arrive'){const u=reduce?1:Math.min(1,(now-arrT0)/1800);freeZ=FZ+24*(1-ease(u))}else freeZ+=(FZ-freeZ)*(reduce?1:Math.min(1,dt*4));
+    freeX+=(freeTgt-freeX)*(reduce?1:Math.min(1,dt*4));if(Math.abs(freeTgt-freeX)<.01)freeX=freeTgt;
+    F.poseAt([freeX,FY,freeZ],[freeX,7,LZ]);F.render('route',0)}
+  function freeUI(F:FactoryApi|undefined,now:number){const fOn=mode==='free',aOn=mode==='arrive'&&(reduce||now-arrT0>1500);
+    if((fOn||mode==='arrive')&&freeLine==='workforce'&&F)F.setWf(true);
+    vis(fx,aOn?1:0);vis(fMap,fOn?1:0);fx.tabIndex=aOn?0:-1;
+    if(!fOn||!F){hLabs.forEach(b=>{if(b.style.visibility!=='hidden')vis(b,0)});return}
+    let near=0;HX.forEach((x,i)=>{if(Math.abs(x-freeX)<Math.abs(HX[near]-freeX))near=i});const at=Math.abs(HX[near]-freeX)<5.3;
+    hLabs.forEach((b,i)=>{const p=F.project(HX[i],8.5,-4);const o=p.vis&&p.x>-60&&p.x<innerWidth+60?1:0;if(o)b.style.transform='translate('+p.x.toFixed(1)+'px,'+Math.max(p.y,76).toFixed(1)+'px) translate(-50%,8px)';vis(b,o);b.tabIndex=o?0:-1;b.classList.toggle('on',at&&i===near)});
+    fHB.forEach((b,i)=>{if(at&&i===near)b.setAttribute('aria-current','location');else b.removeAttribute('aria-current')})}
+  const fSkip=(e:Event)=>(e.target as Element).closest&&(e.target as Element).closest('button,a,input,select,textarea,aside,nav,header,#cDrawer');
+  addEventListener('pointerdown',e=>{if(mode!=='free'||e.button>0||fSkip(e))return;fDrag={x:e.clientX,y:e.clientY,t:freeTgt,m:false}});
+  addEventListener('pointermove',e=>{if(!fDrag)return;const dx=e.clientX-fDrag.x;if(Math.abs(dx)>5)fDrag.m=true;if(fDrag.m){const k=2*(FZ-LZ)*Math.tan(25*Math.PI/180)*(innerWidth/innerHeight)/innerWidth;freeTgt=Math.max(-46,Math.min(22,fDrag.t-dx*k));document.body.style.cursor='grabbing'}});
+  addEventListener('pointerup',e=>{if(!fDrag)return;const d=fDrag;fDrag=null;document.body.style.cursor='';if(d.m||mode!=='free')return;const F=window.FACTORY;if(!F)return;
+    let best=-1,bd=1e9;HX.forEach((x,i)=>{const p=F.project(x,8,-4),dd=Math.abs(p.x-e.clientX);if(dd<bd){bd=dd;best=i}});const hw=Math.abs(F.project(HX[0]+5.25,8,-4).x-F.project(HX[0],8,-4).x);
+    const top=F.project(0,16.5,-4).y,bot=F.project(0,0,0).y;if(best>=0&&bd<hw&&e.clientY>top&&e.clientY<bot)flyHall(best)});
+  addEventListener('keydown',e=>{if(mode!=='free'||fSkip(e)&&!(e.target as Element).closest('#fMap,.fHall'))return;const d=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(!d)return;e.preventDefault();let near=0;HX.forEach((x,i)=>{if(Math.abs(x-freeTgt)<Math.abs(HX[near]-freeTgt))near=i});const at=Math.abs(HX[near]-freeTgt)<.5;flyHall(Math.max(0,Math.min(3,at?near+d:(d>0?HX.findIndex(x=>x>freeTgt):HX.length-1-[...HX].reverse().findIndex(x=>x<freeTgt)))))});
+  const LINES:Record<string,[string,string]>={career:['Career Line','Students and professionals'],build:['Build Line','Startups and companies'],workforce:['Workforce Line','Governments, universities, organisations']};
+  function boardGo(k:string){if(k==='career'){podWf=null;choose('career')}else{podWf=k==='build'?2:3;choose('workforce')}}
+  window.__boardLine=k=>{const L=LINES[k];if(!L)return;pendLine=k;stWho=L[1];const ph=$('podHint');if(ph&&ph.querySelector('span'))ph.querySelector('span')!.textContent='Scroll to ride the '+L[0];if(mode==='intro')jump(4*innerHeight)};
+  if(window.__pendingBoard){window.__boardLine(window.__pendingBoard!);window.__pendingBoard=null}window.__wfGo=i=>wfGo(i);window.__topOf=(r,i)=>topOf(r,i);window.__back=back;window.__toGlobe=toGlobe;window.__openSide=openSide;
+  addEventListener('scroll',()=>{if(document.hidden)window.__step!()},{passive:true});
+  const done=(form:Element,msg:string)=>{const p=document.createElement('p');p.className='regDone';p.textContent=msg;form.replaceWith(p)};
+
+  $('regForm').addEventListener('submit',e=>{e.preventDefault();const fd=new FormData(e.target as HTMLFormElement);done(e.target as HTMLFormElement,"You're registered, "+fd.get('name')+'. The drive schedule will be sent to '+fd.get('email')+'.')});
+  $('modelForm').addEventListener('submit',e=>{e.preventDefault();done(e.target as HTMLFormElement,'Requirement captured. Hand-off destination [PLACEHOLDER].')});
+  $('probForm').addEventListener('submit',e=>{e.preventDefault();const fd=new FormData(e.target as HTMLFormElement);done(e.target as HTMLFormElement,'Thanks. We will reply to '+fd.get('email')+'. Hand-off destination [PLACEHOLDER].')});
+  function openMenu(){menu.hidden=false;menuOpen=true;menuBtn.setAttribute('aria-expanded','true');menu.querySelector('button')!.focus()}
+  function closeMenu(){if(!menuOpen)return;const f=menu.contains(document.activeElement);menu.hidden=true;menuOpen=false;menuBtn.setAttribute('aria-expanded','false');if(f)menuBtn.focus()}
+  menuBtn.onclick=()=>menuOpen?closeMenu():openMenu();
+  addEventListener('pointerdown',e=>{if(menuOpen&&!(e.target as Element).closest('#menu,#menuBtn'))closeMenu()});
+  function resetToIntro(){window.__showStation&&window.__showStation();if(side.classList.contains('open'))closeSide();if(mode==='globe'||mode==='gIn'||mode==='gOut'){window.FACTORY&&window.FACTORY.globeReset();document.body.style.cursor=''}gNext=null;pending=null;mode='intro';route=null;setTrack(INTRO_END);jump(INTRO_END*innerHeight)}
+  const HASH:Record<string,string>={career:'career',workforce:'workforce',globe:'ai-for-everyone',evidence:'evidence',skip:'skip-3d'},ANCH:Record<string,string>={career:'fCareer',workforce:'fWork',globe:'fGlobe',evidence:'fEvidence',skip:'fTop'};
+  function openFlat(auto:boolean,anchor:string){flat.hidden=false;flatOpen=true;if(auto)flatAuto=true;$('fNote').hidden=!flatAuto;$('fBack').hidden=flatAuto;closeMenu();document.documentElement.style.overflow='hidden';requestAnimationFrame(()=>{const el=anchor&&$(anchor);flat.scrollTop=el?el.offsetTop-84:0})}
+  function closeFlat(){if(flatAuto||!flatOpen)return;flat.hidden=true;flatOpen=false;document.documentElement.style.overflow=''}
+  function nav(k:string){closeMenu();if(k==='story'){window.__replayStory&&window.__replayStory();return}history.replaceState(null,'','#'+HASH[k]);if(k==='skip'||k==='evidence'||flatAuto||!window.FACTORY){openFlat(false,ANCH[k]);return}closeFlat();resetToIntro();if(k==='globe')toGlobe();else choose(k)}
+  menu.querySelectorAll<El>('[data-go]').forEach(b=>b.onclick=()=>nav(b.dataset.go!));
+  document.querySelectorAll<El>('.logo').forEach(a=>a.onclick=e=>{e.preventDefault();closeMenu();closeFlat();history.replaceState(null,'',location.pathname+location.search);if(mode!=='intro')resetToIntro();else jump(0)});
+  const esc=(s:string)=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'} as Record<string,string>)[c]);
+  (function buildFlat(){
+    const pan=(sel:string)=>[...document.querySelectorAll(sel)].map(el=>{const h2=el.querySelector('h2'),p=el.querySelector('.lede2'),sv=[...el.querySelectorAll('.svc,.flow')].map(x=>'<div class="svc">'+x.innerHTML+'</div>').join('');return '<li><span class="chip">'+el.querySelector('.eyebrow')!.textContent+'</span>'+(h2?'<h4>'+h2.innerHTML+'</h4>':'')+(p?'<p>'+p.innerHTML+'</p>':'')+sv+'</li>'}).join('');const car=pan('.cp:not(.wm)');
+    const wf=pan('.cp.wm');
+    const inds=INDS.map(d=>'<li><h4>'+esc(d.name)+'</h4><p class="gl">'+esc(d.line)+'</p><ol>'+d.uses.map(u=>'<li>'+esc(u)+'</li>').join('')+'</ol></li>').join('');
+    const reg=$('regForm').outerHTML.replace(' id="regForm"',' data-f="reg"');
+    const ph='<span class="ph">[PLACEHOLDER]</span>';
+    flat.innerHTML='<div class="fw"><div class="fbar"><p class="fnote" id="fNote" hidden>The 3D view is not available on this device, so the Factory is shown as a page.</p><button class="backBtn" id="fBack" type="button">← Back to the 3D Factory</button></div>'
+     +'<section id="fTop"><h1>AI Talent Factory</h1><p class="fsub">Develop capability. Engineer for real. Verify readiness. Deploy with confidence.</p><p>Product Engineering · ETAF™ · Enterprise Deployment</p><p class="fbig">Learning ≠ Getting Hired</p><p class="fbig">What can you actually do?</p><p>Enterprise-ready capability, built through real engineering.</p><h3>What are you here to build?</h3><nav class="fjump" aria-label="Sections"><a href="#fCareer">Build My Career →</a><a href="#fWork">Build My Workforce →</a><a href="#fGlobe">AI for Everyone →</a><a href="#fEvidence">Evidence &amp; Impact →</a></nav></section>'
+     +'<section id="fCareer"><h2>Build My Career</h2><ol>'+car+'</ol><p>Before an assessment result exists, every career path starts with the Entry Assessment.</p><h3>Register for the Weekend Assessment Drive</h3>'+reg+'</section>'
+     +'<section id="fWork"><h2>Build My Workforce</h2><ol>'+wf+'</ol></section>'
+     +'<section id="fGlobe"><h2>AI for Everyone</h2><p>AI for every profession. Explore how AI is reshaping the work people already do.</p><ol class="finds">'+inds+'</ol></section>'
+     +'<section id="fEvidence"><h2>Evidence &amp; Impact</h2><p>'+ph+' Evidence and impact content to be supplied.</p></section></div>';
+    flat.querySelectorAll<El>('.fjump a').forEach(a=>a.onclick=e=>{e.preventDefault();const el=$(a.getAttribute('href')!.slice(1));flat.scrollTo({top:el.offsetTop-84,behavior:reduce?'auto':'smooth'})});
+    $('fBack').onclick=closeFlat;
+    flat.querySelectorAll<El>('.enq').forEach(b=>b.onclick=()=>{const cb=flat.querySelector<HTMLInputElement>('form[data-f="partner"] input[data-k="'+b.dataset.offer!+'"]');if(cb)cb.checked=true;flat.scrollTo({top:$('fPartner').offsetTop-84,behavior:reduce?'auto':'smooth'})});
+    flat.querySelectorAll<HTMLFormElement>('form').forEach(f=>f.addEventListener('submit',e=>{e.preventDefault();const fd=new FormData(f);done(f,f.dataset.f==='reg'?"You're registered, "+fd.get('name')+'. The drive schedule will be sent to '+fd.get('email')+'.':'Thanks. Our partnerships team will reply to '+fd.get('email')+'.')}));
+  })();
+  const KEYS:Record<string,string>={career:
+'career',workforce:'workforce','ai-for-everyone':'globe',globe:'globe',evidence:'evidence','skip-3d':'skip',skip:'skip'};
+  function fromHash(){const k=KEYS[location.hash.slice(1)];if(!k)return;if(k==='skip'||k==='evidence'||window.FACTORY){nav(k);return}let n=0;const w=setInterval(()=>{if(window.FACTORY||++n>90){clearInterval(w);nav(k)}},100)}
+  addEventListener('hashchange',fromHash);
+  const webglOK=(()=>{try{const c=document.createElement('canvas');return !!(window.WebGLRenderingContext&&(c.getContext('webgl2')||c.getContext('webgl')))}catch(e){return false}})();
+  if(!webglOK)openFlat(true,'fTop');else{setTimeout(()=>{if(!window.FACTORY)openFlat(true,'fTop')},10000);fromHash()}
+}
