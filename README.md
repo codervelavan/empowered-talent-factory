@@ -2,6 +2,8 @@
 
 A single-page, scroll-driven 3D site built with Vite, TypeScript and three.js (r160). It's a port of the design handoff prototype (`design_handoff_empowered_talent_factory`). All copy, colours, timings and camera framing are final and carried over unchanged.
 
+**Live site:** https://codervelavan.github.io/empowered-talent-factory/
+
 ## Run
 
 ```bash
@@ -9,6 +11,7 @@ npm install
 npm run dev        # http://localhost:5173
 npm run build      # typecheck + production build into dist/
 npm run preview    # serve dist/
+npm run deploy     # build and publish dist/ to the gh-pages branch (GitHub Pages)
 ```
 
 The build uses a relative base (`./`), so `dist/` works from any folder or sub-path.
