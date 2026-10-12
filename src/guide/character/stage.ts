@@ -83,8 +83,9 @@ function spotFor(ctx: Ctx): Spot | null {
   }
   if (ctx === 'factory') {
     if (phone) return { x: 42, y: H - 92, h: 96, face: 1, bubble: 'right', phone };
+    // Below 1000px the factory map strip spans the bottom, so stand above it.
     const h = clamp(H * 0.32, 160, 260);
-    return { x: 40 + h * 0.28, y: H - 24, h, face: 1, bubble: 'right', phone };
+    return { x: 40 + h * 0.28, y: W < 1000 ? H - 92 : H - 24, h, face: 1, bubble: 'right', phone };
   }
   return null;
 }

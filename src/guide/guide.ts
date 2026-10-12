@@ -172,7 +172,8 @@ export function initGuide(stage: CharacterStage): Guide {
     story() { quiet = true; hush(true); },
     station() { quiet = false; say('welcome', null); },
     board() { say('board', null); },
-    factory() { say('factory', null); },
+    // Once the welcome is done, tuck the bubble away so it doesn't cover the hall labels.
+    factory() { say('factory', () => { bubble.hidden = true; }); },
     end() { say('board', null); },
   };
 }
