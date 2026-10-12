@@ -451,7 +451,7 @@ export function initController(): void {
   requestAnimationFrame(loop);
   window.__step=()=>step(performance.now()+99999,true);
   window.__choose=choose;window.__factMode=()=>mode;window.__stopC=()=>STOPC;window.__openStop=(r,i)=>openStop(r,i);window.__setCat=c=>{stCat=c};window.__rideIn=k=>arrive(k);
-  const HALLS:[string,string][]=[['DEVELOP','Where the Career Line begins.'],['ENGINEER','Where PODs build real products.'],['VERIFY','Where ETAF turns work into proof.'],['DEPLOY','Where talent and products go out.']],HX=[-16,-5.5,5.5,16],ARX:Record<string,number>={career:-16,build:-5.5,workforce:-44},FY=9.5,FZ=16,LZ=-8;
+  const HALLS:[string,string][]=[['DEVELOP','Where the Career Line begins.'],['ENGINEER','Where PODs build real products.'],['VERIFY','Where ETAF turns work into proof.'],['DEPLOY','Where talent and products go out.']],HX=[-16,-5.5,5.5,16],ARX:Record<string,number>={career:-16,build:-5.5,workforce:16},FY=9.5,FZ=16,LZ=-8;
   let freeLine:string|null=null,freeX=0,freeTgt=0,freeZ=FZ,arrT0=0,fDrag:{x:number;y:number;t:number;m:boolean}|null=null,fLast=0;
   const fx=document.createElement('button');fx.id='fExplore';fx.type='button';fx.textContent='Explore the Factory';document.body.appendChild(fx);
   const fMap=document.createElement('nav');fMap.id='fMap';fMap.setAttribute('aria-label','Factory map');fMap.innerHTML='<button class="mChg" type="button">‹ Back to the station</button><ol>'+HALLS.map((x,i)=>'<li><button type="button" data-h="'+i+'">'+x[0]+'</button></li>').join('')+'</ol>';document.body.appendChild(fMap);
@@ -473,7 +473,7 @@ export function initController(): void {
     if(!fOn||!F){hLabs.forEach(b=>{if(b.style.visibility!=='hidden')vis(b,0)});return}
     let near=0;HX.forEach((x,i)=>{if(Math.abs(x-freeX)<Math.abs(HX[near]-freeX))near=i});const at=Math.abs(HX[near]-freeX)<5.3;
     hLabs.forEach((b,i)=>{const p=F.project(HX[i],8.5,-4);const o=p.vis&&p.x>-60&&p.x<innerWidth+60?1:0;if(o)b.style.transform='translate('+p.x.toFixed(1)+'px,'+Math.max(p.y,76).toFixed(1)+'px) translate(-50%,8px)';vis(b,o);b.tabIndex=o?0:-1;b.classList.toggle('on',at&&i===near)});
-    fHB.forEach((b,i)=>{if(at&&i===near)b.setAttribute('aria-current','location');else b.removeAttribute('aria-current')})}
+    fHB.forEach((b,i)=>{if(at&&i===near){if(!b.hasAttribute('aria-current')){b.setAttribute('aria-current','location');const ol=b.closest('ol')!;ol.scrollLeft=b.offsetLeft-(ol.clientWidth-b.offsetWidth)/2}}else b.removeAttribute('aria-current')})}
   const fSkip=(e:Event)=>(e.target as Element).closest&&(e.target as Element).closest('button,a,input,select,textarea,aside,nav,header,#cDrawer');
   addEventListener('pointerdown',e=>{if(mode!=='free'||e.button>0||fSkip(e))return;fDrag={x:e.clientX,y:e.clientY,t:freeTgt,m:false}});
   addEventListener('pointermove',e=>{if(!fDrag)return;const dx=e.clientX-fDrag.x;if(Math.abs(dx)>5)fDrag.m=true;if(fDrag.m){const k=2*(FZ-LZ)*Math.tan(25*Math.PI/180)*(innerWidth/innerHeight)/innerWidth;freeTgt=Math.max(-46,Math.min(22,fDrag.t-dx*k));document.body.style.cursor='grabbing'}});

@@ -93,7 +93,7 @@ html.introOn,html.introOn body{overflow:hidden!important}
 .fHall b,.fHall span{text-shadow:0 0 14px rgba(242,239,226,.98),0 0 4px rgba(242,239,226,.95)}
 .fHall.on b,.fHall:hover b,.fHall:focus-visible b{text-decoration-color:#C9A33A}
 .fHall:focus-visible{outline:2px solid #0F2B22;outline-offset:2px;border-radius:8px}
-@media (max-width:640px){#fMap{gap:4px}#fMap .mChg{padding:0 10px;font-size:12.5px}#fMap ol button{padding:0 8px;font-size:11px;letter-spacing:.04em}.fHall span{white-space:normal;max-width:150px}}
+@media (max-width:820px){#fMap{gap:4px}#fMap .mChg{padding:0 10px;font-size:12.5px}#fMap ol button{padding:0 8px;font-size:11px;letter-spacing:.04em}.fHall span{white-space:normal;max-width:150px}}
 #stMap.dash .mDots::before{background:repeating-linear-gradient(90deg,#0F2B22 0 6px,transparent 6px 11px)}
 #wfSg{position:absolute;inset:0;z-index:2;pointer-events:none}
 .crPin.wSg{display:flex;align-items:center;gap:8px;padding:9px 14px;border:1.5px solid #0F2B22;border-radius:10px;background:#0F2B22;color:#F6DB2D;font:800 14px/1 Manrope,sans-serif;text-shadow:none;cursor:pointer;pointer-events:auto;transition:background .2s,color .2s}
@@ -110,3 +110,13 @@ html.introOn,html.introOn body{overflow:hidden!important}
 @media (max-width:600px){#stMap{gap:8px;padding-right:12px}#stMap .mChg{padding:0 10px;font-size:13px}#stMap .mDots button{width:24px}#stMap .mLbl{font-size:12.5px}#stHint{bottom:72px;font-size:12px;padding:0 16px}}
 
 @media (max-width:700px){#station .stRow{grid-template-columns:minmax(0,1fr) 18px;gap:3px 10px;padding:12px}#station .stRow b,#station .stRow span{grid-column:1}#station .stRow i{grid-column:2;grid-row:1/4}#station .stBT{font-size:18px}}
+
+/* Fixes after mobile review */
+/* During a ride the drawer is moved into #station; keep it above the ride text, pins and cards (z-index:2). */
+#station #cDrawer{z-index:3}
+/* Factory map: let the hall list shrink and scroll sideways instead of running off narrow screens. */
+#fMap .mChg{flex:0 0 auto}
+#fMap ol{position:relative;min-width:0;overflow-x:auto;scrollbar-width:none}
+#fMap ol::-webkit-scrollbar{display:none}
+#fMap ol li{flex:0 0 auto}
+#crPass .pDesc{margin:-2px 0 10px;max-width:240px;font:500 13px/1.4 Inter,sans-serif;color:#1E4632}

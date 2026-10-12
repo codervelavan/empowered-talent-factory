@@ -205,7 +205,7 @@ export function initStation(): void {
     {n:'Start where you are',h:'Start where you are',p:'A short assessment finds your starting point.',b:[['Take the Entry Assessment','assess','pri']]},
     {n:'Your track',h:'Your track',p:''},
     {n:'Build in a POD',h:'Build in a POD',p:'A small team builds a real product for an industry problem. A mentor guides. You own the work.'},
-    {n:'Verified',h:'Verified',p:'Your proof travels with you.'},
+    {n:'Verified',h:'Verified',p:'ETAF™, our readiness framework, checks your assessments, project work and reviewed delivery. What passes goes into your Readiness Passport: a verified record of what you can do that travels with you.'},
     {n:'Industry-ready',h:'Industry-ready',p:'Arrive with a portfolio, verified readiness and support toward the right role.',b:[['Take the Entry Assessment','assess','pri'],['Explore the Factory','factory','sec']]}];
   var BUILD:Stop[]=[
     {n:'Bring us a problem',h:'Bring us a problem',p:'Have a product to build or a problem to solve? Bring it to the Factory.',b:[['Bring Us a Problem','form','pri']]},
@@ -239,7 +239,7 @@ export function initStation(): void {
     var w=!!(line&&line===LN.workforce),wi=w?at:-1,wst=w&&!mv&&rmode==='ride',wlt=wst?(reduce?99:(now-arrT)/1000):0;
     var dsh=c&&(i===1||i===2)?1:0;
     var T:Record<string,number>={train:(b||w)?0:1,plats:(c||b||w)?0:1,railGap:(c||w)?0:1,trunk:w?0:1,gap:c?1:0,cfar:c?1:0,gate:c?1:0,esign:c?1:0,arch:c&&i<2?1:0,buffer:c&&i<3?1:0,scan:st&&i===1?1:0,
-      dashL:dsh,dashC:dsh,dashR:dsh,tlab:st&&i===1?1:0,card:st&&i===2?1:0,team:c&&i===3?1:0,door:c&&i===5?1:0};
+      dashL:dsh,dashC:dsh,dashR:dsh,tlab:0,card:st&&i===2?1:0,team:c&&i===3?1:0,door:c&&i===5?1:0};
     if(st&&i<3)laid=false;if(st&&i===3&&lt>.3+6*.55)laid=true;
     for(k=0;k<6;k++){var t0=.3+k*.55,on=0,now_=false;if(c&&i>3)on=1;else if(c&&i===3){if(laid)on=1;else if(lt>=t0){on=1;now_=lt<t0+.55}}
       T['sec'+k]=on;T['slab'+k]=st&&i===3&&on?1:0;G=gv('sec'+k);var ns=now_?GOLD:null;if(G.st!==ns){G.st=ns;G.w=now_?2.6:0;busy=true}}
