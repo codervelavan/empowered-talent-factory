@@ -1,9 +1,11 @@
-// Voice tour guide lines. Final copy: keep verbatim.
+// Lines spoken by the guide character. Keep the wording consistent with the on-screen copy.
 // A recorded file at public/audio/<id>.mp3 plays instead of speech when present.
 
 export const GUIDE_LINES = {
   welcome:
-    "Welcome to EmpowerED Careers. This is a quick tour of how we turn learning into industry-ready AI talent. Pick the line that fits you on the departure board, and I'll guide you along it.",
+    "Hi, I'm your EmpowerED guide. Welcome to EmpowerED Careers. This is a quick tour of how we turn learning into industry-ready AI talent. Pick the line that fits you on the departure board, and I'll guide you along it.",
+  board:
+    "Pick a line on the board and I'll ride it with you.",
   howto:
     "To move, scroll or press the arrow keys, and the train goes to the next station. The map at the bottom shows where you are. Click any station to jump there, or press Change line to go back to the board.",
   "career-1":

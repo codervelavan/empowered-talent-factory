@@ -1,22 +1,24 @@
-// Voice tour guide: narrates each stop with captions. Silent until the visitor
-// clicks "Start the guided tour". Uses a recorded mp3 when one exists, else speechSynthesis.
+// The guide: the 3D character's voice and speech bubble. Lines always show in the bubble;
+// the voice is off until the visitor turns it on (browsers block audio before a click).
+// Uses a recorded mp3 when one exists, else speechSynthesis.
 import { GUIDE_LINES, type GuideLineId } from '../data/guideLines';
 import { audioUrl } from '../config';
 import type { LineKey } from '../bridge';
+import type { CharacterStage } from './character/stage';
 
 export interface Guide {
   /** Speak the line for station `i` (0-based) of a ride. */
   stop(line: LineKey, i: number): void;
-  /** Cut speech but keep the caption. */
+  /** Cut speech but keep the bubble. */
   hush(): void;
   /** Story replay started: go quiet. */
   story(): void;
-  /** Back at the station after the story: say `welcome` if the story silenced us. */
+  /** At the station (after the story): introduce the guide and the board. */
   station(): void;
-  /** "Change line": silence and hide the caption. */
+  /** "Change line": back at the board. */
   board(): void;
   factory(): void;
-  /** "Back to the station": silence and hide the caption. */
+  /** "Back to the station" from the factory. */
   end(): void;
 }
 
@@ -30,20 +32,23 @@ const SPK = ICON('<path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0
 const MUTE = ICON('<path d="M11 5 6 9H3v6h3l5 4z"/><path d="m16 9 6 6"/><path d="m22 9-6 6"/>');
 const RPL = ICON('<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 3v6h6"/>');
 
-export function initGuide(): Guide {
+/** Roughly how long a line takes to read or say, for timing silent lines. */
+const readTime = (text: string) => Math.max(3500, text.length * 65);
+
+export function initGuide(stage: CharacterStage): Guide {
   const SS: SpeechSynthesis | undefined = window.speechSynthesis;
-  let on = false;
-  let voiceOn = true;
+  let voiceOn = false;
   let cur: GuideLineId | null = null;
   let tok = 0;
   let audio: HTMLAudioElement | null = null;
   let timer = 0;
+  let talkTimer = 0;
   let howtoDone = false;
   let quiet = false;
   let voice: SpeechSynthesisVoice | null = null;
   const noFile: Partial<Record<GuideLineId, true>> = {};
 
-  try { voiceOn = sessionStorage.getItem(VOICE_KEY) !== 'off'; } catch { /* storage blocked */ }
+  try { voiceOn = sessionStorage.getItem(VOICE_KEY) === 'on'; } catch { /* storage blocked */ }
 
   function pickVoice() {
     if (!SS) return;
@@ -56,43 +61,36 @@ export function initGuide(): Guide {
   }
   if (SS) { pickVoice(); SS.addEventListener?.('voiceschanged', pickVoice); }
 
-  const cap = document.createElement('div');
-  cap.id = 'gCap';
-  cap.hidden = true;
-  cap.setAttribute('role', 'region');
-  cap.setAttribute('aria-label', 'Tour guide captions');
-  cap.innerHTML = '<p aria-live="polite"></p><button type="button" class="gR" aria-label="Replay guide">' + RPL + '</button><button type="button" class="gV"></button>';
-  document.body.appendChild(cap);
-  const capP = cap.querySelector('p')!;
-  const bV = cap.querySelector<HTMLButtonElement>('.gV')!;
+  const bubble = stage.bubble;
+  bubble.setAttribute('role', 'region');
+  bubble.setAttribute('aria-label', 'Your EmpowerED guide');
+  bubble.innerHTML = '<p aria-live="polite"></p><div class="gBtns"><button type="button" class="gR" aria-label="Replay guide">' + RPL + '</button><button type="button" class="gV"></button></div>';
+  const textEl = bubble.querySelector('p')!;
+  const bV = bubble.querySelector<HTMLButtonElement>('.gV')!;
+  const boardBtn = document.querySelector<HTMLButtonElement>('.stGuide');
 
-  function vBtn() {
+  function voiceUI() {
     bV.innerHTML = voiceOn ? SPK : MUTE;
     bV.setAttribute('aria-label', voiceOn ? 'Turn voice off' : 'Turn voice on');
     bV.setAttribute('aria-pressed', voiceOn ? 'true' : 'false');
+    if (boardBtn) {
+      boardBtn.setAttribute('aria-pressed', voiceOn ? 'true' : 'false');
+      boardBtn.lastChild!.textContent = voiceOn ? 'Turn off voice' : 'Turn on voice';
+    }
   }
-  vBtn();
+  voiceUI();
 
   function silence() {
     tok++;
     clearTimeout(timer);
+    clearTimeout(talkTimer);
     if (audio) {
       try { audio.pause(); } catch { /* ignore */ }
       audio.onended = audio.onerror = null;
       audio = null;
     }
     SS?.cancel();
-  }
-
-  /** On the departure board the caption moves bottom-right so it never covers the board. */
-  function place() {
-    const st = document.getElementById('station');
-    const m = document.getElementById('stMap');
-    // The station sets the map's target opacity inline when a ride starts. Read that, not the
-    // computed value: the map is still fading in when the first line plays, and the prototype's
-    // computed-style check kept the caption in board mode (hidden below 1180px) for the whole ride.
-    const onBoard = !!st && !st.hidden && (!m || Number(m.style.opacity || 0) < 0.5);
-    cap.classList.toggle('board', onBoard);
+    stage.talk(false);
   }
 
   function tts(text: string, k: number, done: () => void) {
@@ -124,49 +122,57 @@ export function initGuide(): Guide {
   }
 
   function say(id: GuideLineId, then: (() => void) | null) {
-    if (!on || (quiet && id !== 'welcome')) return;
+    if (quiet) return;
     silence();
     const k = tok;
     cur = id;
-    capP.textContent = GUIDE_LINES[id];
-    place();
-    cap.hidden = false;
-    const done = () => { if (k === tok && then) then(); };
+    textEl.textContent = GUIDE_LINES[id];
+    bubble.hidden = false;
+    stage.cue(id);
+    stage.talk(true);
+    const done = () => {
+      if (k !== tok) return;
+      stage.talk(false);
+      if (then) then();
+    };
     if (voiceOn) voiceLine(id, k, done);
-    else if (then) timer = window.setTimeout(done, Math.max(3500, GUIDE_LINES[id].length * 65));
+    else {
+      // Silent: the character mouths the line for about as long as it takes to read.
+      const ms = readTime(GUIDE_LINES[id]);
+      talkTimer = window.setTimeout(() => { if (k === tok) stage.talk(false); }, Math.min(ms, 6000));
+      if (then) timer = window.setTimeout(done, ms);
+    }
   }
 
   function hush(hide: boolean) {
     silence();
-    if (hide) { cur = null; cap.hidden = true; }
+    if (hide) { cur = null; bubble.hidden = true; }
   }
 
-  cap.querySelector<HTMLButtonElement>('.gR')!.onclick = () => { if (cur) say(cur, null); };
-  bV.onclick = () => {
-    voiceOn = !voiceOn;
-    try { sessionStorage.setItem(VOICE_KEY, voiceOn ? 'on' : 'off'); } catch { /* storage blocked */ }
-    vBtn();
-    if (!voiceOn) silence();
+  function setVoice(on: boolean) {
+    voiceOn = on;
+    try { sessionStorage.setItem(VOICE_KEY, on ? 'on' : 'off'); } catch { /* storage blocked */ }
+    voiceUI();
+    if (!on) silence();
     else if (cur) say(cur, null);
-  };
+  }
 
-  const guide: Guide = {
+  bubble.querySelector<HTMLButtonElement>('.gR')!.onclick = () => { if (cur) say(cur, null); };
+  bV.onclick = () => setVoice(!voiceOn);
+  if (boardBtn) boardBtn.onclick = () => setVoice(!voiceOn);
+
+  return {
     stop(line, i) {
-      if (!on || !PREFIX[line]) return;
+      if (!PREFIX[line]) return;
       const id = (PREFIX[line] + (i + 1)) as GuideLineId;
       if (i === 0 && !howtoDone) { howtoDone = true; say(id, () => say('howto', null)); }
       else say(id, null);
     },
-    hush() { if (on) silence(); },
-    story() { quiet = true; if (on) hush(true); },
-    station() { const q = quiet; quiet = false; if (on && q) say('welcome', null); },
-    board() { if (on) hush(true); },
-    factory() { if (on) say('factory', null); },
-    end() { if (on) hush(true); },
+    hush() { silence(); },
+    story() { quiet = true; hush(true); },
+    station() { quiet = false; say('welcome', null); },
+    board() { say('board', null); },
+    factory() { say('factory', null); },
+    end() { say('board', null); },
   };
-
-  const btn = document.querySelector<HTMLButtonElement>('.stGuide');
-  if (btn) btn.onclick = () => { on = true; btn.setAttribute('aria-pressed', 'true'); say('welcome', null); };
-
-  return guide;
 }

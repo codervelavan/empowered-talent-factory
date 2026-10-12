@@ -6,6 +6,7 @@ import { initStation } from './station/station';
 import { drawSketches } from './factory/sketches';
 import { initController } from './factory/controller';
 import { initGuide } from './guide/guide';
+import { initCharacterStage } from './guide/character/stage';
 import { initFactory } from './factory/scene';
 
 // Same start-up order as the prototype: station first (it locks scroll and owns the
@@ -15,7 +16,7 @@ import { initFactory } from './factory/scene';
 initStation();
 drawSketches();
 initController();
-window.__guide = initGuide();
+window.__guide = initGuide(initCharacterStage());
 try {
   initFactory();
 } catch (err) {
