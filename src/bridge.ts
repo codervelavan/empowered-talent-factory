@@ -38,6 +38,8 @@ export interface FactoryApi {
   routeWP(r: string, s: number): [P3, P3];
   /** Camera position and look-at at waypoint position k along a route curve (k may be fractional). */
   routePose(r: string, k: number): [P3, P3];
+  /** World positions of the floating entrance icons: Career, Workforce, AI for Everyone. */
+  brandIcons(): P3[];
   cam(): PerspectiveCamera;
   render(mode: string, introS: number): void;
   // intro / career floor

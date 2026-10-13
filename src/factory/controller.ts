@@ -465,9 +465,13 @@ export function initController(replayStory: () => void): ControllerApi {
   let tourWf=-1,tourCar=-1,tourSettled=false,tourLast=0;
   const FX=()=>window.FACTORY!;
   const COMPANY:[P3,P3]=[[22,10,48],[0,6,-8]];
+  /** Deploy looks back at the ETAF gate from the city side (brand.ts builds the gate and walkers). */
+  const DEPLOY:[P3,P3]=[[6,4.4,-88],[0,5.4,-64]];
+  const icon=(i:number):P3=>{const p=window.FACTORY?.brandIcons()[i]||[0,6,18];return[p[0],p[1]-1.4,p[2]]};
   const wfP=(i:number):[P3,P3]=>{const w=wfPose(i);return[w.p,w.l]};
   const open=(r:string,i:number)=>()=>{openStop(r,i)};
-  const company:TourStop={id:'company',label:'Company',eyebrow:'THE COMPANY',title:'One company. Every possibility.',copy:'Develop. Engineer. Verify. Deploy. Choose your path through one connected talent company, home of the AI Talent Factory.',pose:()=>COMPANY};
+  const company:TourStop={id:'company',label:'Company',eyebrow:'THE COMPANY',title:'One company. Every possibility.',copy:'Develop. Engineer. Verify. Deploy. Choose your path through one connected talent company, home of the AI Talent Factory.',pose:()=>COMPANY,
+    hotspots:[{at:icon(0),label:'Build Career',run:()=>{startTour('career',0);tour.travel(1)}},{at:icon(1),label:'Build Workforce',run:()=>{startTour('workforce',0);tour.travel(1)}},{at:icon(2),label:'AI for Everyone',run:()=>toGlobe()}]};
   const showroom:TourStop={id:'showroom',label:'Showroom',eyebrow:'SHOWROOM',title:'The right capability for you.',copy:'Verified talent, product PODs, workforce academies, campus talent factories and regional programmes, side by side.',pose:()=>wfP(1),
     action:{label:'Open the talent shelf',run:open('workforce',1)},hotspots:[{at:[19.5,2.2,-5.6],label:'Verified talent shelf',run:open('workforce',1)},{at:[30.5,4.5,-13.5],label:'Compare models',run:open('workforce',6)}]};
   const TOURS:Record<TourRoute,TourStop[]>={
@@ -480,8 +484,8 @@ export function initController(replayStory: () => void): ControllerApi {
         action:{label:'Explore engineering PODs',run:open('career',5)},hotspots:[{at:[21.6,2.4,-28.4],label:'Six POD stages',run:open('career',5)},{at:[18,5.2,-33],label:'Career Pro pods',run:open('career',4)}]},
       {id:'verify',label:'Verify',eyebrow:'VERIFY',title:'Evidence in. Readiness out.',copy:'ETAF™, our readiness framework, checks assessments, project work and reviewed delivery. Your Readiness Passport shows evidence of what you can actually do.',pose:()=>FX().routePose('career',CK[4]),
         action:{label:'Explore the Readiness Passport',run:open('career',6)},hotspots:[{at:[21,9.2,-43.8],label:'ETAF™ assurance core',run:open('career',6)}]},
-      {id:'deploy',label:'Deploy',eyebrow:'DEPLOY',title:'Get placed in industry.',copy:'Verified talent connects with companies. Products go live. Career-specific placement support helps people take their next step.',pose:()=>FX().routePose('career',CK[5]),
-        action:{label:'Explore opportunity pathways',run:open('career',7)},hotspots:[{at:[38,4,-24],label:'Opportunity dock',run:open('career',7)}]},
+      {id:'deploy',label:'Deploy',eyebrow:'DEPLOY',title:'Get placed in industry.',copy:'Verified talent connects with companies. Products go live. Career-specific placement support helps people take their next step.',pose:()=>DEPLOY,
+        action:{label:'Explore opportunity pathways',run:open('career',7)},hotspots:[{at:[0,6.4,-72],label:'ETAF™ gate · opportunity pathways',run:open('career',7)}]},
       showroom,
       {id:'world',label:'World',eyebrow:'AI FOR EVERYONE',title:'AI for every profession.',copy:'From this company to a connected world. Explore practical AI across industries and professions.',pose:():[P3,P3]=>[[6,46,58],[0,0,-30]]}],
     workforce:[company,
@@ -494,7 +498,9 @@ export function initController(replayStory: () => void): ControllerApi {
       {...showroom,pose:()=>wfP(6),title:'Which model fits?',copy:'Compare verified talent, PODs, workforce capability, campus and ecosystem programmes side by side.',action:{label:'Open the comparison',run:open('workforce',6)},hotspots:[{at:[30.5,4.5,-13.5],label:'Compare models',run:open('workforce',6)}]}]};
   const tour=new Tour({
     project:(x,y,z)=>FX().project(x,y,z),
-    between:(r,i,e)=>r==='career'&&i<CK.length-1?FX().routePose('career',CK[i]+(CK[i+1]-CK[i])*e):null,
+    between:(r,i,e)=>{if(r!=='career')return null;if(i<4)return FX().routePose('career',CK[i]+(CK[i+1]-CK[i])*e);
+      if(i===4){const [p0,l0]=FX().routePose('career',CK[4]),[p1,l1]=DEPLOY,c:P3=[10,26,-58],u=1-e,q=(k:number)=>u*u*p0[k]+2*u*e*c[k]+e*e*p1[k];return[[q(0),q(1),q(2)],[l0[0]+(l1[0]-l0[0])*e,l0[1]+(l1[1]-l0[1])*e,l0[2]+(l1[2]-l0[2])*e]]}
+      return null},
     onRoute:(r)=>{closeDrawer();route=r},
     onStop:(r,i,settled)=>{const F=window.FACTORY;if(!F)return;
       if(!settled&&cd.classList.contains('open'))closeDrawer();

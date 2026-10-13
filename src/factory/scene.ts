@@ -1,8 +1,11 @@
-// The 3D AI Talent Factory: scene construction, camera poses and the window.FACTORY API.
+// The 3D EmpowerED Careers company building (formerly the AI Talent Factory): scene construction,
+// camera poses and the window.FACTORY API. Company branding lives in brand.ts.
 import * as THREE from 'three';
 import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
 import { POSES, HEAD, LANDMASK, INDS, ECO, type Pose } from '../data/content';
 import type { P3, TalentUnit, EcoNet } from '../bridge';
+import { buildBrand, drawLogo, whenLogo } from './brand';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 type Tone = 'ink' | 'fine' | 'faint' | 'gold';
 
@@ -15,6 +18,7 @@ interface Area {
   fixed?: number; manual?: number; parent?: THREE.Object3D; grow?: number;
   LU?: number[]; dimU?: THREE.IUniform<number>;
   _g?: THREE.MeshBasicMaterial; _y?: THREE.MeshBasicMaterial; _gl?: THREE.MeshBasicMaterial;
+  /** per-colour materials for blocky people */ _vx?: Record<number, THREE.MeshBasicMaterial>;
 }
 interface BoxOpts { p?: THREE.Matrix4; rx?: number; ry?: number; rz?: number; solid?: 'none' | 'green' | 'gold'; tone?: Tone | null }
 interface PlaneOpts { rx?: number; ry?: number; mat?: THREE.Material; fill?: boolean; tone?: Tone }
@@ -54,29 +58,52 @@ function amat(a:Area,color:THREE.ColorRepresentation,base=1,map:THREE.Texture|nu
 const Gm=(a:Area)=>a._g||(a._g=amat(a,INK)),Ym=(a:Area)=>a._y||(a._y=amat(a,GOLD)),GLm=(a:Area)=>a._gl||(a._gl=amat(a,GOLD,.14));
 const factoryG=new THREE.Group();factoryG.matrixAutoUpdate=false;S.add(factoryG);let TG=factoryG;
 function addMesh(geo:THREE.BufferGeometry,mat:THREE.Material,m:THREE.Matrix4){const o=new THREE.Mesh(geo,mat);o.matrixAutoUpdate=false;o.matrix.copy(m);TG.add(o);return o}
+/** Static helper geometry (box, beam, cylinder, plane, panel): merged per material once the scene is built. */
+function addS(geo:THREE.BufferGeometry,mat:THREE.Material,m:THREE.Matrix4){const o=addMesh(geo,mat,m);o.userData.b=1;return o}
 const BOX=new THREE.BoxGeometry(1,1,1),CYL=new THREE.CylinderGeometry(1,1,1,32),PL=new THREE.PlaneGeometry(1,1);
 const EDGES=[[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]];
 function box(a:Area,x:number,y:number,z:number,w:number,h:number,d:number,o:BoxOpts={}){
   const m=(o.p?o.p.clone():new THREE.Matrix4()).multiply(M(x,y+h/2,z,o.rx||0,o.ry||0,o.rz||0)).multiply(SC(w,h,d));
   const s=o.solid;
-  if(s!=='none')addMesh(BOX,s==='green'?Gm(a):s==='gold'?Ym(a):fillMat,m);
+  if(s!=='none')addS(BOX,s==='green'?Gm(a):s==='gold'?Ym(a):fillMat,m);
   const t=o.tone!==undefined?o.tone:(s==='green'||s==='gold'?null:'ink');
   if(t){const c:THREE.Vector3[]=[];for(let i=0;i<8;i++)c.push(V(i&1?.5:-.5,i&2?.5:-.5,i&4?.5:-.5).applyMatrix4(m));EDGES.forEach(([i,j])=>seg(a,t,c[i],c[j]))}
 }
-function beam(a:Area,p:THREE.Vector3,q:THREE.Vector3,t=.2,kind='green'){const d=q.clone().sub(p),len=d.length();addMesh(BOX,kind==='gold'?Ym(a):Gm(a),new THREE.Matrix4().compose(p.clone().add(q).multiplyScalar(.5),new THREE.Quaternion().setFromUnitVectors(V(1,0,0),d.normalize()),V(len,t,t)))}
+function beam(a:Area,p:THREE.Vector3,q:THREE.Vector3,t=.2,kind='green'){const d=q.clone().sub(p),len=d.length();addS(BOX,kind==='gold'?Ym(a):Gm(a),new THREE.Matrix4().compose(p.clone().add(q).multiplyScalar(.5),new THREE.Quaternion().setFromUnitVectors(V(1,0,0),d.normalize()),V(len,t,t)))}
 function line(a:Area,t:Tone,p:P3,q:P3){seg(a,t,V(...p),V(...q))}
 function poly(a:Area,t:Tone,pts:P3[],closed=false,m:THREE.Matrix4|null=null){const P=pts.map(p=>{const v=V(...p);return m?v.applyMatrix4(m):v});for(let i=0;i<P.length-(closed?0:1);i++)seg(a,t,P[i],P[(i+1)%P.length])}
 function ring(a:Area,t:Tone,m:THREE.Matrix4,r:number,n=48){const P:P3[]=[];for(let i=0;i<n;i++){const k=i/n*Math.PI*2;P.push([Math.cos(k)*r,Math.sin(k)*r,0])}poly(a,t,P,true,m)}
 const hring=(a:Area,t:Tone,x:number,y:number,z:number,r:number,n=48)=>ring(a,t,M(x,y,z,-Math.PI/2),r,n);
-function cyl(a:Area,x:number,y:number,z:number,r:number,h:number,o:BoxOpts={}){const m=(o.p?o.p.clone():new THREE.Matrix4()).multiply(M(x,y,z,o.rx||0,o.ry||0,o.rz||0));addMesh(CYL,fillMat,m.clone().multiply(SC(r,h,r)));const t:Tone=o.tone||'ink';[-h/2,h/2].forEach(yy=>ring(a,t,m.clone().multiply(M(0,yy,0,-Math.PI/2)),r,40));for(let i=0;i<4;i++){const k=i*Math.PI/2+Math.PI/4;seg(a,'fine',V(Math.cos(k)*r,-h/2,Math.sin(k)*r).applyMatrix4(m),V(Math.cos(k)*r,h/2,Math.sin(k)*r).applyMatrix4(m))}}
-function plane(a:Area,x:number,y:number,z:number,w:number,h:number,o:PlaneOpts={}){const m=M(x,y,z,o.rx||0,o.ry||0);const mat=o.mat||(o.fill?fillMat:null);if(mat)addMesh(PL,mat,m.clone().multiply(SC(w,h,1)));if(o.tone)poly(a,o.tone,[[-w/2,-h/2,0],[w/2,-h/2,0],[w/2,h/2,0],[-w/2,h/2,0]],true,m);return m}
-const figGeo:Record<string,THREE.BufferGeometry[]>={};
+function cyl(a:Area,x:number,y:number,z:number,r:number,h:number,o:BoxOpts={}){const m=(o.p?o.p.clone():new THREE.Matrix4()).multiply(M(x,y,z,o.rx||0,o.ry||0,o.rz||0));addS(CYL,fillMat,m.clone().multiply(SC(r,h,r)));const t:Tone=o.tone||'ink';[-h/2,h/2].forEach(yy=>ring(a,t,m.clone().multiply(M(0,yy,0,-Math.PI/2)),r,40));for(let i=0;i<4;i++){const k=i*Math.PI/2+Math.PI/4;seg(a,'fine',V(Math.cos(k)*r,-h/2,Math.sin(k)*r).applyMatrix4(m),V(Math.cos(k)*r,h/2,Math.sin(k)*r).applyMatrix4(m))}}
+function plane(a:Area,x:number,y:number,z:number,w:number,h:number,o:PlaneOpts={}){const m=M(x,y,z,o.rx||0,o.ry||0);const mat=o.mat||(o.fill?fillMat:null);if(mat)addS(PL,mat,m.clone().multiply(SC(w,h,1)));if(o.tone)poly(a,o.tone,[[-w/2,-h/2,0],[w/2,-h/2,0],[w/2,h/2,0],[-w/2,h/2,0]],true,m);return m}
+/** Blocky people (art board): suits or casual learners, coloured per figure from its position. */
+const VXC={suit:[0x1E4632,0x0F2B22],tops:[0xE9E2CC,0x8FBF9A,0xD9C27A,0xB9CBB8,0xF2EFE2],legs:[0x3E4A44,0x5B6B62,0x2E3A35],skin:[0xC89B7B,0xA87B5C,0xE0B898,0x7A5238],hair:[0x2B2018,0x1A1410,0x4A3424]};
+const vmat=(a:Area,c:number)=>{const m=a._vx||(a._vx={});return m[c]||(m[c]=amat(a,c))};
+/** Person boxes are queued per (target group, area, colour) and merged into one mesh each, so crowds stay cheap. */
+const VXQ=new Map<string,{tg:THREE.Object3D;a:Area;c:number;ms:THREE.Matrix4[]}>();let vxId=0;const vxKey=new WeakMap<object,number>();
+const vxq=(a:Area,c:number,m:THREE.Matrix4)=>{const id=(o:object)=>{let v=vxKey.get(o);if(v===undefined){v=++vxId;vxKey.set(o,v)}return v};const k=id(TG)+'/'+id(a)+'/'+c;let e=VXQ.get(k);if(!e){e={tg:TG,a,c,ms:[]};VXQ.set(k,e)}e.ms.push(m)};
 function figure(a:Area,pose:Pose,x:number,y:number,z:number,ry=0,flip=1,h=1.75,t:Tone='ink'){
-  const P=POSES[pose],H=HEAD[pose];
-  const m=M(x,y,z,0,ry).multiply(SC(h*flip,h,h));
-  if(!figGeo[pose]){const g1=new THREE.ShapeGeometry(new THREE.Shape(P.map(p=>new THREE.Vector2(p[0],p[1]))));const g2=new THREE.CircleGeometry(.075,24);g2.translate(H[0],H[1],0);figGeo[pose]=[g1,g2]}
-  figGeo[pose].forEach(g=>addMesh(g,fillMat,m));
-  poly(a,t,P.map((p):P3=>[p[0],p[1],0]),true,m);ring(a,t,m.clone().multiply(M(H[0],H[1],0)),.075,24);
+  const s=h/1.75;let hv=Math.sin(x*12.9898+z*78.233+y*3.71)*43758.5453;hv-=Math.floor(hv);
+  const pick=(arr:number[],k:number)=>arr[Math.floor((hv*(k+1)*7.31)%1*arr.length)];
+  const suit=hv<.5,top=suit?VXC.suit[0]:pick(VXC.tops,1),leg=suit?VXC.suit[1]:pick(VXC.legs,2),skin=pick(VXC.skin,3),hair=pick(VXC.hair,4);
+  const base=M(x,y,z,0,ry+(pose==='sit'?(flip>0?Math.PI/2:-Math.PI/2):0)).multiply(SC(s,s,s));
+  /** A box hanging from (dir -1) or standing on (dir 1) a pivot, rotated about x at the pivot. */
+  const part=(px:number,py:number,pz:number,rx:number,w:number,len:number,d:number,c:number,dir=-1,start=0,edge:Tone|null=null)=>{
+    const m=base.clone().multiply(M(px,py,pz,rx)).multiply(M(0,dir*(start+len/2),0)).multiply(SC(w,len,d));vxq(a,c,m);
+    if(edge){const cs:THREE.Vector3[]=[];for(let i=0;i<8;i++)cs.push(V(i&1?.5:-.5,i&2?.5:-.5,i&4?.5:-.5).applyMatrix4(m));EDGES.forEach(([i,j])=>seg(a,edge,cs[i],cs[j]))}};
+  const sit=pose==='sit',hip=sit?.47:.88,sh=hip+.57,hd=hip+.6;
+  const legA=pose==='walk'?.42:0,armA=pose==='walk'?.38:0;
+  if(sit){[-.12,.12].forEach(lx=>{part(lx,hip,0,-Math.PI/2,.2,.46,.22,leg);part(lx,hip,.46,0,.2,.47,.22,leg)})}
+  else{part(-.12,hip,0,legA,.2,hip,.22,leg);part(.12,hip,0,-legA,.2,hip,.22,leg)}
+  part(0,hip,0,0,.52,.6,.3,top,1,0,t);
+  if(suit)part(0,hip+.32,.152,0,.13,.26,.02,0xF2EFE2,1);
+  const armR=sit?-1:pose==='point'?-1.45:-armA,armL=sit?-1:armA;
+  part(.335,sh,0,armR,.15,.5,.17,top);part(.335,sh,0,armR,.13,.1,.15,skin,-1,.5);
+  part(-.335,sh,0,armL,.15,.5,.17,top);part(-.335,sh,0,armL,.13,.1,.15,skin,-1,.5);
+  if(suit&&hv<.25&&!sit)part(.38,.62,0,0,.09,.3,.4,0x2B2018,-1);
+  part(0,hd,0,0,.34,.34,.34,skin,1,0,t);
+  part(0,hd+.33,0,0,.37,.08,.37,hair,1);part(0,hd+.06,-.16,0,.36,.3,.06,hair,1);
+  [-.075,.075].forEach(ex=>part(ex,hd+.2,.172,0,.05,.05,.02,0x0F2B22,1));
 }
 const face=(x:number,z:number,c:number[])=>Math.atan2(c[0]-x,c[2]-z);
 function chair(a:Area,x:number,y:number,z:number,dir:number){box(a,x,y+.4,z,.48,.05,.48,{tone:'fine'});line(a,'fine',[x,y,z],[x,y+.4,z]);line(a,'fine',[x-.28,y,z],[x+.28,y,z]);line(a,'fine',[x,y,z-.28],[x,y,z+.28]);const bx=x-dir*.25;line(a,'fine',[bx,y+.43,z-.2],[bx-dir*.04,y+1.05,z-.2]);line(a,'fine',[bx,y+.43,z+.2],[bx-dir*.04,y+1.05,z+.2]);line(a,'fine',[bx-dir*.04,y+1.05,z-.2],[bx-dir*.04,y+1.05,z+.2])}
@@ -84,10 +111,10 @@ function desk(a:Area,x:number,y:number,z:number,w=1.3,d=.9){box(a,x,y+.7,z,w,.05
 function monitor(a:Area,x:number,y:number,z:number,ry:number){box(a,x,y+.8,z,.7,.42,.04,{ry});line(a,'fine',[x,y+.75,z],[x,y+.8,z])}
 function sitAt(a:Area,x:number,y:number,z:number,dir=1){figure(a,'sit',x,y,z,0,dir);chair(a,x+dir*.02,y,z,dir);desk(a,x+dir*1.05,y,z);monitor(a,x+dir*1.45,y,z,dir>0?-Math.PI/2:Math.PI/2)}
 function dataPanel(a:Area,x:number,y:number,z:number,w:number,h:number,ry=0,kind='bars'){
-  const m=M(x,y,z,0,ry);addMesh(PL,GLm(a),m.clone().multiply(SC(w,h,1)));
+  const m=M(x,y,z,0,ry);addS(PL,GLm(a),m.clone().multiply(SC(w,h,1)));
   poly(a,'gold',[[-w/2,-h/2,0],[w/2,-h/2,0],[w/2,h/2,0],[-w/2,h/2,0]],true,m);
   poly(a,'gold',[[-w/2+.12,h/2-.16,0],[-w/2+w*.42,h/2-.16,0]],false,m);
-  if(kind==='bars'){const n=6;for(let i=0;i<n;i++){const st=(w-.4)/n,bw=st*.6,bx=-w/2+.2+i*st+bw/2,bh=(.2+((i*37)%10)/10*.6)*(h-.5);addMesh(PL,Ym(a),m.clone().multiply(M(bx,-h/2+.14+bh/2,.01)).multiply(SC(bw,bh,1)))}}
+  if(kind==='bars'){const n=6;for(let i=0;i<n;i++){const st=(w-.4)/n,bw=st*.6,bx=-w/2+.2+i*st+bw/2,bh=(.2+((i*37)%10)/10*.6)*(h-.5);addS(PL,Ym(a),m.clone().multiply(M(bx,-h/2+.14+bh/2,.01)).multiply(SC(bw,bh,1)))}}
   else if(kind==='ring'){const r=h*.28,cm=m.clone().multiply(M(-w/2+r+.18,-.08,.01));ring(a,'gold',cm,r,32);ring(a,'gold',cm,r*.62,28);for(let i=0;i<3;i++)poly(a,'gold',[[-w/2+2*r+.35,.1-i*.2,0],[w/2-.15-(i%2)*.3,.1-i*.2,0]],false,m)}
   else{for(let i=0;i<4;i++)poly(a,'gold',[[-w/2+.12,h/2-.4-i*.2,0],[w/2-.2-(i%3)*.35,h/2-.4-i*.2,0]],false,m)}
 }
@@ -95,7 +122,7 @@ const TEX:RedrawTex[]=[];
 function ctex(w:number,h:number,draw:(x:CanvasRenderingContext2D,w:number,h:number)=>void):RedrawTex{const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d')!;const t=new THREE.CanvasTexture(c) as RedrawTex;t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=R.capabilities.getMaxAnisotropy();t.redraw=()=>{x.clearRect(0,0,w,h);draw(x,w,h);t.needsUpdate=true};t.redraw();TEX.push(t);return t}
 document.fonts&&document.fonts.ready.then(()=>TEX.forEach(t=>t.redraw()));
 const sp=(x:CanvasRenderingContext2D,v:string)=>{if('letterSpacing' in x)x.letterSpacing=v};
-const signTex=ctex(2048,256,(x,w,h)=>{x.fillStyle='#F2EFE2';x.fillRect(0,0,w,h);x.fillStyle='#0F2B22';x.font='800 150px Manrope, sans-serif';x.textAlign='center';x.textBaseline='middle';sp(x,'16px');x.fillText('AI TALENT FACTORY',w/2,h/2+8)});
+const signTex=ctex(2048,256,(x,w,h)=>{x.fillStyle='#F2EFE2';x.fillRect(0,0,w,h);drawLogo(x,150,h/2,190);x.fillStyle='#0F2B22';x.font='800 128px Manrope, sans-serif';x.textAlign='center';x.textBaseline='middle';sp(x,'12px');x.fillText('EMPOWERED CAREERS',w/2+130,h/2+8)});whenLogo(signTex);
 const roomSign=(n:string)=>ctex(512,128,(x,w,h)=>{x.fillStyle='#1E4632';x.fillRect(0,0,w,h);x.fillStyle='#F2EFE2';x.font='800 60px Manrope, sans-serif';x.textAlign='center';x.textBaseline='middle';sp(x,'10px');{const mw=x.measureText(n).width;if(mw>w-36)x.font='800 '+Math.floor(60*(w-36)/mw)+'px Manrope, sans-serif'}x.fillText(n,w/2,h/2+4)});
 let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
 const circuitTex=ctex(1024,560,(x,w,h)=>{seed=7;x.fillStyle='#1E4632';x.fillRect(0,0,w,h);x.strokeStyle='#C9A33A';x.fillStyle='#C9A33A';x.lineWidth=3;
@@ -115,7 +142,6 @@ plane(ext,-30,8,-30,60,16,{ry:Math.PI/2,fill:true});plane(ext,30,8,-30,60,16,{ry
 box(ext,0,0,-30,60,16,60,{solid:'none'});
 for(let z=-4;z>-60;z-=4){line(ext,'fine',[-30,0,z],[-30,16,z]);line(ext,'fine',[30,0,z],[30,16,z])}
 line(ext,'fine',[-30,6,0],[-30,6,-60]);line(ext,'fine',[30,6,0],[30,6,-60]);
-[-18,0,18].forEach(x=>{box(ext,x,16,-30,8,1.8,46,{});for(let z=-10;z>=-50;z-=4)line(ext,'fine',[x-4,16,z],[x-4,17.8,z])});
 [-30,-20,-10,10,20,30].forEach(x=>box(ext,x,0,0,.5,16,.5,{solid:'green'}));
 box(ext,0,15.7,0,60.5,.6,.5,{solid:'green'});box(ext,-18,5.8,0,24,.4,.4,{solid:'green'});box(ext,18,5.8,0,24,.4,.4,{solid:'green'});
 box(ext,-6.3,0,0,.7,8.4,.7,{solid:'green'});box(ext,6.3,0,0,.7,8.4,.7,{solid:'green'});box(ext,0,8,0,13.3,.7,.7,{solid:'green'});
@@ -124,7 +150,6 @@ for(let x=-27.5;x<=27.5;x+=2.5){if(Math.abs(Math.round(x)%10)===0&&Number.isInte
 line(ext,'fine',[-30,11,0],[30,11,0]);
 [-3,0,3].forEach(x=>line(ext,'fine',[x,0,-.1],[x,4.2,-.1]));line(ext,'fine',[-6,4.2,-.1],[6,4.2,-.1]);
 plane(ext,0,12.4,.3,22,2.75,{mat:amat(ext,0xffffff,1,signTex),tone:'ink'});
-box(ext,38,0,-42,12,9,18,{});cyl(ext,37,13,-46,1.5,26);cyl(ext,41,10,-37,1.1,20);hring(ext,'gold',37,24,-46,1.55);hring(ext,'gold',41,18,-37,1.15);
 
 
 // ATRIUM
@@ -140,7 +165,8 @@ sitAt(atr,-22,0,-28,1);sitAt(atr,-16,0,-28,1);sitAt(atr,-22,0,-34,1);
 dataPanel(atr,-7,3.4,-13,2.8,1.7,face(-7,-13,ST[1]),'bars');dataPanel(atr,7.5,3,-11,2.4,1.5,face(7.5,-11,ST[1]),'ring');
 line(atr,'gold',[-7,2.55,-13],[-7,0,-13]);hring(atr,'gold',-7,.02,-13,.6);line(atr,'gold',[7.5,2.25,-11],[7.5,0,-11]);hring(atr,'gold',7.5,.02,-11,.5);
 figure(atr,'walk',-4,0,-3,face(-4,-3,ST[1]));figure(atr,'walk',4.5,0,-8,face(4.5,-8,ST[1]),-1);figure(atr,'stand',9,0,-16,face(9,-16,ST[1]));figure(atr,'stand',-12.5,0,-17,face(-12.5,-17,ST[1]));
-for(let z=-6;z>-60;z-=8){line(atr,'fine',[-30,14.6,z],[30,14.6,z]);for(let x=-30;x<30;x+=5){line(atr,'fine',[x,14.6,z],[x+5,16,z]);line(atr,'fine',[x+5,16,z],[x+5,14.6,z])}}
+// Flat office ceiling grid (replaces the factory sawtooth trusses).
+for(let z=-6;z>-60;z-=6)line(atr,'faint',[-30,15.2,z],[30,15.2,z]);for(let x=-30;x<=30;x+=6)line(atr,'faint',[x,15.2,-2],[x,15.2,-60]);
 [-15,0,15].forEach(x=>[-10,-18].forEach(z=>{line(atr,'fine',[x,16,z],[x,12.5,z]);box(atr,x,12.2,z,.8,.3,.8,{solid:'gold'})}));
 
 // MEZZANINE
@@ -148,7 +174,7 @@ beam(mez,V(-30,7.1,-22.1),V(-2.8,7.1,-22.1),.14);beam(mez,V(2.8,7.1,-22.1),V(30,
 for(let x=-30;x<=30;x+=2){if(Math.abs(x)<2.8)continue;line(mez,'fine',[x,6,-22.1],[x,7.1,-22.1])}
 line(mez,'fine',[-30,6.55,-22.1],[-2.8,6.55,-22.1]);line(mez,'fine',[2.8,6.55,-22.1],[30,6.55,-22.1]);
 for(let x=-30;x<=30;x+=2)line(mez,'faint',[x,6.01,-22],[x,6.01,-34]);for(let z=-22;z>=-34;z-=2)line(mez,'faint',[-30,6.01,z],[30,6.01,z]);
-([['ASSESSMENT',-21],['CAREER LAUNCH',-7],['CAREER PRO',7],['ETAF™',21]] as [string,number][]).forEach(([n,c])=>{
+([['INTAKE · ASSESSMENT',-21],['DEVELOP · LAUNCH',-7],['DEVELOP · PRO',7],['VERIFY · ETAF™',21]] as [string,number][]).forEach(([n,c])=>{
   [[c-6,-34],[c+6,-34],[c-6,-48],[c+6,-48]].forEach(([x,z])=>box(mez,x,6,z,.24,5,.24,{solid:'green'}));
   box(mez,c,10.9,-34,12.2,.24,.24,{solid:'green'});box(mez,c-6,10.9,-41,.24,.24,14,{solid:'green'});box(mez,c+6,10.9,-41,.24,.24,14,{solid:'green'});
   for(let k=1;k<6;k++){const x=c-6+2*k;if(Math.abs(x-c)<1.1)continue;line(mez,'fine',[x,6,-34],[x,10.9,-34])}
@@ -200,7 +226,7 @@ box(choice,24,0,1.6,9,1.2,3.2,{});
 [20.3,27.7].forEach(x=>box(choice,x,.3,3.28,.5,.6,.16,{solid:'green'}));
 plane(choice,24,3.2,.08,6,4,{fill:true,tone:'ink'});for(let y=1.6;y<5.2;y+=.4)line(choice,'fine',[21,y,.1],[27,y,.1]);
 poly(choice,'ink',[[19.5,1.2,3.2],[16.8,0,3.2]]);poly(choice,'ink',[[19.5,1.2,.4],[16.8,0,.4]]);line(choice,'fine',[16.8,0,3.2],[16.8,0,.4]);
-plane(choice,24,6.95,.35,3.6,.9,{mat:amat(choice,0xffffff,1,roomSign('OUTPUT'))});
+plane(choice,24,6.95,.35,3.6,.9,{mat:amat(choice,0xffffff,1,roomSign('TALENT DOCK'))});
 {const bx=0,bz=-10,by=17.8,tp=by+7;
  box(choice,bx,by,bz,3,.4,3,{});
  [[-1,-1],[1,-1],[1,1],[-1,1]].forEach(([i,j])=>line(choice,'ink',[bx+i*1.2,by+.4,bz+j*1.2],[bx+i*.35,tp,bz+j*.35]));
@@ -208,6 +234,18 @@ plane(choice,24,6.95,.35,3.6,.9,{mat:amat(choice,0xffffff,1,roomSign('OUTPUT'))}
  hring(choice,'ink',bx,tp,bz,.6);cyl(choice,bx,tp+.5,bz,.32,1);hring(choice,'gold',bx,tp+1.05,bz,.55);hring(choice,'gold',bx,tp+1.05,bz,1.3);hring(choice,'fine',bx,tp+1.05,bz,2.1);
  line(choice,'gold',[bx,tp+1.05,bz],[bx,tp+48,bz]);}
 beam(choice,V(-6,.06,4.5),V(6,.06,4.5),.12,'gold');
+// COMPANY BRANDING (brand.ts)
+const brand=buildBrand({
+  area:(n,o)=>area(n,o as Partial<Area>),
+  box:(a,x,y,z,w,h,d,o)=>box(a as Area,x,y,z,w,h,d,o),
+  line:(a,t,p,q)=>line(a as Area,t,p,q),
+  plane:(a,x,y,z,w,h,o)=>plane(a as Area,x,y,z,w,h,o),
+  amat:(a,c,b,m)=>amat(a as Area,c,b,m),
+  ctex:(w,h,d)=>ctex(w,h,d),
+  figure:(a,p,x,y,z,ry,fl,h)=>figure(a as Area,p,x,y,z,ry,fl,h),
+  into:(g,fn)=>{const prev=TG;TG=g as THREE.Group;try{fn()}finally{TG=prev}},
+  root:factoryG,cam:()=>C,
+},innerWidth<=700||((navigator as Navigator&{deviceMemory?:number}).deviceMemory??8)<=4);
 // GLOBE (AI for Everyone)
 TG=globeG;
 const llv=(la:number,lo:number)=>{la*=Math.PI/180;lo*=Math.PI/180;return V(Math.cos(la)*Math.cos(lo),Math.sin(la),-Math.cos(la)*Math.sin(lo))};
@@ -241,7 +279,7 @@ TG=factoryG;
 const FX=[22,15.6,9.2,2.8,-3.6,-10],FZ=-31;
 const pef=area('pef',{c:V(6,2,-31),full:34,start:48});
 {const cs=[26,0,-22.8];
- plane(pef,8,4.55,-22.3,6,1.1,{mat:amat(pef,0xffffff,1,roomSign('PRODUCT ENGINEERING'))});
+ plane(pef,8,4.55,-22.3,6,1.1,{mat:amat(pef,0xffffff,1,roomSign('ENGINEER · PRODUCT PODS'))});
  poly(pef,'ink',[[29.95,0,-29.2],[29.95,3.2,-29.2],[29.95,3.2,-32.8],[29.95,0,-32.8]]);for(let y=.4;y<3.2;y+=.4)line(pef,'fine',[29.93,y,-29.2],[29.93,y,-32.8]);
  plane(pef,29.9,3.9,-31,3.6,.8,{ry:-Math.PI/2,mat:amat(pef,0xffffff,1,roomSign('FROM WORKFORCE'))});
  line(pef,'gold',[30,.03,FZ-.45],[-12,.03,FZ-.45]);line(pef,'gold',[30,.03,FZ+.45],[-12,.03,FZ+.45]);
@@ -309,7 +347,7 @@ const BAYFX=BZ.map(z=>{const lm=new THREE.MeshBasicMaterial({color:GOLD,transpar
  const fm=new THREE.MeshBasicMaterial({color:PAPER,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false});const fp=new THREE.Mesh(new THREE.PlaneGeometry(5.4,6.4),fm);fp.position.set(33.6,3,z+1.2);fp.visible=false;factoryG.add(fp);return{lm,lp,fm,fp,z}});
 BZ.forEach((z,i)=>hit('bay'+i,'w0',32,2.6,z,4.6,5.2,4.6));
 const shA=area('shelf',{c:V(22,2,-6),full:12,start:22});
-[-2.6,-8.9].forEach(z=>line(shA,'ink',[19.2,0,z],[19.2,4.2,z]));[0,1.2,2.4,3.6].forEach(y=>line(shA,'ink',[19.2,y+.02,-2.6],[19.2,y+.02,-8.9]));plane(shA,19.3,4.75,-5.75,3.2,.72,{ry:Math.PI/2,mat:amat(shA,0xffffff,1,roomSign('TALENT SHELF'))});
+[-2.6,-8.9].forEach(z=>line(shA,'ink',[19.2,0,z],[19.2,4.2,z]));[0,1.2,2.4,3.6].forEach(y=>line(shA,'ink',[19.2,y+.02,-2.6],[19.2,y+.02,-8.9]));plane(shA,19.3,4.75,-5.75,3.2,.72,{ry:Math.PI/2,mat:amat(shA,0xffffff,1,roomSign('SHOWROOM · TALENT'))});
 figure(shA,'stand',24.5,0,-7.8,face(24.5,-7.8,[29,3.2,-4.5]));line(shA,'gold',[29.8,.03,-3.5],[21,.03,-5.75]);
 const UNITS:THREE.Mesh<THREE.BoxGeometry,THREE.MeshBasicMaterial>[]=[];for(let r=0;r<3;r++)for(let c=0;c<4;c++){const m=new THREE.MeshBasicMaterial({color:GOLD,transparent:true,opacity:1}),o=new THREE.Mesh(BOX,m);o.scale.set(.7,.8,1.1);o.position.set(19.6,.02+r*1.2+.42,-3.3-c*1.5);const e=new THREE.LineSegments(new THREE.EdgesGeometry(BOX),new THREE.LineBasicMaterial({color:INK,transparent:true,opacity:1}));o.add(e);o.visible=false;factoryG.add(o);UNITS.push(o)}
 const NODEN=['PRODUCT/BA','AI/ML','DATA','FULL STACK','CLOUD','CYBER'],PODN=NODEN.map((n,i)=>{const g=new THREE.Group();const s=new THREE.Mesh(new THREE.PlaneGeometry(1.9,.47),new THREE.MeshBasicMaterial({map:roomSign(n),transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false}));s.position.y=2.1;g.add(s);const rg=new THREE.Mesh(new THREE.RingGeometry(.34,.44,28),new THREE.MeshBasicMaterial({color:GOLD,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false}));rg.rotation.x=-Math.PI/2;rg.position.y=.04;g.add(rg);g.visible=false;factoryG.add(g);return{g,s,rg,a:i/6*Math.PI*2}});
@@ -334,7 +372,7 @@ const OUT:[P3,P3][]=[];{const ol=(p:P3,q:P3)=>OUT.push([p,q]);const X=[-30,30],Y
  ol([-11,11,.3],[11,11,.3]);ol([-11,13.8,.3],[11,13.8,.3]);ol([-11,11,.3],[-11,13.8,.3]);ol([11,11,.3],[11,13.8,.3]);
  [-18,0,18].forEach(x=>{ol([x-4,17.8,-7],[x+4,17.8,-7]);ol([x-4,16,-7],[x-4,17.8,-7]);ol([x+4,16,-7],[x+4,17.8,-7]);ol([x-4,17.8,-7],[x-4,17.8,-53]);ol([x+4,17.8,-7],[x+4,17.8,-53])});}
 // WORKFORCE ROUTE
-const ctl=area('ctl',{c:V(24,10,-10),full:14,start:24}),bay=area('bay',{c:V(40,4,-24),full:26,start:38}),acad=area('acad',{c:V(-24,2,-12),full:22,start:32}),uni=area('uni',{c:V(-44,6,-22),full:26,start:40}),pod=area('pod',{c:V(19,2,-28),full:14,start:24}),city=area('city',{hy:[900,901]});
+const ctl=area('ctl',{c:V(24,10,-10),full:14,start:24}),bay=area('bay',{c:V(40,4,-24),full:26,start:38}),acad=area('acad',{c:V(-24,2,-12),full:22,start:32}),uni=area('uni',{c:V(-44,6,-22),full:26,start:40}),pod=area('pod',{c:V(19,2,-28),full:14,start:24}),city=area('city',{hy:[900,901]}),cityArcs=area('cityArcs',{hy:[900,901]});
 const lane=(a:Area,pts:P3[],wd:number)=>{const P=lanePts(pts);for(let i=0;i<70;i++){const p=P[i],q=P[i+1],d=q.clone().sub(p).normalize(),n=V(-d.z,0,d.x).multiplyScalar(wd);seg(a,'gold',p.clone().add(n).setY(.03),q.clone().add(n).setY(.03));seg(a,'gold',p.clone().sub(n).setY(.03),q.clone().sub(n).setY(.03));if(i%3===0)seg(a,'gold',p.clone().setY(.03),p.clone().lerp(q,.6).setY(.03))}};
 const flowC=document.createElement('canvas');flowC.width=1600;flowC.height=700;const flowX=flowC.getContext('2d')!,flowT=new THREE.CanvasTexture(flowC);flowT.colorSpace=THREE.SRGBColorSpace;flowT.anisotropy=R.capabilities.getMaxAnisotropy();
 let flowP=-1;
@@ -456,7 +494,7 @@ const tetM=new THREE.LineBasicMaterial({color:INK,transparent:true,opacity:0}),t
   box(city,x,0,z,w,hh,d,{ry:a});if(hh>16)line(city,'fine',[x,hh,z],[x,hh+3,z])}
  const tops=CIV.map(([x,z,k])=>{if(k==='dome'){box(city,x,0,z,10,5,10,{});cyl(city,x,6,z,3.2,2);for(let j=0;j<6;j++){const t=j/6*Math.PI/2;hring(city,'ink',x,7+Math.sin(t)*3.2,z,3.2*Math.cos(t))}line(city,'gold',[x,10.2,z],[x,12.5,z]);return V(x,10.4,z)}
   BUILD[k](city,new THREE.Matrix4().compose(V(x,0,z),new THREE.Quaternion().setFromAxisAngle(V(0,1,0),Math.atan2(-x,-30-z)),V(4,4,4)));return V(x,k==='school'?9.8:7.2,z)});
- const arc=(p:THREE.Vector3,q:THREE.Vector3,lift:number)=>{let pr=p;for(let i=1;i<=40;i++){const t=i/40,v=p.clone().lerp(q,t);v.y+=Math.sin(Math.PI*t)*lift;seg(city,'gold',pr,v);pr=v}};
+ const arc=(p:THREE.Vector3,q:THREE.Vector3,lift:number)=>{let pr=p;for(let i=1;i<=40;i++){const t=i/40,v=p.clone().lerp(q,t);v.y+=Math.sin(Math.PI*t)*lift;seg(cityArcs,'gold',pr,v);pr=v}};
  const roof=V(0,16.4,-30);tops.forEach(t=>arc(roof,t,14));
  const ord=tops.map((t,i)=>[Math.atan2(t.x,t.z+30),i]).sort((a,b)=>a[0]-b[0]).map(o=>tops[o[1]]);ord.forEach((t,i)=>arc(t,ord[(i+1)%ord.length],6));}
 
@@ -468,6 +506,10 @@ const FS=`uniform vec3 uColor;uniform vec3 uPaper;uniform float uReveal;uniform 
 void main(){float r=clamp((uReveal-vD)/0.55,0.0,1.0);if(r<=0.0||vU>r)discard;float f=max(smoothstep(uFog.x,uFog.y,vDepth)*0.92,uDim);gl_FragColor=vec4(mix(uColor,uPaper,f),1.0);
 #include <colorspace_fragment>
 }`;
+VXQ.forEach(({tg,a,c,ms})=>{const g=mergeGeometries(ms.map(m=>BOX.clone().applyMatrix4(m)),false);if(!g)return;const o=new THREE.Mesh(g,vmat(a,c));tg.add(o)});VXQ.clear();
+// Batch static helper meshes per (parent, material): ~1000 draws become ~150.
+{const groups=new Map<string,THREE.Mesh[]>();const seen=new Set<THREE.Object3D>();S.traverse(o=>{if(!(o as THREE.Mesh).isMesh||!o.userData.b||!o.parent)return;seen.add(o.parent);const m=o as THREE.Mesh,k=o.parent.uuid+'/'+(m.material as THREE.Material).uuid;let g=groups.get(k);if(!g)groups.set(k,g=[]);g.push(m)});
+ groups.forEach(ms=>{if(ms.length<2)return;const geo=mergeGeometries(ms.map(m=>m.geometry.clone().applyMatrix4(m.matrix)),false);if(!geo)return;const parent=ms[0].parent!,o=new THREE.Mesh(geo,ms[0].material);o.matrixAutoUpdate=false;ms.forEach(m=>parent.remove(m));parent.add(o)});void seen}
 AREAS.forEach(a=>{
   let lo=1e9,hi=-1e9;Object.values(a.L!).forEach(arr=>{for(let i=1;i<arr.length;i+=3){lo=Math.min(lo,arr[i]);hi=Math.max(hi,arr[i])}});const span=Math.max(1,hi-lo);
   Object.entries(a.L!).forEach(([t,arr])=>{if(!arr.length)return;const n=arr.length/6,u=new Float32Array(n*2),dl=new Float32Array(n*2);
@@ -569,17 +611,23 @@ window.FACTORY={
     const im=mode==='intro'||mode==='globe';
     AREAS.forEach(a=>{
       if(a===grd)a.r=1-sm(0,.5,G.gV);
+      else if(a===brand.skyline)a.r=1-sm(.75,1,G.gV);
       else if(a===gA)a.r=G.gV;
       else if(a===gRim)a.r=G.done?sm(0,.35,G.arcs):Math.min(a.r,G.gV);
       else if(a===gArc)a.r=G.done?G.arcs:Math.min(G.arcs,G.gV);
-      else if(a===city)a.r=G.dist;
+      // The civic city ring is part of the visible city now (its paper fills always occluded anyway).
+      else if(a===city)a.r=Math.max(G.dist,1-sm(.75,1,G.gV));
+      else if(a===cityArcs)a.r=G.dist;
       else if(a.at!==undefined)a.r=mode==='intro'?(reduce?(introS>=a.at-.6?1:0):sm(a.at-.95,a.at-.05,introS)):1;
       else if(a.hy){const tg=im?0:sm(a.hy[0],a.hy[1],C.position.y);a.r=reduce?tg:a.r+(tg-a.r)*Math.min(1,dt*2.2)}
       else{const tg=im?0:1-sm(a.full!,a.start!,C.position.distanceTo(a.c!));
         if(reduce)a.r=im?0:Math.max(a.r,tg>.3?1:0);
         else if(tg>a.r)a.r=Math.min(tg,a.r+dt*1.1);
         else if(im)a.r=Math.max(0,a.r-dt*1.6);}
-      a.u.value=a.r;a.mats.forEach(m=>{m.opacity=m.userData.base*a.r;m.visible=a.r>.002})});
+      a.u.value=a.r;a.mats.forEach(m=>{const op=m.userData.base*a.r;m.opacity=op;m.visible=a.r>.002;
+        // Fully revealed solids draw in the opaque pass (hundreds of sorted transparent draws were the frame-rate cost).
+        const tr=op<.999||m.blending!==THREE.NormalBlending||m.depthWrite===false;if(m.transparent!==tr){m.transparent=tr;m.needsUpdate=true}})});
+    brand.tick(now,dt);
     R.render(S,C);CR.render(S,C);
   },
   globeBegin(dir){G.dir=dir;G.done=false;G.focus=null;G.panel=0;G.A={p:C.position.clone(),l:lt.clone(),s:G.fs,q:Rcur.clone()};G.B=dir==='in'?{p:GPOS,l:GLOOK,s:SF,q:Rg}:{p:EXTP,l:EXTL,s:1,q:R0};if(dir==='in'){const a=G.A;G.cp=new THREE.CatmullRomCurve3([a.p.clone(),V(2,31,-4),V(0,62,-18),GPOS.clone()],false,'centripetal');G.cl=new THREE.CatmullRomCurve3([a.l.clone(),V(0,26.4,-10),V(0,4,-30),GLOOK.clone()],false,'centripetal')}},
@@ -589,7 +637,7 @@ window.FACTORY={
   globeReset(){G.dist=0;G.fs=1;Rcur.copy(R0);G.gV=0;G.arcs=0;G.done=false;G.dir=null;G.panel=0;G.panelE=0},
   setPanel(v){G.panel=v},setSel(i){G.gsel=i},
   css(el,par){const o=new CSS3DObject(el);el.style.userSelect='text';el.style.display='none';CAMEL.appendChild(el);(par==='campus'?campus.g:par==='net'?NET:par==='world'?S:factoryG).add(o);return o},
-  cam(){return C},routeWP(r,s){const Q=ROUTES[r];return Q.wp[Q.stops[s]]},routePose(r,k){const Q=ROUTES[r],u=Math.min(1,Math.max(0,k/(Q.wp.length-1))),p=Q.pc!.getPoint(u),l=Q.lc!.getPoint(u);return[[p.x,p.y,p.z],[l.x,l.y,l.z]]},
+  cam(){return C},routeWP(r,s){const Q=ROUTES[r];return Q.wp[Q.stops[s]]},brandIcons(){return brand.icons},routePose(r,k){const Q=ROUTES[r],u=Math.min(1,Math.max(0,k/(Q.wp.length-1))),p=Q.pc!.getPoint(u),l=Q.lc!.getPoint(u);return[[p.x,p.y,p.z],[l.x,l.y,l.z]]},
   fitBoard(o,p,l,pxW){const P=V(...p),L=V(...l),f=L.clone().sub(P),d=f.length(),ty=Math.tan(C.fov*Math.PI/360),tx=ty*Math.min(1.9,Math.max(1.3,innerWidth/innerHeight));f.normalize();const r=f.clone().cross(V(0,1,0)).normalize();L.addScaledVector(r,d*tx/3);const f2=L.sub(P).normalize(),r2=f2.clone().cross(V(0,1,0)).normalize(),u=r2.clone().cross(f2),D=Math.min(d*.8,13);o.position.copy(P).addScaledVector(f2,D).addScaledVector(r2,D*tx*.6).addScaledVector(u,D*ty*.05);o.scale.setScalar(D*tx*2*.27/pxW);o.rotation.set(0,0,0);o.lookAt(P);o.rotateY(-.17)},
   aim(o,pos,cp,z,flat,ww,pxW){o.position.set(pos[0],pos[1],pos[2]);const c=cp?V(...cp):null;if(flat)o.rotation.set(-Math.PI/2,0,0);else if(c){o.updateMatrixWorld();o.lookAt(c)}const w=V();o.getWorldPosition(w);o.scale.setScalar(ww?ww/pxW!:
 c?w.distanceTo(c)*.001036*(z||1):.02)},
