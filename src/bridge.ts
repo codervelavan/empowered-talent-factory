@@ -4,7 +4,6 @@
 // single place that documents them.
 import type { Object3D, PerspectiveCamera, Vector3 } from 'three';
 import type { CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
-import type { Guide } from './guide/guide';
 
 export type LineKey = 'career' | 'build' | 'workforce';
 /** Factory controller mode (`mode` in controller.ts). */
@@ -37,6 +36,8 @@ export interface FactoryApi {
   snapshot(): void;
   poseBack(t: number): void;
   routeWP(r: string, s: number): [P3, P3];
+  /** Camera position and look-at at waypoint position k along a route curve (k may be fractional). */
+  routePose(r: string, k: number): [P3, P3];
   cam(): PerspectiveCamera;
   render(mode: string, introS: number): void;
   // intro / career floor
@@ -95,36 +96,13 @@ declare global {
   interface Window {
     // factory/scene.ts
     FACTORY?: FactoryApi;
-
-    // guide/guide.ts
-    __guide?: Guide;
-
-    // station/station.ts
-    __rideInput?: (e: Event) => void;
-    __stFrame?: (u: number) => void;
-    __stDbg?: { start(k: LineKey): void; go(i: number): void };
-    __enterFactory?: () => void;
-    __replayStory?: () => void;
-    __showStation?: () => void;
-    /** Set on the story iframe's window once station.ts has hooked its scroll handlers. */
+    // main.ts / story/intro.ts: true while the story intro covers the page.
+    __storyShowing?: boolean;
+    /** Set on the story iframe's window once story/intro.ts has hooked its scroll handlers. */
     __hooked?: number;
 
     // factory/controller.ts
     __step?: () => void;
-    __choose?: (r: string) => void;
-    __factMode?: () => FactoryMode;
-    __stopC?: () => Record<string, StopCopy[]>;
-    __openStop?: (r: string, i: number) => void;
-    __setCat?: (c: string) => void;
-    __rideIn?: (k: LineKey) => void;
-    __factoryReset?: () => void;
-    __boardLine?: (k: string) => void;
-    __pendingBoard?: string | null;
-    __wfGo?: (i: number) => void;
-    __topOf?: (r: string, i: number) => number;
-    __back?: () => void;
-    __toGlobe?: () => void;
-    __openSide?: (i: number) => void;
     __goForm?: (i: number, title: string) => void;
     __wform?: (title: string) => void;
   }

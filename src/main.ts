@@ -1,24 +1,25 @@
 import './styles/base.css';
-import './styles/guide.css';
-import './styles/station.css';
+import './styles/company.css';
 
-import { initStation } from './station/station';
 import { drawSketches } from './factory/sketches';
 import { initController } from './factory/controller';
-import { initGuide } from './guide/guide';
-import { initCharacterStage } from './guide/character/stage';
+import { initStoryIntro } from './story/intro';
 import { initFactory } from './factory/scene';
 
-// Same start-up order as the prototype: station first (it locks scroll and owns the
-// story intro), then the scene sketches, the factory UI controller and the guide.
-// The 3D scene comes last; the controller waits for window.FACTORY and falls back
-// to the flat page if WebGL isn't available.
-initStation();
+// The story intro plays first, over everything else. When it hands over, the company
+// tour starts at the Company stop. The 3D scene starts last; the controller waits for
+// window.FACTORY and falls back to the flat page if WebGL isn't available.
+window.__storyShowing = true;
 drawSketches();
-initController();
-window.__guide = initGuide(initCharacterStage());
+const controller = initController(() => story.replay());
+const story = initStoryIntro(
+  () => { window.__storyShowing = false; controller.enterFromStory(); },
+  () => { window.__storyShowing = true; controller.beforeStory(); },
+);
+// Deep links (#career, #workforce, #ai-for-everyone, #evidence, #skip-3d) go straight into the site.
+if (/^#(career|workforce|ai-for-everyone|globe|evidence|skip-3d|skip)$/.test(location.hash)) story.skip();
 try {
   initFactory();
 } catch (err) {
-  console.error('3D factory failed to start; the flat page will be shown.', err);
+  console.error('3D scene failed to start; the flat page will be shown.', err);
 }

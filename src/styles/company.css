@@ -1,0 +1,57 @@
+html.introOn,html.introOn body{overflow:hidden!important}
+#storyIntro{position:fixed;inset:0;width:100%;height:100%;border:0;z-index:1000;background:#F4EFE2;opacity:1;transition:opacity .7s ease}
+
+/* ---- Company tour: HUD card, stage map, progress, hotspots (camera workflow from web2ite) ---- */
+:root{--glow:#35DC78}
+#tourHud{position:fixed;left:clamp(16px,4vw,64px);top:110px;z-index:6;box-sizing:border-box;width:min(380px,34vw);max-height:calc(100vh - 250px);overflow:auto;padding:24px;border:1px solid rgba(20,62,46,.15);border-radius:16px;background:rgba(242,239,226,.93);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);box-shadow:0 10px 35px rgba(20,62,46,.07);pointer-events:auto;transition:opacity .3s ease}
+#tourHud.dim{opacity:.55!important}
+#tourHud .tEye{display:flex;justify-content:space-between;gap:14px;font:700 10.5px/1 Manrope,sans-serif;letter-spacing:.18em;color:#5B705E}
+#tourHud .tEye span:first-child{display:flex;gap:10px;align-items:center}
+#tourHud .tEye span:first-child::before{content:"";width:3px;height:14px;border-radius:3px;background:#C9A33A}
+#tourHud h2{margin:14px 0 10px;font:800 clamp(26px,2.6vw,38px)/1.05 Manrope,sans-serif;letter-spacing:-.02em;color:#0F2B22;text-wrap:balance}
+#tourHud p{margin:0 0 16px;font:500 15px/1.5 Inter,sans-serif;color:#1E4632;text-wrap:pretty}
+#tourHud .tRoutes{display:flex;flex-direction:column;gap:8px;margin:0 0 12px}
+#tourHud .tRoutes button{display:flex;flex-direction:column;gap:4px;padding:13px 15px;border:1px solid rgba(20,62,46,.25);border-radius:10px;background:none;color:#0F2B22;text-align:left;cursor:pointer}
+#tourHud .tRoutes b{font:800 15px/1.2 Manrope,sans-serif}
+#tourHud .tRoutes span{font:500 12px/1.4 Inter,sans-serif;opacity:.8}
+#tourHud .tRoutes button.on,#tourHud .tRoutes button:hover{background:#0F2B22;color:#F2EFE2;border-color:#0F2B22}
+#tourHud .tAct{width:100%;padding:13px 17px;border:0;border-radius:10px;background:#0F2B22;color:#F6DB2D;text-align:left;font:700 14px/1.2 Manrope,sans-serif;cursor:pointer}
+#tourHud .tAct:hover{background:#2B6247}
+#tourMap{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:10;box-sizing:border-box;display:flex;align-items:center;gap:14px;width:min(860px,94vw);padding:10px 14px;border:1px solid rgba(20,62,46,.15);border-radius:18px;background:rgba(248,246,237,.9);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);box-shadow:0 8px 30px rgba(20,62,46,.09);pointer-events:auto}
+#tourMap ol{display:flex;justify-content:space-between;flex:1;gap:6px;margin:0;padding:0;list-style:none;min-width:0}
+#tourMap li{flex:1;min-width:0}
+#tourMap button{border:0;background:none;color:#0F2B22;cursor:pointer;font-family:Manrope,sans-serif}
+#tourMap [data-ts]{width:100%;display:flex;flex-direction:column;align-items:center;gap:7px;padding:4px 2px;border-radius:10px;font:600 11px/1 Manrope,sans-serif;white-space:nowrap}
+#tourMap [data-ts] i{width:10px;height:10px;border:1.5px solid #1E4632;border-radius:50%;box-sizing:border-box}
+#tourMap [data-ts].past i{background:#1E4632}
+#tourMap [data-ts].on{font-weight:800}
+#tourMap [data-ts].on i{border-color:var(--glow);background:var(--glow);box-shadow:0 0 0 4px rgba(53,220,120,.22),0 0 12px rgba(53,220,120,.7)}
+#tourMap [data-ts]:hover{background:rgba(15,43,34,.06)}
+#tourMap .tPrev,#tourMap .tNext{flex:none;height:36px;padding:0 10px;border-radius:999px;font:700 13px/1 Manrope,sans-serif}
+#tourMap .tNext{background:#0F2B22;color:#F2EFE2;padding:0 14px}
+#tourMap button:disabled{opacity:.3;cursor:default}
+#tourProgress{position:fixed;left:0;right:0;bottom:0;z-index:15;height:3px;background:rgba(20,62,46,.12);pointer-events:none}
+#tourFill{height:100%;width:0;background:var(--glow);box-shadow:0 0 8px rgba(53,220,120,.8)}
+#tourHint{position:fixed;left:50%;bottom:104px;transform:translateX(-50%);z-index:4;padding:8px 16px;border-radius:999px;background:rgba(242,239,226,.88);font:600 10.5px/1 Manrope,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:#1E4632;white-space:nowrap;pointer-events:none}
+#tourHots{position:fixed;inset:0;z-index:5;pointer-events:none}
+.tHot{position:absolute;left:0;top:0;display:flex;align-items:center;gap:8px;margin:-11px 0 0 -11px;padding:0;border:0;background:none;cursor:pointer;pointer-events:auto}
+.tHot[hidden]{display:none}
+.tHot i{width:22px;height:22px;border-radius:50%;background:radial-gradient(circle,#fff 0 18%,var(--glow) 22% 48%,rgba(53,220,120,0) 70%);box-shadow:0 0 14px 4px rgba(53,220,120,.55);animation:tHotPulse 1.8s ease-in-out infinite}
+.tHot span{padding:6px 10px;border-radius:999px;background:rgba(15,43,34,.9);color:#F2EFE2;font:700 12px/1 Manrope,sans-serif;white-space:nowrap;opacity:0;transform:translateX(-4px);transition:opacity .2s,transform .2s}
+.tHot:hover span,.tHot:focus-visible span{opacity:1;transform:none}
+.tHot:focus-visible{outline:2px solid #C9A33A;outline-offset:4px;border-radius:999px}
+@keyframes tHotPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.25)}}
+@media (prefers-reduced-motion:reduce){.tHot i{animation:none}}
+@media (max-width:760px){
+  #tourHud{top:auto;bottom:96px;left:12px;right:12px;width:auto;max-height:38vh;padding:16px}
+  #tourHud h2{font-size:24px;margin:10px 0 8px}
+  #tourHud p{font-size:13.5px;margin-bottom:12px}
+  #tourHud .tRoutes span{display:none}
+  #tourMap{bottom:12px;gap:6px;padding:8px}
+  #tourMap [data-ts]{font-size:9px;gap:5px}
+  #tourMap [data-ts] span{overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  #tourMap .tNext{font-size:0;padding:0 12px}#tourMap .tNext span{font-size:16px}
+  #tourHint{display:none}
+}
+/* The floating career-path cards duplicate the stop panels and collide with the tour card. */
+html[data-route] .cor{visibility:hidden!important;pointer-events:none!important}

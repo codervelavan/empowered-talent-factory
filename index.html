@@ -2,7 +2,7 @@
 <html lang="en" class="introOn">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>EmpowerED Careers — AI Talent Factory</title>
+<title>EmpowerED Careers — The AI Talent Company</title>
 <link rel="icon" type="image/png" href="./src/assets/empowered-careers-logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
@@ -10,30 +10,6 @@
 </head>
 <body>
 <iframe id="storyIntro" title="EmpowerED Careers story"></iframe>
-<div id="station" hidden tabindex="-1" role="region" aria-label="Station">
-  <svg id="stSvg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true"></svg>
-  <div class="stTxt stUI">
-    <h1>We build the bridge from education-ready to industry-ready.</h1>
-    <p>People learn by building real AI products in PODs, small teams guided by industry mentors. Their work is verified, so employers can trust it.</p>
-  </div>
-  <div class="stBW stUI">
-    <div class="stBoard" role="group" aria-labelledby="stBT">
-      <h2 class="stBT" id="stBT">Where are you heading?</h2>
-      <button class="stRow" type="button" data-line="career"><b>Career Line</b><span>Students and professionals</span><span class="o">Become industry-ready</span><i aria-hidden="true">→</i></button>
-      <button class="stRow" type="button" data-line="build"><b>Build Line</b><span>Startups and companies</span><span class="o">Get a product built. Hire the team behind it.</span><i aria-hidden="true">→</i></button>
-      <button class="stRow" type="button" data-line="workforce"><b>Workforce Line</b><span>Governments, universities, organisations</span><span class="o">Upskill your people</span><i aria-hidden="true">→</i></button>
-    </div>
-    <div class="stPick">Pick a line to board</div>
-    <div class="stActs"><button class="stStory" type="button">Watch the story again <span aria-hidden="true">↺</span></button><button class="stGuide" type="button" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>Turn on voice</button></div>
-  </div>
-  <div id="stRide" class="rUI" aria-live="polite"><div class="sTop"><div class="sCat"></div><h2 class="sTtl"></h2></div><div class="sBot"><p class="sPar"></p><div class="sRow"><ul class="sChips"><li></li><li></li><li></li></ul><button class="cta sAct" type="button"><b></b> <span>→</span></button></div></div></div>
-  <div id="stHint" class="rUI">Scroll to ride · Click a station on the map · Change line anytime</div>
-  <nav id="stMap" class="rUI" aria-label="Line map"><button class="mChg" type="button">‹ Change line</button><ol class="mDots"></ol><span class="mLbl"></span></nav>
-  <div id="crCards"></div><div id="wfSg"></div>
-  <div id="crTxt" aria-live="polite"><h2 class="crH"></h2><p class="crP"></p><div class="crB"></div></div>
-  <aside id="crPass" aria-label="Readiness Passport"><h3>Readiness Passport</h3><p class="pDesc">A verified record of what you can do. Employers can trust it.</p><ul><li><i></i>Role fit</li><li><i></i>Evidence</li><li><i></i>Readiness</li><li><i></i>Validity</li></ul></aside>
-</div>
-
 <canvas id="c" aria-hidden="true"></canvas>
 
 <div class="scene" id="sceneA" aria-hidden="true"><svg id="svgA" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice"></svg><div class="bigType" id="textA">LEARNING <span>≠</span> GETTING HIRED</div></div>
@@ -42,7 +18,7 @@
 <div class="scene" id="sceneF" aria-hidden="true"><svg id="svgF"></svg></div>
 
 <div id="hud">
-  <button class="bldg" id="bldg" type="button" aria-label="How the Factory works: Develop, Engineer, Verify, Deploy"></button>
+  <button class="bldg" id="bldg" type="button" aria-label="How EmpowerED works: Develop, Engineer, Verify, Deploy"></button>
   <div class="title" id="title"><h2>AI TALENT FACTORY</h2><p class="sys">Develop capability. Engineer for real. Verify readiness. Deploy with confidence.</p><div class="proof"><span>Product Engineering</span><i></i><span>ETAF™</span><i></i><span>Enterprise Deployment</span></div><p class="ask" id="ask">What are you here to build?</p></div>
   <div id="zones" aria-hidden="true"><span class="zone">DEVELOP</span><i>→</i><span class="zone">ENGINEER</span><i>→</i><span class="zone">VERIFY</span><i>→</i><span class="zone">DEPLOY</span></div>
   <button class="door gold" id="doorCareer" type="button" data-anchor="0,4.3,4.5">Build My Career <span>→</span></button>
@@ -51,7 +27,7 @@
 
   <div class="final cp wm" id="w0p">
     <div class="eyebrow">Build My Workforce · Dock</div>
-    <h2>What do you need the Factory to produce?</h2>
+    <h2>What do you need EmpowerED to produce?</h2>
     <div class="opts" id="wFil" role="group" aria-label="Filter by organisation"><button class="opt on" type="button" data-fil="all">All</button><button class="opt" type="button" data-fil="ent">Enterprise</button><button class="opt" type="button" data-fil="uni">University</button><button class="opt" type="button" data-fil="gov">Government</button></div>
     <div class="lab">Bays</div>
     <div class="opts" id="bayBtns"><button class="opt" type="button" data-bay="0" data-hit="bay0">01 · Verified Talent (TaaS)</button><button class="opt" type="button" data-bay="1" data-hit="bay1">02 · Product Engineering PODs</button><button class="opt" type="button" data-bay="2" data-hit="bay2">03 · Workforce Capability</button><button class="opt" type="button" data-bay="3" data-hit="bay3">04 · Campus Talent Factory</button><button class="opt" type="button" data-bay="4" data-hit="bay4">05 · Ecosystem at Scale</button></div>
@@ -103,7 +79,7 @@
   <div class="final cp wm" id="w4p">
     <div class="eyebrow">Campus Talent Factory</div>
     <h2>Build the future talent supply.</h2>
-    <p class="lede2">A campus plugs into the Factory as an extension. Choose an actor to see what it brings.</p>
+    <p class="lede2">A campus plugs into EmpowerED as an extension. Choose an actor to see what it brings.</p>
     <div class="lab">Actor</div>
     <div class="opts" id="actBtns"></div>
     <div class="detail" id="actV"></div>
@@ -116,7 +92,7 @@
   <div class="final cp wm" id="w5p">
     <div class="eyebrow">Ecosystem at Scale</div>
     <h2>Regional and sector capability building.</h2>
-    <p class="lede2">Above the Factory, one pilot POD or regional hub links campuses, industry and government around a sector priority.</p>
+    <p class="lede2">Above the company, one pilot POD or regional hub links campuses, industry and government around a sector priority.</p>
     <div class="lab">Sector priority</div>
     <div class="opts" id="secBtns"></div>
     <div class="lab">Actors</div>
@@ -142,7 +118,7 @@
   <div class="final cp" id="cp0">
     <div class="eyebrow">Build My Career · Intake</div>
     <h2>Your career path starts with where you are.</h2>
-    <p class="lede2">The Factory assesses your current capability first, then recommends the path that fits.</p>
+    <p class="lede2">EmpowerED assesses your current capability first, then recommends the path that fits.</p>
     <div class="acts"><button class="cta" type="button" data-go-assess="">Take the Entry Assessment <span>→</span></button><button class="cta ghost" type="button" data-drawer="how">How the assessment works</button></div>
   </div>
   <div class="final cp" id="cp1">
@@ -211,7 +187,7 @@
   </div>
   <div class="final cp" id="cp7">
     <div class="eyebrow">Opportunity dock</div>
-    <h2>Leave the Factory ready.</h2>
+    <h2>Leave EmpowerED ready.</h2>
     <div class="c3"><div><b>Career Launch</b><p>Placement assistance, no guarantee</p></div><div><b>Career Pro</b><p>Role-aligned placement support</p></div><div><b>Career Accelerate</b><p>Targeted premium-role opportunities</p><p class="note">Eligibility terms <span class="ph">[PLACEHOLDER]</span></p></div></div>
     <div class="acts"><button class="cta" type="button" data-drive=""></button><button class="cta ghost" type="button" data-ph="Talk to Career Team">Talk to Career Team</button></div>
     <button class="backBtn" type="button">← Back to the entrance</button>
@@ -222,7 +198,7 @@
   <div class="cor" tabindex="0" data-k="pro" data-anchor="7,11.4,-34"><div class="cb"><b>CAREER PRO</b><small>Recommended after assessment</small><div class="cx"><p>Specialise in a Role. Build Real-World Capability.</p><button class="cta" type="button" data-path="pro"></button></div></div></div>
   <div class="cor" tabindex="0" data-k="accel" data-anchor="8,4.6,-22.6"><div class="cb"><b>CAREER ACCELERATE</b><small>Recommended after assessment</small><div class="cx"><p>Gain Industry Experience. Accelerate Your Career.</p><button class="cta" type="button" data-path="accel"></button></div></div></div>
   <aside id="cDrawer" aria-live="polite"><button class="gClose" type="button" aria-label="Close" id="cdClose">×</button>
-    <section data-d="how"><div class="eyebrow">Entry Assessment</div><h3>How the assessment works</h3><ol><li>It maps your baseline capability across AI, digital and technical skills.</li><li>It identifies your capability gaps and the role direction that fits you.</li><li>It establishes how ready you are today.</li><li>The Factory then recommends Career Launch, Career Pro or Career Accelerate.</li></ol><p class="note">Format, duration and cost: <span class="ph">[PLACEHOLDER]</span></p><button class="cta" type="button" data-go-assess="">Take the Entry Assessment <span>→</span></button></section>
+    <section data-d="how"><div class="eyebrow">Entry Assessment</div><h3>How the assessment works</h3><ol><li>It maps your baseline capability across AI, digital and technical skills.</li><li>It identifies your capability gaps and the role direction that fits you.</li><li>It establishes how ready you are today.</li><li>EmpowerED then recommends Career Launch, Career Pro or Career Accelerate.</li></ol><p class="note">Format, duration and cost: <span class="ph">[PLACEHOLDER]</span></p><button class="cta" type="button" data-go-assess="">Take the Entry Assessment <span>→</span></button></section>
     <section data-d="drive" hidden=""><div class="eyebrow">Weekend Assessment Drive</div><h3 id="driveT"></h3>
       <form class="regForm" id="regForm">
         <label>Full name<input name="name" required="" autocomplete="name"></label>
@@ -255,7 +231,7 @@
   <aside id="gSide" aria-live="polite"><button class="gClose" type="button" aria-label="Close">×</button><div class="eyebrow">Profession journey</div><h3 id="gName"></h3><div class="gline" id="gLine"></div><div class="detail" id="gLvD"></div><label class="tgl"><input type="checkbox" id="gOrg"> I'm an organisation</label><div class="acts"><button class="cta" type="button" id="gGo"></button></div><div class="handoff" id="gHand" hidden=""><b id="gHandT"></b><p class="note"><span class="ph">[PLACEHOLDER]</span> Hand-off destination to be supplied.</p></div></aside>
   <aside id="gWho" aria-live="polite"><button class="gClose" type="button" aria-label="Close" id="whoClose">×</button><div class="eyebrow">AI for Everyone</div><h3>Who is this for?</h3><div class="radial" id="radial" role="group" aria-label="Pathways"><svg viewBox="0 0 300 300" aria-hidden="true"><circle cx="150" cy="150" r="102" fill="none" stroke="#C9A33A" stroke-width="1.5" stroke-dasharray="3 5"></circle></svg><div class="hubc" id="whoHub"></div></div><div class="detail" id="whoD"></div><div class="acts" id="whoActs"></div><div class="handoff" id="whoHand" hidden=""><b id="whoHandT"></b><p class="note"><span class="ph">[PLACEHOLDER]</span> Hand-off destination to be supplied.</p></div></aside>
   <div id="xf" aria-hidden="true"></div>
-  <div id="lift" aria-live="polite"><b>AI FOR EVERYONE</b><span>From the Factory to the world.</span><small>Click or press any key to skip</small></div>
+  <div id="lift" aria-live="polite"><b>AI FOR EVERYONE</b><span>From the company to the world.</span><small>Click or press any key to skip</small></div>
   <div id="gHint">Drag to rotate · Click an industry</div>
   <nav class="rail" id="rail" aria-label="Route stops"></nav>
   <div id="ctl" role="group" aria-label="Controls at this stop"></div>
@@ -268,7 +244,7 @@
 
 <header id="top">
   <a class="logo" id="hdrLogo" href="#top"><img src="./src/assets/empowered-careers-logo.png" alt="EmpowerED Careers"></a>
-  <div class="hdrR"><button class="hBtn" id="hdrBack" type="button">← Back</button><span class="crumb" id="crumb">FACTORY</span><button class="hBtn" id="menuBtn" type="button" aria-expanded="false" aria-controls="menu">Menu</button></div>
+  <div class="hdrR"><button class="hBtn" id="hdrBack" type="button">← Back</button><span class="crumb" id="crumb">EMPOWERED</span><button class="hBtn" id="menuBtn" type="button" aria-expanded="false" aria-controls="menu">Menu</button></div>
   <nav id="menu" aria-label="Site menu" hidden=""><ul><li><button type="button" data-go="story">Watch the story <span>↺</span></button></li><li><button type="button" data-go="career">Build My Career <span>→</span></button></li><li><button type="button" data-go="workforce">Build My Workforce <span>→</span></button></li><li><button type="button" data-go="globe">AI for Everyone <span>↑</span></button></li><li><button type="button" data-go="evidence">Evidence &amp; Impact <span>→</span></button></li><li class="sep"><button type="button" data-go="skip">Skip 3D <span>→</span></button></li></ul></nav>
 </header>
 
