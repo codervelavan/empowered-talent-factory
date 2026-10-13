@@ -137,6 +137,7 @@ export class Tour {
   get index(): number { return Math.round(this.current); }
 
   update(dt: number): TourFrame {
+    dt = Number.isFinite(dt) ? Math.min(0.1, Math.max(0, dt)) : 0;
     const n = this.stops.length;
     // innerHeight can be 0 while the page is hidden; never let NaN into the camera.
     const t = innerHeight > 0 ? scrollY / (SEG * innerHeight) : this.target;

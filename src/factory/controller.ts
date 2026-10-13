@@ -277,7 +277,7 @@ export function initController(replayStory: () => void): ControllerApi {
       else if(mode==='gIn'||mode==='gOut'){const gi=mode==='gIn',raw=Math.min(1,(now-gT0)/(gi?(reduce?1400:GIN):2600)),t=reduce&&!gi?1:raw;if(gi&&reduce){liftO=1-Math.abs(raw*2-1);xfO=liftO;F.globeStep(raw<.5?0:1)}else{if(gi)liftO=sm(.04,.16,raw)*(1-sm(.8,.94,raw));F.globeStep(t)}F.render('globe',0);
         if(t>=1){if(mode==='gIn'){F.globeArrive();mode='globe';document.body.style.cursor='grab'}else{F.globeReset();document.body.style.cursor='';finishBack();if(gNext){const n=gNext;gNext=null;choose(n)}}}}
       else if(mode==='globe'){F.globeHold();F.render('globe',0)}
-      else if(mode==='tour'){const dt=Math.min(.1,(now-(tourLast||now))/1000);tourLast=now;const fr=tour.update(dt);F.poseAt(fr.pos,fr.look);route=tour.route;
+      else if(mode==='tour'){const dt=Math.max(0,Math.min(.1,(now-(tourLast||now))/1000));if(now>tourLast||now<tourLast-5e3)tourLast=now;const fr=tour.update(dt);F.poseAt(fr.pos,fr.look);route=tour.route;
         s=tourCar>=0?tourCar:tourWf>=0?tourWf:-9;floorX=tourCar===5&&tourSettled?curStage:-1;F.render('route',0)}
       else{
         const st=F.stops(route!);last=st.length-1;let k=0;
