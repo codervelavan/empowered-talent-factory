@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import type { P3, ScreenPoint } from '../bridge';
 import type { TourHotspot, TourStop } from '../company/tour';
 
-export type RoomId = 'entrance' | 'intake' | 'develop' | 'engineer' | 'verify' | 'deploy';
+export type RoomId = 'entrance' | 'intake' | 'develop' | 'engineer' | 'verify' | 'deploy' | 'dock' | 'talent' | 'teams' | 'campus' | 'region' | 'plaza';
 export interface Choice { id: string; label: string; you: string; guide: string }
 export interface Beat {
   room: RoomId;
@@ -31,15 +31,21 @@ export interface RoomDef {
   hotspots?: TourHotspot[];
 }
 export type Audience = 'student' | 'founder' | 'hr' | 'university' | 'professional' | 'explore';
+export type PathId = Exclude<Audience, 'explore'>;
+export interface EndAction { label: string; primary?: boolean; run(): void }
+/** One audience's story: its beats, any room copy that differs for this audience, and its next steps. */
+export interface StoryPath {
+  script: Beat[];
+  rooms?: Partial<Record<RoomId, Partial<RoomDef>>>;
+  end: EndAction[];
+}
 export interface StoryHost {
   project(x: number, y: number, z: number): ScreenPoint;
   addWorld(o: THREE.Object3D): void;
   /** Replace the story route's beats and go to beat i. */
   setBeats(stops: TourStop[], goTo: number): void;
-  /** Paths not built as stories yet hand over to the matching part of the tour. */
-  other(a: Exclude<Audience, 'student'>): void;
-  /** Buttons on the last beat. */
-  endActions: { label: string; primary?: boolean; run(): void }[];
+  /** "I'll explore on my own": hand over to the free tour. */
+  explore(): void;
 }
 
 // ---- Where things happen ----------------------------------------------------------
@@ -52,6 +58,18 @@ const SPOTS: Record<RoomId, Spot> = {
   engineer: { guide: [13.6, 0, -25.6], you: [16.5, 0, -24.4], cam: [[21.6, 3.6, -17.4], [13.4, 1.6, -31]] },
   verify: { guide: [18.6, 6, -38.6], you: [21.5, 6, -37.3], cam: [[24.6, 8.8, -29.4], [20, 7.6, -44]] },
   deploy: { guide: [-1.6, 0, -77], you: [1.6, 0, -78.4], cam: [[4.5, 3.8, -91], [0, 4.2, -68]] },
+  // Outside the east wall, by the five workforce bays.
+  dock: { guide: [39, 0, -12], you: [41.4, 0, -14.4], cam: [[50, 4, -4], [35, 2, -15]] },
+  // Just inside the east wall, at the verified talent shelf.
+  talent: { guide: [22.2, 0, -3.4], you: [24.8, 0, -6], cam: [[28.8, 3.2, 0], [20.5, 1.6, -7.5]] },
+  // West side of the ground floor, by the reskilling line.
+  teams: { guide: [-25, 0, -2.2], you: [-22.4, 0, -3], cam: [[-21.5, 3.4, 4.5], [-24.5, 1.6, -10]] },
+  // Outside the west wall, where the campus extension slides in.
+  campus: { guide: [-41, 0, -8], you: [-38.6, 0, -9.8], cam: [[-31, 4.6, 2], [-48, 2.4, -18]] },
+  // Same place, camera pulled up over the regional network.
+  region: { guide: [-41, 0, -8], you: [-38.6, 0, -9.8], cam: [[-20, 30, 24], [-56, 0, -24]] },
+  // On the plaza under the "AI for Everyone" icon.
+  plaza: { guide: [5, 0, 22.5], you: [8, 0, 24], cam: [[0.5, 3.2, 33], [7, 4.4, 17]] },
 };
 /** Walking routes between rooms (guide spot to guide spot), up and down the atrium stairs. */
 const PATHS: Record<string, P3[]> = {
@@ -59,6 +77,15 @@ const PATHS: Record<string, P3[]> = {
   'intake>develop': [[6.5, 0, -9], [2, 0, -5], [0, 0, -5.6], [0, 6, -22], [-3, 6, -27], [-7, 6, -33], [-9.5, 6, -37.6]],
   'develop>engineer': [[-9.5, 6, -37.6], [-7, 6, -30], [-1, 6, -24], [0, 6, -22], [0, 0, -6], [4, 0, -10], [10, 0, -18], [13.6, 0, -25.6]],
   'engineer>verify': [[13.6, 0, -25.6], [8, 0, -14], [0, 0, -6], [0, 6, -22], [8, 6, -26], [16, 6, -32], [18.6, 6, -38.6]],
+  'entrance>dock': [[-2, 0, 30], [10, 0, 24], [28, 0, 14], [40, 0, 4], [42, 0, -6], [39, 0, -12]],
+  'dock>engineer': [[39, 0, -12], [34, 0, -13.5], [30, 0, -13.5], [24, 0, -14], [18, 0, -20], [13.6, 0, -25.6]],
+  'talent>verify': [[22.2, 0, -3.4], [12, 0, -4.4], [2, 0, -5], [0, 0, -5.6], [0, 6, -22], [8, 6, -26], [16, 6, -32], [18.6, 6, -38.6]],
+  'entrance>teams': [[-2, 0, 30], [0, 0, 16], [0, 0, 3], [-8, 0, 1], [-22, 0, 1], [-25, 0, -2.2]],
+  'teams>talent': [[-25, 0, -2.2], [-22, 0, 1], [-8, 0, 1], [2, 0, -3], [12, 0, -3.4], [22.2, 0, -3.4]],
+  'verify>dock': [[18.6, 6, -38.6], [16, 6, -32], [8, 6, -26], [0, 6, -22], [0, 0, -6], [12, 0, -11], [26, 0, -13.5], [30, 0, -13.5], [36, 0, -13.5], [39, 0, -12]],
+  'entrance>campus': [[-2, 0, 30], [-16, 0, 24], [-36, 0, 14], [-42, 0, 0], [-41, 0, -8]],
+  'region>engineer': [[-41, 0, -8], [-42, 0, 0], [-36, 0, 14], [-16, 0, 16], [0, 0, 16], [0, 0, 3], [4, 0, -10], [10, 0, -18], [13.6, 0, -25.6]],
+  'entrance>plaza': [[-2, 0, 30], [2, 0, 25], [5, 0, 22.5]],
   'verify>deploy': [[18.6, 6, -38.6], [20, 6, -31], [6, 6, -24], [0, 6, -22], [0, 0, -6], [-4, 0, -9], [-4, 0, -57], [0, 0, -61], [0, 0, -70], [-1.6, 0, -77]],
 };
 
@@ -137,6 +164,24 @@ const makeGuide = () => {
   r.root.add(ring);
   return r;
 };
+const makeFounder = () => blocky({ top: 0x2c3e5c, legs: 0x2a2f3a, skin: 0xc68e6a, hair: 0x231a14, extra: (_b, box) => {
+  box(0xf2efe2, 0.14, 0.4, 0.02, 0, 1.24, 0.155); // shirt
+  box(0x9aa3ad, 0.08, 0.42, 0.32, 0.42, 1.06, 0.02); // laptop under the arm
+} });
+const makeManager = () => blocky({ top: 0x3b7d7a, legs: 0x40434a, skin: 0x8d5f45, hair: 0x1a1410, extra: (_b, box) => {
+  box(0x0f2b22, 0.3, 0.38, 0.03, 0.12, 1.0, 0.2); // tablet held in front
+  box(0x35dc78, 0.24, 0.3, 0.01, 0.12, 1.0, 0.218);
+} });
+const makeDean = () => blocky({ top: 0x5a4632, legs: 0x3a3530, skin: 0xe0b898, hair: 0x9a9a9a, extra: (_b, box) => {
+  box(0xf2efe2, 0.14, 0.4, 0.02, 0, 1.24, 0.155);
+  box(0x1e4632, 0.05, 0.3, 0.025, 0, 1.22, 0.166); // tie
+  box(0xc9a33a, 0.06, 0.36, 0.28, 0.4, 1.08, 0.02); // folder under the arm
+} });
+const makeProfessional = () => blocky({ top: 0xd8dde2, legs: 0x2f3b4c, skin: 0xa87b5c, hair: 0x3a2a1c, extra: (_b, box) => {
+  box(0x1fa85a, 0.03, 0.34, 0.02, -0.07, 1.32, 0.156); // lanyard
+  box(0x1fa85a, 0.03, 0.34, 0.02, 0.07, 1.32, 0.156);
+  box(0xffffff, 0.14, 0.18, 0.02, 0, 1.08, 0.16); // badge
+} });
 const makeStudent = () => blocky({ top: 0x8fbf9a, legs: 0x3e5c7a, skin: 0xe0b898, hair: 0x4a3424, extra: (body, box) => {
   box(0x1e4632, 0.44, 0.5, 0.18, 0, 1.2, -0.24, body); // backpack
   box(0x7fae8a, 0.4, 0.14, 0.12, 0, 1.47, -0.18, body); // hood
@@ -148,7 +193,9 @@ export class Story {
   private beats: Beat[] = [];
   private picked: Record<number, string> = {};
   private guide = makeGuide();
-  private you = makeStudent();
+  private rigs: Record<PathId, Rig> = { student: makeStudent(), founder: makeFounder(), hr: makeManager(), university: makeDean(), professional: makeProfessional() };
+  private you: Rig = this.rigs.student;
+  private path: StoryPath | null = null;
   private last: { g: P3; y: P3 } | null = null;
   private walkT = 0;
   private bubbleG: HTMLDivElement;
@@ -156,10 +203,10 @@ export class Story {
   private shownBeat = -1;
   private visible = false;
 
-  constructor(private host: StoryHost, private rooms: Record<RoomId, RoomDef>, private script: Beat[]) {
+  constructor(private host: StoryHost, private rooms: Record<RoomId, RoomDef>, private paths: Record<PathId, StoryPath>) {
     host.addWorld(this.guide.root);
-    host.addWorld(this.you.root);
-    this.guide.root.visible = this.you.root.visible = false;
+    for (const r of Object.values(this.rigs)) { host.addWorld(r.root); r.root.visible = false; }
+    this.guide.root.visible = false;
     const mk = (cls: string) => { const d = document.createElement('div'); d.className = 'sbub ' + cls; d.hidden = true; (document.getElementById('hud') ?? document.body).appendChild(d); return d; };
     this.bubbleG = mk('guide');
     this.bubbleY = mk('you');
@@ -167,20 +214,24 @@ export class Story {
   }
 
   /** The entrance beat only (before the visitor picks a path). */
-  entranceStops(): TourStop[] { this.audience = null; this.beats = [{ room: 'entrance' }]; return this.toStops(); }
+  entranceStops(): TourStop[] { this.audience = null; this.path = null; this.beats = [{ room: 'entrance' }]; return this.toStops(); }
 
   private toStops(): TourStop[] {
     return this.beats.map((b, i) => {
-      const r = this.rooms[b.room];
+      const r = { ...this.rooms[b.room], ...this.path?.rooms?.[b.room] };
       return { id: 'beat' + i, room: b.room, label: r.label, eyebrow: r.eyebrow, title: r.title, copy: r.copy, action: r.action, hotspots: r.hotspots, pose: () => SPOTS[b.room].cam };
     });
   }
 
   private pick(a: Audience) {
-    if (a !== 'student') { this.host.other(a); return; }
+    if (a === 'explore') { this.host.explore(); return; }
     this.audience = a;
+    this.path = this.paths[a];
+    this.you.root.visible = false;
+    this.you = this.rigs[a];
+    this.last = null;
     this.picked = {};
-    this.beats = [{ room: 'entrance' }, ...this.script];
+    this.beats = [{ room: 'entrance' }, ...this.path.script];
     this.shownBeat = -1;
     this.host.setBeats(this.toStops(), 1);
   }
@@ -326,11 +377,11 @@ export class Story {
         const opts: [Audience, string][] = [['student', 'I want to build my career'], ['founder', 'I need a product or a team'], ['hr', 'I want to upskill my people'], ['university', 'I run a university'], ['professional', "I'm exploring AI for my profession"], ['explore', "I'll explore on my own"]];
         extra = '<div class="sbChips">' + opts.map(([k, t]) => `<button type="button" data-a="${k}"${k === 'explore' ? ' class="ghost"' : ''}>${esc(t)}</button>`).join('') + '</div>';
       } else if (b.end) {
-        extra = '<div class="sbChips">' + this.host.endActions.map((x, k) => `<button type="button" data-end="${k}"${x.primary ? ' class="pri"' : ''}>${esc(x.label)}</button>`).join('') + '</div>';
+        extra = '<div class="sbChips">' + (this.path?.end ?? []).map((x, k) => `<button type="button" data-end="${k}"${x.primary ? ' class="pri"' : ''}>${esc(x.label)}</button>`).join('') + '</div>';
       } else if (b.point) extra = '<span class="sbHint">Tap the glowing marker to look closer</span>';
       this.bubbleG.innerHTML = `<small>Your EmpowerED guide</small><p>${esc(L.guide)}</p>${extra}`;
       this.bubbleG.querySelectorAll<HTMLButtonElement>('[data-a]').forEach((btn) => (btn.onclick = () => this.pick(btn.dataset.a as Audience)));
-      this.bubbleG.querySelectorAll<HTMLButtonElement>('[data-end]').forEach((btn) => (btn.onclick = () => this.host.endActions[+btn.dataset.end!].run()));
+      this.bubbleG.querySelectorAll<HTMLButtonElement>('[data-end]').forEach((btn) => (btn.onclick = () => this.path?.end[+btn.dataset.end!]?.run()));
     } else this.bubbleG.hidden = true;
   }
 

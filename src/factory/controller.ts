@@ -3,8 +3,9 @@
 // flat (no-3D) fallback page.
 import { INDS, ECO, CAREER_CFG } from '../data/content';
 import { Tour, type TourRoute, type TourStop } from '../company/tour';
-import { Story, type RoomDef, type RoomId } from '../story/guide';
+import { Story, type EndAction, type RoomDef, type RoomId } from '../story/guide';
 import { STUDENT } from '../story/student';
+import { FOUNDER, HR, PROFESSIONAL, UNIVERSITY } from '../story/audiences';
 import type { Object3D } from 'three';
 import type * as THREE from 'three';
 import type { FactoryApi, P3, ScreenPoint, StopCopy, TalentUnit } from '../bridge';
@@ -501,22 +502,41 @@ export function initController(replayStory: () => void): ControllerApi {
       {id:'region',label:'Region',eyebrow:'ECOSYSTEM AT SCALE',title:'Regional and sector capability.',copy:'One pilot POD or regional hub links campuses, industry and government around a sector priority.',pose:()=>wfP(5),action:{label:'Explore the ecosystem',run:open('workforce',5)}},
       {...showroom,pose:()=>wfP(6),title:'Which model fits?',copy:'Compare verified talent, PODs, workforce capability, campus and ecosystem programmes side by side.',action:{label:'Open the comparison',run:open('workforce',6)},hotspots:[{at:[30.5,4.5,-13.5],label:'Compare models',run:open('workforce',6)}]}]};
   // ---- Story mode (story/guide.ts): the guide walks the visitor's character through the company ----
-  const ROOMEQ:Record<RoomId,number>={entrance:-1,intake:0,develop:3,engineer:5,verify:6,deploy:7};
+  /** Career route stop (scene highlights) and workforce stop (bays, campus, network) lit for each story room. */
+  const ROOMEQ:Partial<Record<RoomId,number>>={intake:0,develop:3,engineer:5,verify:6,deploy:7};
+  const ROOMWF:Partial<Record<RoomId,number>>={dock:0,talent:1,teams:3,campus:4,region:5};
   const ROOMS:Record<RoomId,RoomDef>={
     entrance:{label:'Welcome',eyebrow:'STORY · WELCOME',title:'Meet your guide.',copy:'Tell your EmpowerED guide what you are looking for, then scroll to follow them through the company.'},
     intake:{label:'Intake',eyebrow:'STORY · INTAKE',title:'Start where you are.',copy:'The Entry Assessment finds your starting point and recommends your track.',action:{label:'Explore the assessment',run:open('career',1)},hotspots:[{at:[9.5,2.2,-11],label:'Entry Assessment',run:open('career',1)}]},
     develop:{label:'Develop',eyebrow:'STORY · DEVELOP',title:'Build capability with direction.',copy:'Career Launch, Career Pro and Career Accelerate. Every station adds evidence to your passport.',action:{label:'Explore Foundation Hall',run:open('career',3)},hotspots:[{at:[-11.4,9,-40.5],label:'Evidence Passport',run:open('career',3)}]},
     engineer:{label:'Engineer',eyebrow:'STORY · ENGINEER',title:'Real teams. Real products.',copy:'Build in a cross-functional POD, guided by an industry mentor, through six stages.',action:{label:'Explore engineering PODs',run:open('career',5)},hotspots:[{at:[14.5,2.8,-33.6],label:'Six POD stages',run:open('career',5)}]},
     verify:{label:'Verify',eyebrow:'STORY · VERIFY',title:'Evidence in. Readiness out.',copy:'ETAF™ checks your assessments, project work and reviewed delivery, then issues your Readiness Passport.',action:{label:'Explore the Readiness Passport',run:open('career',6)},hotspots:[{at:[21,9.2,-43.8],label:'ETAF™ assurance core',run:open('career',6)}]},
-    deploy:{label:'Deploy',eyebrow:'STORY · DEPLOY',title:'Get placed in industry.',copy:'Verified talent walks through the ETAF gate, with placement support matched to your track.',action:{label:'Explore opportunity pathways',run:open('career',7)},hotspots:[{at:[0,6.4,-72],label:'ETAF™ gate',run:open('career',7)}]}};
+    deploy:{label:'Deploy',eyebrow:'STORY · DEPLOY',title:'Get placed in industry.',copy:'Verified talent walks through the ETAF gate, with placement support matched to your track.',action:{label:'Explore opportunity pathways',run:open('career',7)},hotspots:[{at:[0,6.4,-72],label:'ETAF™ gate',run:open('career',7)}]},
+    dock:{label:'Dock',eyebrow:'STORY · DOCK',title:'What do you need EmpowerED to produce?',copy:'Five bays: verified talent, product PODs, workforce capability, campus talent factories and ecosystems at scale.',action:{label:'Choose a bay',run:open('workforce',0)},hotspots:[{at:[32,3,-8.5],label:'Choose a bay',run:open('workforce',0)}]},
+    talent:{label:'Talent',eyebrow:'STORY · VERIFIED TALENT',title:'Verified capability, on demand.',copy:'Talent is built before demand and verified before deployment. Reserve, activate, scale and release.',action:{label:'Explore verified talent',run:open('workforce',1)},hotspots:[{at:[19.5,2.2,-5.6],label:'Talent shelf',run:open('workforce',1)}]},
+    teams:{label:'Teams',eyebrow:'STORY · WORKFORCE CAPABILITY',title:'Upgrade the team you already have.',copy:'Teams join the reskilling line in the roles they hold today and leave with AI capability built in.',action:{label:'Explore the capability lens',run:open('workforce',3)},hotspots:[{at:[-21.9,2.6,-14],label:'Reskilling line',run:open('workforce',3)}]},
+    campus:{label:'Campus',eyebrow:'STORY · CAMPUS TALENT FACTORY',title:'Build the future talent supply.',copy:'A campus plugs into EmpowerED as an extension: centre of excellence, curriculum pathway, labs and Student PODs.',action:{label:'Explore the campus',run:open('workforce',4)},hotspots:[{at:[-50,3.5,-23],label:'Campus actors',run:open('workforce',4)}]},
+    region:{label:'Region',eyebrow:'STORY · ECOSYSTEM',title:'Regional and sector capability.',copy:'A regional hub links campuses, industry and government around a sector priority.',action:{label:'Explore the ecosystem',run:open('workforce',5)}},
+    plaza:{label:'AI for Everyone',eyebrow:'STORY · AI FOR EVERYONE',title:'AI for every profession.',copy:'Practical AI for every profession, level by level: awareness, productivity, your profession, applied projects and career readiness.',action:{label:'Explore the globe',run:()=>toGlobe()},hotspots:[{at:[6,4.8,18],label:'AI for Everyone',run:()=>toGlobe()}]}};
+  const again:EndAction={label:'Try another path',run:()=>{tour.setStops('story',story.reset());tour.jump(0)}};
+  const talk=(t:string,e:string):EndAction=>({label:'Talk to us',run:()=>openDrawer('ph',t,e)});
+  const leave=(f:()=>void)=>()=>{story.hide();f()};
   const pendWorld:Object3D[]=[];
   const story=new Story({
     project:(x,y,z)=>FX().project(x,y,z),
     addWorld:(o)=>{if(window.FACTORY)window.FACTORY.addWorld(o);else pendWorld.push(o)},
     setBeats:(stops,goTo)=>{tour.setStops('story',stops);tour.travel(goTo)},
-    other:(a)=>{story.hide();if(a==='founder')startTour('workforce',3);else if(a==='hr')startTour('workforce',4);else if(a==='university')startTour('workforce',5);else if(a==='professional')toGlobe();else startTour('career',0)},
-    endActions:[{label:'Take the Entry Assessment',primary:true,run:()=>openStop('career',1)},{label:'Keep exploring',run:()=>{story.hide();startTour('career',1)}},{label:'Talk to us',run:()=>openDrawer('ph','Talk to Career Team','Build My Career')},{label:'Try another path',run:()=>{tour.setStops('story',story.reset());tour.jump(0)}}],
-  },ROOMS,STUDENT);
+    explore:()=>{story.hide();startTour('career',0)},
+  },ROOMS,{
+    student:{script:STUDENT,end:[{label:'Take the Entry Assessment',primary:true,run:()=>openStop('career',1)},{label:'Keep exploring',run:leave(()=>startTour('career',1))},talk('Talk to Career Team','Build My Career'),again]},
+    founder:{script:FOUNDER,rooms:{engineer:{label:'PODs',eyebrow:'STORY · PRODUCT PODs',title:'Bring us a problem.',copy:'A cross-functional POD forms around your problem and takes it through six stages, guided by industry architects.',action:{label:'Design my POD',run:open('workforce',2)}},verify:{copy:'ETAF™ checks every builder: assessments, project work and reviewed delivery.'}},
+      end:[{label:'Bring Us a Problem',primary:true,run:open('workforce',2)},{label:'Keep exploring',run:leave(()=>startTour('workforce',1))},talk('Talk to us','Bring Us a Problem'),again]},
+    hr:{script:HR,rooms:{verify:{copy:'ETAF™ checks demonstrated capability, not attendance.'},dock:{title:'Which model fits?',copy:'Compare verified talent, PODs, workforce capability, campus and ecosystem programmes side by side.',action:{label:'Open the comparison',run:open('workforce',6)}}},
+      end:[{label:'Assess My Workforce',primary:true,run:open('workforce',3)},{label:'Compare models',run:open('workforce',6)},talk('Talk to us','Assess My Workforce'),again]},
+    university:{script:UNIVERSITY,rooms:{engineer:{label:'Student PODs',eyebrow:'STORY · STUDENT PODs',title:'Real problems, on campus.',copy:'Student PODs take real industry problem statements through the same six stages as every POD.'},verify:{copy:'Graduates leave with ETAF™-validated evidence and a Readiness Passport.'}},
+      end:[{label:'Build a Campus Talent Factory',primary:true,run:()=>goForm(3,'Build a Campus Talent Factory')},{label:'Launch a Student POD',run:()=>$('spodBtn').click()},talk('Talk to us','Build a Campus Talent Factory'),again]},
+    professional:{script:PROFESSIONAL,end:[{label:'Explore my profession',primary:true,run:leave(()=>toGlobe())},{label:'Keep exploring',run:leave(()=>startTour('career',0))},talk('Talk to us','AI for Everyone'),again]},
+  });
   (TOURS as Record<TourRoute,TourStop[]>).story=story.entranceStops();
   const tour=new Tour({
     project:(x,y,z)=>FX().project(x,y,z),
@@ -527,7 +547,7 @@ export function initController(replayStory: () => void): ControllerApi {
     onRoute:(r)=>{closeDrawer();route=r},
     onStop:(r,i,settled)=>{const F=window.FACTORY;if(!F)return;
       if(!settled&&cd.classList.contains('open'))closeDrawer();
-      tourSettled=settled;const sroom=r==='story'?TOURS_ALL().story[i]?.room as RoomId|undefined:undefined;tourCar=r==='career'?CEQ[i]:r==='story'?(sroom?ROOMEQ[sroom]:-1):-1;tourWf=r==='story'?-1:r==='career'?(TOURS.career[i]?.id==='showroom'?1:-1):(i>=1?i-1:-1);
+      tourSettled=settled;const sroom=r==='story'?TOURS_ALL().story[i]?.room as RoomId|undefined:undefined;tourCar=r==='career'?CEQ[i]:r==='story'?(sroom?ROOMEQ[sroom]??-1:-1):-1;tourWf=r==='story'?(sroom?ROOMWF[sroom]??-1:-1):r==='career'?(TOURS.career[i]?.id==='showroom'?1:-1):(i>=1?i-1:-1);
       if(tourWf>=0&&tourWf!==wfAt){wfAt=tourWf;setBayHv(-1);F.pod(wfAt===2);if(wfAt===2)F.podJump(-1.62);F.wfStop(wfAt);if(wfAt===3||wfAt===4)F.campusIn()}
       if(tourWf<0&&wfAt!==0){wfAt=0;F.pod(false)}
       wfArr=settled;
