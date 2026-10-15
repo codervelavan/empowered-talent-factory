@@ -379,7 +379,8 @@ export function buildBrand(k: BrandKit, mobile: boolean): Brand {
     const step = mobile ? 30 : 20;
     for (let x = -160; x <= 160; x += step) {
       for (let z = 70; z >= -190; z -= step) {
-        const inside = x > -80 && x < 55 && z > -150 && z < 64;
+        // Keep the city clear of the building and every tour camera (the compare stop sits at x = 62).
+        const inside = x > -85 && x < 88 && z > -150 && z < 64;
         if (inside || rnd() < 0.28) continue;
         const w = 8 + rnd() * 8, d = 8 + rnd() * 8, h = 10 + rnd() * rnd() * 46;
         const xx = x + (rnd() - 0.5) * 4, zz = z + (rnd() - 0.5) * 4;
