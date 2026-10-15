@@ -38,6 +38,8 @@ export interface TourHost {
   between?(route: TourRoute, i: number, e: number): [P3, P3] | null;
   /** Every frame: continuous position, for overlays that follow the camera (the story guide). */
   frame?(route: TourRoute, v: number, settled: boolean, dt: number): void;
+  /** While true (a detail panel is open) scrolling must not move the tour. */
+  paused?(): boolean;
 }
 
 export interface TourFrame {
@@ -68,6 +70,10 @@ export class Tour {
   private shownCard = -1;
   private lastIndex = -1;
   private lastSettled = false;
+  private held = false;
+  /** Stop a button or key asked for, and the scroll position this tour last set while moving there. */
+  private goal: number | null = null;
+  private setY = -1;
   private readonly reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   private readonly hud: HTMLElement;
@@ -129,16 +135,19 @@ export class Tour {
     this.track.style.height = '';
   }
 
-  /** Smoothly scroll to a stop. */
+  /** Move to a stop at walking pace (buttons and keys). A new request replaces the old one; scrolling cancels it. */
   travel(i: number): void {
     if (!this.active) return;
     i = clamp(Math.round(i), 0, this.stops.length - 1);
-    scrollTo({ top: i * SEG * innerHeight, behavior: this.reduce ? 'instant' : 'smooth' });
+    if (this.reduce) { this.goal = null; scrollTo({ top: i * SEG * innerHeight, behavior: 'instant' }); return; }
+    this.goal = i;
+    this.setY = -1;
   }
 
   /** Jump to a stop without animating the camera there. */
   jump(i: number): void {
     i = clamp(i, 0, this.stops.length - 1);
+    this.goal = null;
     this.current = this.target = i;
     scrollTo({ top: i * SEG * innerHeight, behavior: 'instant' });
   }
@@ -150,8 +159,24 @@ export class Tour {
     dt = Number.isFinite(dt) ? Math.min(0.1, Math.max(0, dt)) : 0;
     const n = this.stops.length;
     // innerHeight can be 0 while the page is hidden; never let NaN into the camera.
-    const t = innerHeight > 0 ? scrollY / (SEG * innerHeight) : this.target;
-    this.target = clamp(Number.isFinite(t) ? t : 0, 0, n - 1);
+    // While details are open the tour holds its stop; afterwards the page returns to that stop.
+    const paused = !!this.host.paused?.();
+    if (paused) this.held = true;
+    else if (this.held) { this.held = false; scrollTo({ top: Math.round(this.target) * SEG * innerHeight, behavior: 'instant' }); }
+    // A requested move walks the target toward its stop and keeps the page scroll in step,
+    // unless the visitor scrolls themselves (then scrolling wins).
+    if (this.goal !== null && this.setY >= 0 && Math.abs(scrollY - this.setY) > 3) this.goal = null;
+    if (this.goal !== null && !paused && innerHeight > 0) {
+      const left = this.goal - this.target, step = dt * (0.5 + Math.min(1.5, Math.abs(left) * 0.6));
+      this.target = Math.abs(left) <= step ? this.goal : this.target + Math.sign(left) * step;
+      if (this.target === this.goal) this.goal = null;
+      this.setY = Math.round(this.target * SEG * innerHeight);
+      scrollTo({ top: this.setY, behavior: 'instant' });
+      this.setY = Math.round(scrollY);
+    } else {
+      const t = innerHeight > 0 && !paused ? scrollY / (SEG * innerHeight) : this.target;
+      this.target = clamp(Number.isFinite(t) ? t : 0, 0, n - 1);
+    }
     if (!Number.isFinite(this.current)) this.current = this.target;
     this.current = this.reduce ? this.target : this.current + (this.target - this.current) * (1 - Math.exp(-dt * 5));
     if (Math.abs(this.target - this.current) < 0.0005) this.current = this.target;
