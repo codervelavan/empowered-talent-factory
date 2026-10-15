@@ -170,3 +170,10 @@ html[data-route="career"] #resumeTour,html[data-route="workforce"] #resumeTour{t
 #storyPanel .sx h4{font-size:16px;margin-bottom:8px}
 #storyPanel .sx .sxRows div{grid-template-columns:96px 1fr;padding:6px 0}
 #storyPanel .sx dt{font-size:12.5px}#storyPanel .sx dd,#storyPanel .sx .sxFlow span{font-size:12.5px}
+
+/* ---- Globe page: a clean card for the title, search and list; no drag hint ---- */
+#gHint{display:none!important}
+#finGlobe{z-index:6;box-sizing:border-box;padding:20px 22px;border:1px solid rgba(20,62,46,.16);border-radius:16px;background:rgba(246,243,233,.97);box-shadow:0 18px 40px -22px rgba(15,43,34,.35)}
+@media (max-width:900px){#finGlobe{padding:16px;max-height:52vh}}
+/* Phones use the level chips under the panel; the ring around the globe would sit on top of it. */
+@media (max-width:760px){#gRing{display:none!important}}
