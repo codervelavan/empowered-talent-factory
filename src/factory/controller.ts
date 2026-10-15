@@ -5,6 +5,7 @@ import { INDS, ECO, CAREER_CFG } from '../data/content';
 import { Tour, type TourRoute, type TourStop } from '../company/tour';
 import { Story, type PathId, type RoomDef, type RoomId } from '../story/guide';
 import { makeRoutes, PROFESSIONS } from '../story/routes';
+import type { StoryIntroIntent } from '../story/intro';
 import type { Object3D } from 'three';
 import type * as THREE from 'three';
 import type { FactoryApi, P3, ScreenPoint, StopCopy, TalentUnit } from '../bridge';
@@ -33,7 +34,7 @@ interface CorPlace { t: { c: El; p: ScreenPoint; w: number; hh: number }; o: num
 
 export interface ControllerApi {
   /** The story intro has handed over: show the tour at the Company stop. */
-  enterFromStory(): void;
+  enterFromStory(intent?: StoryIntroIntent): void;
   /** The story is about to replay over the page: close panels and leave the globe. */
   beforeStory(): void;
 }
@@ -91,7 +92,7 @@ export function initController(replayStory: () => void): ControllerApi {
   const WB=['Explore Programme','Bring AI to My Team','Discuss Enterprise Delivery'];
   $('radial').insertAdjacentHTML('beforeend',PW.map((p,i)=>{const k=(-90+i*60)*Math.PI/180;return'<button type="button" data-pw="'+i+'" style="left:'+Math.round(150+Math.cos(k)*102)+'px;top:'+Math.round(150+Math.sin(k)*102)+'px">'+escG(p[0])+'</button>'}).join(''));
   document.querySelectorAll<El>('[data-pw]').forEach(b=>b.onclick=()=>{who=+b.dataset.pw!;paintWho()});
-  function whoHand(n:string){$('whoHandT').textContent=n;$('whoHand').hidden=false}
+  function whoHand(n:string){openDrawer('ph',n,'AI for Everyone')}
   function paintWho(){const p=PW[who];document.querySelectorAll<El>('[data-pw]').forEach(b=>{const on=+b.dataset.pw! ===who;b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on))});$('whoHub').textContent='AI for '+p[0];
     $('whoD').innerHTML='<small>Audience</small><p>'+escG(p[1])+'</p><small>Delivery shape</small><p>'+escG(p[2])+'</p><small>Next step</small><p>'+(p[3]<0?'Enter the Career route':WB[p[3]])+'</p>';
     $('whoActs').innerHTML=(p[3]<0?'<button class="cta" type="button" data-wb="c">Enter the Career route <span>→</span></button>':'')+WB.map((n,i)=>'<button class="cta'+(i===p[3]?'':' ghost')+'" type="button" data-wb="'+i+'">'+n+(i===p[3]?' <span>→</span>':'')+'</button>').join('');
@@ -119,8 +120,22 @@ export function initController(replayStory: () => void): ControllerApi {
   [['doorCareer','career'],['doorWork','workforce'],['doorGlobe','globe']].forEach(([id,k])=>{const d=$(id),on=()=>window.FACTORY&&window.FACTORY.setHover(k),off=()=>window.FACTORY&&window.FACTORY.setHover(null);d.addEventListener('pointerenter',on);d.addEventListener('focus',on);d.addEventListener('pointerleave',off);d.addEventListener('blur',off)});
   const ZA=[[-16,10.5,-4],[-5.5,10.5,-4],[5.5,10.5,-4],[16,10.5,-4]];
   const cd=$('cDrawer'),cors=[...document.querySelectorAll<El>('.cor')],CFG=CAREER_CFG,REC='pro',PATHN:Record<string,string>={launch:'Career Launch',pro:'Career Pro',accel:'Career Accelerate'};let hasResult=false,curS=0;
-  function openDrawer(k:string,t?:string,e?:string){cd.querySelectorAll<El>('[data-d]').forEach(x=>x.hidden=x.dataset.d!==k);if(k==='ph'){$('phT').textContent=t!;$('phE').textContent=e||'Build My Career'}cd.classList.add('open');setTimeout(()=>$('cdClose').focus(),60)}
-  function closeDrawer(){cd.classList.remove('open')}
+  let drawerOpener:HTMLElement|null=null;
+  function openDrawer(k:string,t?:string,e?:string){if(!cd.classList.contains('open'))drawerOpener=document.activeElement instanceof HTMLElement?document.activeElement:null;cd.inert=false;cd.querySelectorAll<El>('[data-d]').forEach(x=>x.hidden=x.dataset.d!==k);if(k==='ph'){$('phT').textContent=t!;$('phE').textContent=e||'Build My Career';$('phT').nextElementSibling!.textContent='Online enquiries are not available yet. You can continue exploring the services and return when contact details are published.'}cd.classList.add('open');setTimeout(()=>{if(cd.classList.contains('open'))$('cdClose').focus({preventScroll:true})},60)}
+  cd.inert=true;
+  function closeDrawer(){
+    const wasOpen=cd.classList.contains('open');
+    cd.classList.remove('open');cd.inert=true;
+    if(!wasOpen)return;
+    const opener=drawerOpener;drawerOpener=null;
+    requestAnimationFrame(()=>{
+      if(cd.classList.contains('open'))return;
+      if(mode==='tour'&&tour.route==='story')story.restoreFocus(opener);
+      else if(opener?.isConnected&&opener.getClientRects().length&&!opener.closest('[hidden]'))opener.focus({preventScroll:true});
+      else menuBtn.focus({preventScroll:true});
+    });
+  }
+  cd.querySelectorAll<HTMLElement>('[data-close-drawer]').forEach(b=>b.onclick=closeDrawer);
   $('cdClose').onclick=closeDrawer;
   function goStop(i:number){closeDrawer();if(mode==='tour'){startTour('career',tour.route==='career'?tour.index:0);tour.travel(CTS[i]);return}if(mode==='route'&&route==='career')scrollTo({top:topOf('career',i),behavior:reduce?'auto':'smooth'})}
   function ctaLabel(k:string){if(!hasResult)return 'Take the Entry Assessment';if(PATHN[k])return k===REC?'Continue '+PATHN[k]:(k==='accel'?'Discuss Eligibility':'View Programme Details');return k==='etaf'?'View My Readiness Journey':'Continue My Application'}
@@ -133,8 +148,11 @@ export function initController(replayStory: () => void): ControllerApi {
   document.querySelectorAll<El>('[data-ph]').forEach(b=>b.onclick=()=>openDrawer('ph',b.dataset.ph,b.dataset.phe));
   document.querySelectorAll<El>('[data-drive]').forEach(b=>{b.textContent=CFG.drive.label;b.onclick=()=>{if(CFG.drive.url)location.href=CFG.drive.url;else openDrawer('drive')}});$('driveT').textContent=CFG.drive.label;
   $('startA').innerHTML=CFG.assessment.label+' <span>→</span>';
-  function hideHandoff(){$('handoff').hidden=true;$('aScan').style.display='flex'}
-  $('startA').onclick=()=>{$('aScan').style.display='none';$('handoff').hidden=false;const u=CFG.assessment.url;$<HTMLAnchorElement>('assessLink').href=u||'#';$('assessPh').hidden=!!u;$('hoBack').focus()};
+  function hideHandoff(){$('handoff').hidden=true;$('aScan').style.display='flex';$('startA').focus({preventScroll:true})}
+  $('startA').onclick=()=>{
+    if(!CFG.assessment.url){openDrawer('ph','Assessment access','Entry Assessment');$('phT').nextElementSibling!.textContent='The online assessment is not available yet. You can explore the assessment process and return when the assessment link is published.';return}
+    $('aScan').style.display='none';$('handoff').hidden=false;$<HTMLAnchorElement>('assessLink').href=CFG.assessment.url;$('assessLink').hidden=false;$('assessPh').hidden=true;$('assessLink').focus({preventScroll:true})
+  };
   $('assessLink').onclick=e=>{if(!CFG.assessment.url)e.preventDefault()};$('hoBack').onclick=hideHandoff;
   $('contRec').onclick=()=>goStop(4);
   $('sampleT').onchange=e=>{hasResult=(e.target as HTMLInputElement).checked;refreshCareer()};
@@ -236,7 +254,7 @@ export function initController(replayStory: () => void): ControllerApi {
     if(i===0){$('mSum').textContent=s;const f=$<HTMLFormElement>('modelForm');if(f){if(dom!=='All')f.domain.value=dom;if(band!=='All')f.band.value=band;f.shape.value=eng===1?'Squad':'Individual role'}openDrawer('model')}
     else if(i===1){wform(title||'Bring Us a Problem');$('wfSum').textContent=s}
     else{$('bfE').textContent=WFAM[i];$('bfT').textContent=title;$<HTMLTextAreaElement>('bfSel').value=s;$('bForm').hidden=false;$('bfDone').hidden=true;openDrawer('bform')}}
-  $('bForm').addEventListener('submit',e=>{e.preventDefault();const ft=e.target as HTMLFormElement,fd=new FormData(ft);ft.hidden=true;$('bfDone').hidden=false;$('bfDone').textContent='Thanks, '+fd.get('name')+'. We will reply to '+fd.get('email')+'. Hand-off destination [PLACEHOLDER].';ft.reset()});
+  markFormUnavailable($<HTMLFormElement>('bForm'));
   $('assessBtn').onclick=()=>goForm(2,'Assess My Workforce');$('acadBtn').onclick=()=>goForm(2,'Design a Corporate Academy');
   $('campBtn').onclick=()=>goForm(3,'Build a Campus Talent Factory');$('spodBtn').onclick=()=>{con=3;paintAct();window.FACTORY&&window.FACTORY.podCross();goForm(3,'Launch a Student POD')};
   $('sectBtn').onclick=()=>goForm(4,'Design a Sector Talent Program');$('hubBtn').onclick=()=>{eMode=1;paintEco();goForm(4,'Explore a Regional Talent Hub')};
@@ -531,7 +549,7 @@ export function initController(replayStory: () => void): ControllerApi {
     travel:(i)=>tour.travel(i),
     board:(el)=>{const F=window.FACTORY;if(!F)return null;const o=F.css(el);o.visible=false;return{place:(at,face,w)=>F.aim(o,at,face,1,0,w,440),show:(on)=>{o.visible=on}}},
     open:(key)=>{const [r,i]=key.split(':');openStop(r,+i)},
-    detailOpen:()=>cd.classList.contains('open'),
+    detailOpen:()=>cd.classList.contains('open')||flatOpen,
     explore:()=>{story.hide();startTour('career',0)},
     onAudience:(a)=>{stCat=a?CATS[a]:'For students'},
     fov:()=>window.FACTORY?.cam().fov??50,
@@ -552,7 +570,7 @@ export function initController(replayStory: () => void): ControllerApi {
   setInterval(()=>{const onStory=mode==='tour'&&tour.route==='story';if(onStory)resumeAt=Math.max(1,story.stopIndex);resume.hidden=onStory||!story.audience||flatOpen},300);
   const tour=new Tour({
     project:(x,y,z)=>FX().project(x,y,z),
-    paused:()=>cd.classList.contains('open'),
+    paused:()=>cd.classList.contains('open')||flatOpen||menuOpen||!!window.__storyShowing,
     frame:(r,v,settled,dt)=>{if(r==='story'){while(pendWorld.length&&window.FACTORY)window.FACTORY.addWorld(pendWorld.shift()!);story.update(v,settled,dt)}else story.hide()},
     between:(r,i,e)=>{if(r==='story')return story.camAt(i,e);if(r!=='career')return null;if(i<4)return FX().routePose('career',CK[i]+(CK[i+1]-CK[i])*e);
       if(i===4){const [p0,l0]=FX().routePose('career',CK[4]),[p1,l1]=DEPLOY,c:P3=[10,26,-58],u=1-e,q=(k:number)=>u*u*p0[k]+2*u*e*c[k]+e*e*p1[k];return[[q(0),q(1),q(2)],[l0[0]+(l1[0]-l0[0])*e,l0[1]+(l1[1]-l0[1])*e,l0[2]+(l1[2]-l0[2])*e]]}
@@ -575,19 +593,34 @@ export function initController(replayStory: () => void): ControllerApi {
   requestAnimationFrame(loop);
   window.__step=()=>step(performance.now()+99999,true);
   addEventListener('scroll',()=>{if(document.hidden)window.__step!()},{passive:true});
-  const done=(form:Element,msg:string)=>{const p=document.createElement('p');p.className='regDone';p.textContent=msg;form.replaceWith(p)};
-
-  $('regForm').addEventListener('submit',e=>{e.preventDefault();const fd=new FormData(e.target as HTMLFormElement);done(e.target as HTMLFormElement,"You're registered, "+fd.get('name')+'. The drive schedule will be sent to '+fd.get('email')+'.')});
-  $('modelForm').addEventListener('submit',e=>{e.preventDefault();done(e.target as HTMLFormElement,'Requirement captured. Hand-off destination [PLACEHOLDER].')});
-  $('probForm').addEventListener('submit',e=>{e.preventDefault();const fd=new FormData(e.target as HTMLFormElement);done(e.target as HTMLFormElement,'Thanks. We will reply to '+fd.get('email')+'. Hand-off destination [PLACEHOLDER].')});
+  // No enquiry endpoint is configured. Keep the fields intact and never claim a submission.
+  function markFormUnavailable(form:HTMLFormElement){
+    const submit=form.querySelector<HTMLButtonElement>('button[type="submit"]');
+    if(submit){submit.disabled=true;submit.textContent=form.id==='regForm'||form.dataset.f==='reg'?'Online registration unavailable':'Online enquiries unavailable'}
+    if(!form.querySelector('.availabilityNote')){const note=document.createElement('p');note.className='availabilityNote';note.setAttribute('role','status');note.textContent='Online submission is not available yet. Nothing entered here will be sent. Please return when contact details are published.';form.appendChild(note)}
+    form.addEventListener('submit',event=>event.preventDefault());
+  }
+  for(const id of ['regForm','modelForm','probForm'])markFormUnavailable($<HTMLFormElement>(id));
   function openMenu(){menu.hidden=false;menuOpen=true;menuBtn.setAttribute('aria-expanded','true');menu.querySelector('button')!.focus()}
   function closeMenu(){if(!menuOpen)return;const f=menu.contains(document.activeElement);menu.hidden=true;menuOpen=false;menuBtn.setAttribute('aria-expanded','false');if(f)menuBtn.focus()}
   menuBtn.onclick=()=>menuOpen?closeMenu():openMenu();
   addEventListener('pointerdown',e=>{if(menuOpen&&!(e.target as Element).closest('#menu,#menuBtn'))closeMenu()});
   function resetToIntro(r:TourRoute='story',at=0){if(side.classList.contains('open'))closeSide();if(whoOpen)closeWho();if(mode==='globe'||mode==='gIn'||mode==='gOut'){window.FACTORY&&window.FACTORY.globeReset();document.body.style.cursor=''}gNext=null;pending=null;startTour(r,at)}
   const HASH:Record<string,string>={career:'career',workforce:'workforce',globe:'ai-for-everyone',evidence:'evidence',skip:'skip-3d'},ANCH:Record<string,string>={career:'fCareer',workforce:'fWork',globe:'fGlobe',evidence:'fEvidence',skip:'fTop'};
-  function openFlat(auto:boolean,anchor:string){flat.hidden=false;flatOpen=true;if(auto)flatAuto=true;$('fNote').hidden=!flatAuto;$('fBack').hidden=flatAuto;closeMenu();document.documentElement.style.overflow='hidden';requestAnimationFrame(()=>{const el=anchor&&$(anchor);flat.scrollTop=el?el.offsetTop-84:0})}
-  function closeFlat(){if(flatAuto||!flatOpen)return;flat.hidden=true;flatOpen=false;document.documentElement.style.overflow=''}
+  let flatTour:{route:TourRoute;index:number}|null=null;
+  function openFlat(auto:boolean,anchor:string){
+    if(!flatOpen)flatTour=mode==='tour'?{route:tour.route,index:tour.index}:null;
+    flat.hidden=false;flatOpen=true;flat.tabIndex=-1;flat.setAttribute('aria-label','EmpowerED standard page');if(auto)flatAuto=true;
+    $('fNote').hidden=!flatAuto;$('fBack').hidden=flatAuto;closeMenu();story.hide();document.documentElement.style.overflow='hidden';
+    requestAnimationFrame(()=>{const el=anchor&&$(anchor);flat.scrollTop=el?el.offsetTop-84:0;flat.focus({preventScroll:true})});
+  }
+  function closeFlat(){
+    if(flatAuto||!flatOpen)return;
+    flat.hidden=true;flatOpen=false;document.documentElement.style.overflow='';
+    const saved=flatTour;flatTour=null;
+    if(saved&&mode==='tour'&&tour.route===saved.route)tour.jump(saved.index);
+    requestAnimationFrame(()=>{if(mode==='tour'&&tour.route==='story')story.restoreFocus(null);else menuBtn.focus({preventScroll:true})});
+  }
   function nav(k:string){closeMenu();if(k==='story'){replayStory();return}history.replaceState(null,'','#'+HASH[k]);if(k==='skip'||k==='evidence'||flatAuto||!window.FACTORY){const inStory=mode==='tour'&&tour.route==='story'&&!!story.audience;$('fBack').textContent=inStory?'← Back to your guided tour':'← Back to the 3D company';openFlat(false,inStory&&k==='skip'?STORYANCH[story.audience!]:ANCH[k]);return}closeFlat();closeDrawer();if(k==='globe'){resetToIntro('career',0);toGlobe()}else if(k==='career'){resetToIntro('story',0);story.choose('student')}else resetToIntro('workforce',1)}
   menu.querySelectorAll<El>('[data-go]').forEach(b=>b.onclick=()=>nav(b.dataset.go!));
   document.querySelectorAll<El>('.logo').forEach(a=>a.onclick=e=>{e.preventDefault();closeMenu();closeFlat();history.replaceState(null,'',location.pathname+location.search);resetToIntro(tour.route,0)});
@@ -607,7 +640,7 @@ export function initController(replayStory: () => void): ControllerApi {
     flat.querySelectorAll<El>('.fjump a').forEach(a=>a.onclick=e=>{e.preventDefault();const el=$(a.getAttribute('href')!.slice(1));flat.scrollTo({top:el.offsetTop-84,behavior:reduce?'auto':'smooth'})});
     $('fBack').onclick=closeFlat;
     flat.querySelectorAll<El>('.enq').forEach(b=>b.onclick=()=>{const cb=flat.querySelector<HTMLInputElement>('form[data-f="partner"] input[data-k="'+b.dataset.offer!+'"]');if(cb)cb.checked=true;flat.scrollTo({top:$('fPartner').offsetTop-84,behavior:reduce?'auto':'smooth'})});
-    flat.querySelectorAll<HTMLFormElement>('form').forEach(f=>f.addEventListener('submit',e=>{e.preventDefault();const fd=new FormData(f);done(f,f.dataset.f==='reg'?"You're registered, "+fd.get('name')+'. The drive schedule will be sent to '+fd.get('email')+'.':'Thanks. Our partnerships team will reply to '+fd.get('email')+'.')}));
+    flat.querySelectorAll<HTMLFormElement>('form').forEach(markFormUnavailable);
   })();
   const KEYS:Record<string,string>={career:
 'career',workforce:'workforce','ai-for-everyone':'globe',globe:'globe',evidence:'evidence','skip-3d':'skip',skip:'skip'};
@@ -616,7 +649,22 @@ export function initController(replayStory: () => void): ControllerApi {
   const webglOK=(()=>{try{const c=document.createElement('canvas');return !!(window.WebGLRenderingContext&&(c.getContext('webgl2')||c.getContext('webgl')))}catch(e){return false}})();
   if(!webglOK)openFlat(true,'fTop');else{setTimeout(()=>{if(!window.FACTORY)openFlat(true,'fTop')},10000);fromHash()}
   return {
-    enterFromStory(){if(window.FACTORY&&mode!=='tour')resetToIntro(tour.route,0)},
+    enterFromStory(intent='welcome'){
+      if(!window.FACTORY)return;
+      if(intent==='welcome'){
+        // Explicit text deep links remain open. Starting/replaying the guided tour
+        // always returns to the goal question, with saved progress still available.
+        if(!flatOpen){tour.setStops('story',story.reset());resetToIntro('story',0)}
+        requestAnimationFrame(()=>{if(!flatOpen&&mode==='tour'&&tour.route==='story')story.restoreFocus(null)});
+        return;
+      }
+      closeFlat();closeDrawer();resetToIntro('story',0);
+      if(intent==='skip'){openFlat(false,'fTop');return}
+      if(intent==='globe'){toGlobe();return}
+      if(intent==='workforce'){goForm(1,'Bring Us a Problem');return}
+      if(intent==='contact'){openDrawer('ph','Talk to our team','EmpowerED Careers');return}
+      story.choose('student');tour.jump(2);openDrawer('how');
+    },
     beforeStory(){closeMenu();closeDrawer();closeFlat();if(mode==='globe'||mode==='gIn'||mode==='gOut')resetToIntro(tour.route,0)},
   };
 }

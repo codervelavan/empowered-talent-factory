@@ -38,7 +38,7 @@ export interface TourHost {
   between?(route: TourRoute, i: number, e: number): [P3, P3] | null;
   /** Every frame: continuous position, for overlays that follow the camera (the story guide). */
   frame?(route: TourRoute, v: number, settled: boolean, dt: number): void;
-  /** While true (a detail panel is open) scrolling must not move the tour. */
+  /** While true (details or the text view are open) input must not move the tour. */
   paused?(): boolean;
 }
 
@@ -60,6 +60,8 @@ function readReduce(): boolean {
 
 /** One stop takes this many viewport heights of scrolling. */
 const SEG = 1.15;
+/** Wait for wheel/touch momentum to finish before completing a partial stop. */
+const SCROLL_IDLE = 0.2;
 const sm = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 const lerp3 = (a: P3, b: P3, t: number): P3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
@@ -80,6 +82,9 @@ export class Tour {
   /** Stop a button or key asked for, and the scroll position this tour last set while moving there. */
   private goal: number | null = null;
   private setY = -1;
+  private lastY = scrollY;
+  private viewportHeight = innerHeight;
+  private scrollIdle = 0;
   /** Reduced motion: the system setting, unless the visitor chose otherwise in the guide panel. */
   reduce = readReduce();
 
@@ -138,6 +143,8 @@ export class Tour {
 
   stop(): void {
     this.active = false;
+    this.goal = null;
+    this.held = false;
     delete document.documentElement.dataset.route;
     this.setVisible(false);
     this.track.style.height = '';
@@ -145,26 +152,29 @@ export class Tour {
 
   /** Move to a stop at walking pace (buttons and keys). A new request replaces the old one; scrolling cancels it. */
   travel(i: number): void {
-    if (!this.active) return;
+    if (!this.active || this.host.paused?.()) return;
     i = clamp(Math.round(i), 0, this.stops.length - 1);
-    if (this.reduce) { this.goal = null; scrollTo({ top: i * SEG * innerHeight, behavior: 'instant' }); return; }
+    if (this.reduce) { this.jump(i); return; }
     this.goal = i;
     this.setY = -1;
+    this.scrollIdle = 0;
   }
 
   /** Jump to a stop without animating the camera there. */
   jump(i: number): void {
-    i = clamp(i, 0, this.stops.length - 1);
+    i = clamp(Math.round(i), 0, this.stops.length - 1);
     this.goal = null;
+    this.held = false;
     this.current = this.target = i;
-    scrollTo({ top: i * SEG * innerHeight, behavior: 'instant' });
+    this.viewportHeight = innerHeight;
+    this.syncScroll();
   }
 
   /** Turn reduced motion on or off and remember the choice on this device. */
   setReduce(on: boolean): void {
     this.reduce = on;
     try { localStorage.setItem(REDUCE_KEY, on ? '1' : '0'); } catch { /* storage blocked */ }
-    if (on && this.goal !== null) { const g = this.goal; this.goal = null; scrollTo({ top: g * SEG * innerHeight, behavior: 'instant' }); }
+    if (on && this.active) this.jump(this.goal ?? Math.round(this.target));
   }
 
   get count(): number { return this.stops.length; }
@@ -174,27 +184,51 @@ export class Tour {
     dt = Number.isFinite(dt) ? Math.min(0.1, Math.max(0, dt)) : 0;
     const n = this.stops.length;
     // innerHeight can be 0 while the page is hidden; never let NaN into the camera.
-    // While details are open the tour holds its stop; afterwards the page returns to that stop.
     const paused = !!this.host.paused?.();
+    // A resize changes the pixel distance per stop. Rebase the page scroll before reading
+    // it, retaining a button's destination (or the nearest stop after manual scrolling).
+    if (innerHeight > 0 && innerHeight !== this.viewportHeight) {
+      this.viewportHeight = innerHeight;
+      if (!paused) {
+        this.syncScroll();
+        this.goal ??= Math.round(this.target);
+      }
+    }
+    // Details and the standard text view freeze both scroll progress and camera easing.
+    // Native scrolling inside those views must not cancel a pending journey underneath.
     if (paused) this.held = true;
-    else if (this.held) { this.held = false; scrollTo({ top: Math.round(this.target) * SEG * innerHeight, behavior: 'instant' }); }
+    else if (this.held) {
+      this.held = false;
+      this.syncScroll();
+      this.goal ??= Math.round(this.target);
+    }
     // A requested move walks the target toward its stop and keeps the page scroll in step,
     // unless the visitor scrolls themselves (then scrolling wins).
-    if (this.goal !== null && this.setY >= 0 && Math.abs(scrollY - this.setY) > 3) this.goal = null;
+    const scrolled = Math.abs(scrollY - this.lastY) > 0.5;
+    if (!paused && this.goal !== null && this.setY >= 0 && Math.abs(scrollY - this.setY) > 3) {
+      this.goal = null;
+      this.scrollIdle = 0;
+    }
     if (this.goal !== null && !paused && innerHeight > 0) {
       const left = this.goal - this.target, step = dt * (0.5 + Math.min(1.5, Math.abs(left) * 0.6));
       this.target = Math.abs(left) <= step ? this.goal : this.target + Math.sign(left) * step;
       if (this.target === this.goal) this.goal = null;
-      this.setY = Math.round(this.target * SEG * innerHeight);
-      scrollTo({ top: this.setY, behavior: 'instant' });
-      this.setY = Math.round(scrollY);
-    } else {
-      const t = innerHeight > 0 && !paused ? scrollY / (SEG * innerHeight) : this.target;
+      this.syncScroll();
+    } else if (!paused && innerHeight > 0) {
+      const t = scrollY / (SEG * innerHeight);
       this.target = clamp(Number.isFinite(t) ? t : 0, 0, n - 1);
+      this.scrollIdle = scrolled ? 0 : this.scrollIdle + dt;
+      const nearest = Math.round(this.target);
+      if (this.scrollIdle >= SCROLL_IDLE && Math.abs(this.target - nearest) > 0.001) {
+        // A partial scroll must not leave the guide on "On the way" indefinitely.
+        if (this.reduce) this.jump(nearest);
+        else { this.goal = nearest; this.setY = -1; }
+      }
     }
+    this.lastY = scrollY;
     if (!Number.isFinite(this.current)) this.current = this.target;
-    this.current = this.reduce ? this.target : this.current + (this.target - this.current) * (1 - Math.exp(-dt * 5));
-    if (Math.abs(this.target - this.current) < 0.0005) this.current = this.target;
+    if (!paused) this.current = this.reduce ? this.target : this.current + (this.target - this.current) * (1 - Math.exp(-dt * 5));
+    if (!paused && Math.abs(this.target - this.current) < 0.0005) this.current = this.target;
     const v = this.current;
     const i = Math.min(n - 2, Math.floor(v));
     const f = n > 1 ? clamp(v - i, 0, 1) : 0;
@@ -213,7 +247,7 @@ export class Tour {
     }
 
     const moving = Math.abs(this.target - this.current) > 0.02;
-    if (moving && !this.drag) {
+    if (moving && !paused && !this.drag) {
       const k = Math.min(1, dt * 3);
       this.yaw -= this.yaw * k;
       this.pitch -= this.pitch * k;
@@ -236,6 +270,13 @@ export class Tour {
     this.paint(index, v, settled);
     this.host.frame?.(this.route, v, settled, dt);
     return { pos, look, v, index, settled };
+  }
+
+  private syncScroll(): void {
+    if (innerHeight <= 0) return;
+    scrollTo({ top: this.target * SEG * innerHeight, behavior: 'instant' });
+    this.setY = this.lastY = scrollY;
+    this.scrollIdle = 0;
   }
 
   private setVisible(on: boolean) {
@@ -331,12 +372,17 @@ export class Tour {
 
   private bindInput() {
     const skip = (t: EventTarget | null) => !!(t as Element | null)?.closest?.('button,a,input,select,textarea,aside,nav,header,dialog,#cDrawer,#tourHud,#tourMap');
+    const scrollInput = (e: Event) => {
+      if (this.active && !this.host.paused?.() && !skip(e.target)) this.scrollIdle = 0;
+    };
+    addEventListener('wheel', scrollInput, { passive: true });
+    addEventListener('touchmove', scrollInput, { passive: true });
     addEventListener('pointerdown', (e) => {
-      if (!this.active || e.button > 0 || skip(e.target)) return;
+      if (!this.active || this.host.paused?.() || e.button > 0 || skip(e.target)) return;
       this.drag = { x: e.clientX, y: e.clientY };
     });
     addEventListener('pointermove', (e) => {
-      if (!this.drag) return;
+      if (!this.drag || this.host.paused?.()) return;
       this.yaw = clamp(this.yaw - (e.clientX - this.drag.x) * 0.0035, -0.75, 0.75);
       this.pitch = clamp(this.pitch + (e.clientY - this.drag.y) * 0.002, -0.35, 0.35);
       this.drag = { x: e.clientX, y: e.clientY };
@@ -346,7 +392,7 @@ export class Tour {
     addEventListener('pointerup', end);
     addEventListener('pointercancel', end);
     addEventListener('keydown', (e) => {
-      if (!this.active || e.defaultPrevented) return;
+      if (!this.active || this.host.paused?.() || e.defaultPrevented) return;
       const t = e.target as Element | null;
       if (t?.closest?.('input,textarea,select,[contenteditable],dialog,#cDrawer.open')) return;
       if (document.getElementById('cDrawer')?.classList.contains('open')) return;

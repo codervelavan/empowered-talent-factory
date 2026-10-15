@@ -319,6 +319,9 @@ export class Story {
     this.panel.setAttribute('aria-live', 'polite');
     this.panel.setAttribute('aria-label', 'Your EmpowerED guide');
     this.panel.hidden = true;
+    // Contain gestures in the readable panel, including at its scroll boundaries.
+    this.panel.addEventListener('wheel', (event) => event.stopPropagation(), { passive: true });
+    this.panel.addEventListener('touchmove', (event) => event.stopPropagation(), { passive: true });
     this.fade = document.createElement('div');
     this.fade.id = 'storyFade';
     this.boardEl = document.createElement('div');
@@ -515,6 +518,7 @@ export class Story {
     this.panel.hidden = detail;
     if (detail) return;
     const moving = !arrived && Math.abs(v - idx) > 0.04;
+    const changedStop = !moving && this.at !== idx;
     if (!moving && this.at !== idx) { this.at = idx; this.save(idx); }
     const key = moving ? 'walk' + Math.floor(v) + '>' + (Math.floor(v) + 1) : 'stop' + idx + '|' + (this.ask?.stop === idx ? this.ask.k : -1) + '|' + this.mapOpen + '|' + this.ctx.profession + '|' + (this.audience ?? '') + '|' + this.host.reduced() + '|' + (innerWidth <= 760);
     this.panel.classList.toggle('moving', moving);
@@ -525,16 +529,19 @@ export class Story {
     const all = this.all();
     if (moving) {
       // On the way: say why the next room matters; the explanation appears after arrival.
-      const from = all[Math.floor(v)], to = all[Math.min(all.length - 1, Math.floor(v) + 1)];
+      const back = Math.max(0, Math.floor(v)), forward = Math.min(all.length - 1, back + 1);
+      const from = all[back], to = all[v < this.at ? back : forward];
       const line = v > (this.at ?? 0) ? from.bridge ?? '' : '';
-      this.panel.innerHTML = `<div class="spTop"><span class="spEye">On the way to ${esc(to.title)}</span></div>` +
-        `<p class="spGuide"><small>Your EmpowerED guide</small>${esc(line || 'Follow me.')}</p>`;
+      this.panel.innerHTML = this.topHtml(`On the way to ${to.title}`) +
+        `<p class="spGuide"><small>Your EmpowerED guide</small>${esc(line || 'Follow me.')}</p>` +
+        `<div class="spNav"><button type="button" class="spLink" data-go="${back}">Back to ${esc(all[back].title)}</button><button type="button" class="spNext" data-go="${forward}">Continue to ${esc(all[forward].title)} →</button></div>`;
       this.panel.tabIndex = -1;
       if (this.keepFocus) this.panel.focus({ preventScroll: true });
       return;
     }
     this.panel.removeAttribute('tabindex');
     this.panel.innerHTML = idx === 0 ? this.welcomeHtml() : idx === 1 ? this.previewHtml() : this.stopHtml(idx);
+    if (changedStop) this.panel.scrollTop = 0;
     if (all[idx]?.pick === 'profession') this.paintProfessions();
     if (this.keepFocus) {
       this.keepFocus = false;
@@ -651,6 +658,24 @@ export class Story {
       case 'goal': this.host.setStops(this.reset(), 0); break;
       case 'show': { const s = this.all()[this.at]; if (s?.show) this.host.open(s.show.open, this.ctx); break; }
     }
+  }
+
+  /** Restore focus after a detail closes, including controls recreated on arrival. */
+  restoreFocus(opener: HTMLElement | null) {
+    const data = opener?.dataset;
+    if (this.panel.hidden) {
+      // The drawer closes before the next tour frame makes the guide visible.
+      // Defer focus until that frame instead of attempting to focus hidden DOM.
+      this.keepFocus = true;
+      const entry = data ? Object.entries(data).find(([key]) => ['act','end','go','ask','prof','goal'].includes(key)) : undefined;
+      this.focusSel = entry ? `[data-${entry[0]}="${CSS.escape(entry[1] ?? '')}"]` : '.spNext';
+      this.shownKey = '';
+      return;
+    }
+    const same = data ? [...this.panel.querySelectorAll<HTMLElement>('button,input,summary')].find(el => Object.keys(data).length > 0 && Object.entries(data).every(([k,v]) => el.dataset[k] === v)) : null;
+    const visible = opener?.isConnected && opener.getClientRects().length && !opener.closest('[hidden]');
+    const target = visible ? opener : same ?? this.panel.querySelector<HTMLElement>('[data-act="show"],.spNext,.spGoals button,button');
+    target?.focus({ preventScroll: true });
   }
 
   /** Profession the professional route is following (first complete one until the visitor picks). */

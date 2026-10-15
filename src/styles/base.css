@@ -110,6 +110,9 @@ footer{position:relative;z-index:10;background:var(--paper);padding:28px 8vw 40p
 .pin:hover{border-color:var(--gold)}.pin.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
 #hdrLogo{transition:opacity .3s}
 .regDone{font:500 16px/1.55 Inter,sans-serif;color:var(--ink);text-shadow:0 0 6px var(--paper)}
+.availabilityNote{font:500 14px/1.5 Inter,sans-serif;color:var(--ink);margin:12px 0}
+button:disabled{cursor:not-allowed;opacity:.65}
+#gSide:not(.open){visibility:hidden}
 #finGlobe{left:40px;top:76px;transform:none;width:min(300px,30vw);gap:10px}
 #finGlobe h2{font-size:clamp(28px,3vw,42px)}
 #finPartner{left:56px;top:76px;bottom:92px;overflow:auto;width:min(460px,calc(100vw - 40px));display:flex;flex-direction:column;align-items:flex-start;gap:14px;padding-right:6px}

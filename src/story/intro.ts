@@ -11,9 +11,19 @@ export interface StoryIntro {
   isShowing(): boolean;
 }
 
-const ENTER_LINK = /Enter (EmpowerED|the Factory)/i;
+/** The intro chooses an existing site experience; destinations stay in the controller. */
+export type StoryIntroIntent = 'welcome' | 'assessment' | 'workforce' | 'contact' | 'globe' | 'skip';
 
-export function initStoryIntro(onEnter: () => void, onReplay: () => void): StoryIntro {
+const INTRO_ACTIONS: ReadonlyArray<readonly [RegExp, StoryIntroIntent]> = [
+  [/^Enter (EmpowerED|the Factory)\b/i, 'welcome'],
+  [/^Take the Entry Assessment\b/i, 'assessment'],
+  [/^Bring Us a Problem\b/i, 'workforce'],
+  [/^Talk to Our Team\b/i, 'contact'],
+  [/^AI for Everyone\b/i, 'globe'],
+  [/^View as a page\b/i, 'skip'],
+];
+
+export function initStoryIntro(onEnter: (intent: StoryIntroIntent) => void, onReplay: () => void): StoryIntro {
   const de = document.documentElement;
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let fr = document.getElementById('storyIntro') as HTMLIFrameElement;
@@ -50,28 +60,46 @@ export function initStoryIntro(onEnter: () => void, onReplay: () => void): Story
   const block = (e: Event) => {
     if (!showing && performance.now() > settleUntil) return;
     if (e.target === start) return;
+    if (!showing && (e.type === 'wheel' || e.type === 'touchmove') &&
+      (e.target as Element | null)?.closest?.('#storyPanel,#cDrawer,#flat')) return;
+    // Tab must be able to move between the iframe and the always-available start button.
+    if (e instanceof KeyboardEvent && e.key === 'Tab') return;
+    // After hand-over only suppress residual page navigation, never interaction with a
+    // newly opened panel, form or button.
+    if (!showing && e instanceof KeyboardEvent) {
+      if (!['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' '].includes(e.key)) return;
+      if ((e.target as Element | null)?.closest?.('a,button,input,select,textarea,[contenteditable="true"],[role="dialog"]')) return;
+    }
     e.stopImmediatePropagation();
     if (e.cancelable && e.type !== 'keyup') e.preventDefault();
   };
   ['wheel', 'keydown', 'keyup', 'touchmove'].forEach((t) => addEventListener(t, block, { capture: true, passive: false }));
-  addEventListener('scroll', () => { if ((showing || performance.now() < settleUntil) && scrollY) scrollTo(0, 0); }, true);
+  // Once the intro has handed over, route buttons may immediately move the tour.
+  // Only real input is suppressed during settling; never undo route positioning.
+  addEventListener('scroll', () => { if (showing && scrollY) scrollTo(0, 0); }, true);
 
-  function enter() {
+  function enter(intent: StoryIntroIntent = 'welcome') {
     if (!showing) return;
     const me = fr;
     showing = false;
     start.hidden = true;
-    settleUntil = performance.now() + 1200;
+    // Intent links can immediately position a route or the standard page. Do not
+    // force their document scroll back to zero during the intro fade.
+    settleUntil = performance.now() + (intent === 'welcome' ? 1200 : 0);
     de.classList.remove('introOn');
     inertAll();
-    onEnter();
+    onEnter(intent);
     me.style.pointerEvents = 'none';
+    me.inert = true;
+    me.tabIndex = -1;
     if (reduce || reduceSkip) me.style.transition = 'none';
     me.style.opacity = '0';
-    setTimeout(() => { me.remove(); try { document.body.focus(); } catch { /* ignore */ } }, reduce ? 0 : 760);
+    // The controller focuses the destination. Removing the intro must not take
+    // focus away from a destination control or an open detail panel.
+    setTimeout(() => me.remove(), reduce || reduceSkip ? 0 : 760);
   }
 
-  /** Watch the story document for "scrolled past the end" or the enter link. */
+  /** Watch the story document for "scrolled past the end" or an action link. */
   function hook() {
     let w: Window;
     try { w = fr.contentWindow as Window; void w.document; } catch { return; }
@@ -116,13 +144,18 @@ export function initStoryIntro(onEnter: () => void, onReplay: () => void): Story
     }, { passive: true });
     w.addEventListener('keydown', (e) => {
       if (!e.isTrusted) return;
+      // Space should activate a focused control rather than skip the whole intro.
+      if ((e.target as Element | null)?.closest?.('a,button,input,select,textarea,[contenteditable="true"]')) return;
       arm();
       const k = e.key;
       if (bT && (k === 'ArrowDown' || k === 'PageDown' || k === 'End' || (k === ' ' && !e.shiftKey))) { e.preventDefault(); enter(); }
     });
     w.addEventListener('click', (e) => {
       const a = (e.target as Element | null)?.closest?.('a');
-      if (a && ENTER_LINK.test(a.textContent || '')) { e.preventDefault(); if (e.isTrusted) enter(); }
+      if (!a) return;
+      const label = (a.textContent || '').replace(/\s+/g, ' ').trim();
+      const action = INTRO_ACTIONS.find(([pattern]) => pattern.test(label));
+      if (action) { e.preventDefault(); if (e.isTrusted) enter(action[1]); }
     }, true);
     try { w.focus(); } catch { /* ignore */ }
   }

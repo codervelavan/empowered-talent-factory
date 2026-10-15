@@ -13,7 +13,7 @@ window.__storyShowing = true;
 drawSketches();
 const controller = initController(() => story.replay());
 const story = initStoryIntro(
-  () => { window.__storyShowing = false; controller.enterFromStory(); },
+  (intent) => { window.__storyShowing = false; controller.enterFromStory(intent); },
   () => { window.__storyShowing = true; controller.beforeStory(); },
 );
 // Deep links (#career, #workforce, #ai-for-everyone, #evidence, #skip-3d) go straight into the site.
