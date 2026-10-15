@@ -15,7 +15,7 @@ export interface StoryIntro {
 export type StoryIntroIntent = 'welcome' | 'assessment' | 'workforce' | 'contact' | 'globe' | 'skip';
 
 const INTRO_ACTIONS: ReadonlyArray<readonly [RegExp, StoryIntroIntent]> = [
-  [/^Enter (EmpowerED|the Factory)\b/i, 'welcome'],
+  [/^(Enter (EmpowerED|the Factory)|Start (your |the )?guided tour)\b/i, 'welcome'],
   [/^Take the Entry Assessment\b/i, 'assessment'],
   [/^Bring Us a Problem\b/i, 'workforce'],
   [/^Talk to Our Team\b/i, 'contact'],

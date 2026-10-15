@@ -70,7 +70,7 @@ export function initController(replayStory: () => void): ControllerApi {
   setTimeout(function wirePods(){const F=window.FACTORY;if(!F||!F.podEls){setTimeout(wirePods,300);return}F.podEls().forEach((el,i)=>{el.addEventListener('click',()=>{if(!atPods())return;if(i===F.podCentre()&&i===podI)podEnter(i);else podI=i});el.addEventListener('focus',()=>{if(atPods())podI=i})})},300);$('doorWork').onclick=()=>choose('workforce');$('doorGlobe').onclick=toGlobe;
   document.querySelectorAll<El>('.backBtn,#hdrBack').forEach(b=>b.onclick=back);
   const side=$('gSide'),nodeWrap=$('nodes');
-  const nodeEls=INDS.map((d,i)=>{const b=document.createElement('button');b.type='button';b.className='node';b.innerHTML='<b></b><span></span>';b.firstChild!.textContent=d.name;b.lastChild!.textContent=d.line;b.onclick=()=>openSide(i);nodeWrap.appendChild(b);return b});
+  const nodeEls=INDS.map((d,i)=>{const b=document.createElement('button');b.type='button';b.className='node';b.innerHTML='<b></b><span></span>';b.firstChild!.textContent=d.name;b.lastChild!.textContent=d.ph?'Coming soon':d.line;b.onclick=()=>openSide(i);nodeWrap.appendChild(b);return b});
   const escG=(s:string)=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;'),PHG='<span class="ph">[PLACEHOLDER]</span>';
   const LVN=['AI Awareness','AI Productivity','For Your Profession','Applied Projects','Career Readiness'],LVD=['What AI is, what it can and cannot do, and how to use it safely.','Everyday AI tools for writing, research, analysis and planning.','AI applied to the workflows of your profession.','Real projects that produce work you can show.','Evidence of capability that employers can check.'];
   let lvl=0,whoOpen=false,who=0,lastSel=0;const ring=$('gRing');
@@ -628,7 +628,7 @@ export function initController(replayStory: () => void): ControllerApi {
   (function buildFlat(){
     const pan=(sel:string)=>[...document.querySelectorAll(sel)].map(el=>{const h2=el.querySelector('h2'),p=el.querySelector('.lede2'),sv=[...el.querySelectorAll('.svc,.flow')].map(x=>'<div class="svc">'+x.innerHTML+'</div>').join('');return '<li><span class="chip">'+el.querySelector('.eyebrow')!.textContent+'</span>'+(h2?'<h4>'+h2.innerHTML+'</h4>':'')+(p?'<p>'+p.innerHTML+'</p>':'')+sv+'</li>'}).join('');const car=pan('.cp:not(.wm)');
     const wf=pan('.cp.wm');
-    const inds=INDS.map(d=>'<li><h4>'+esc(d.name)+'</h4><p class="gl">'+esc(d.line)+'</p><ol>'+d.uses.map(u=>'<li>'+esc(u)+'</li>').join('')+'</ol></li>').join('');
+    const inds=INDS.filter(d=>!d.ph).map(d=>'<li><h4>'+esc(d.name)+'</h4><p class="gl">'+esc(d.line)+'</p><ol>'+d.uses.map(u=>'<li>'+esc(u)+'</li>').join('')+'</ol></li>').join('');
     const reg=$('regForm').outerHTML.replace(' id="regForm"',' data-f="reg"');
     const ph='<span class="ph">[PLACEHOLDER]</span>';
     flat.innerHTML='<div class="fw"><div class="fbar"><p class="fnote" id="fNote" hidden>The 3D view is not available on this device, so EmpowerED is shown as a page.</p><button class="backBtn" id="fBack" type="button">← Back to the 3D company</button></div>'
