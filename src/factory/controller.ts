@@ -3,6 +3,9 @@
 // flat (no-3D) fallback page.
 import { INDS, ECO, CAREER_CFG } from '../data/content';
 import { Tour, type TourRoute, type TourStop } from '../company/tour';
+import { Story, type RoomDef, type RoomId } from '../story/guide';
+import { STUDENT } from '../story/student';
+import type { Object3D } from 'three';
 import type * as THREE from 'three';
 import type { FactoryApi, P3, ScreenPoint, StopCopy, TalentUnit } from '../bridge';
 import type { CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
@@ -50,7 +53,7 @@ export function initController(replayStory: () => void): ControllerApi {
   const jump=(top:number)=>{scrollTo({top,behavior:'instant'});yS=top};
   function buildRail(r:string){rail.innerHTML='';LABELS[r].forEach((l,i)=>{const b=document.createElement('button');b.type='button';b.innerHTML='<i></i><span>'+l+'</span>';b.setAttribute('aria-label','Go to '+l);b.onclick=()=>{if(r==='workforce'){wfGo(i);return}if(r==='globe'){if(mode==='globe')globeRail(i)}else if(mode==='route')scrollTo({top:topOf(r,i),behavior:reduce?'auto':'smooth'})};rail.appendChild(b)});dots=[...rail.children] as El[]}
   function choose(r:string){if(mode!=='intro'||!window.FACTORY)return;stCat=stWho||(r==='career'?'For students':'For startups');stWho=null;window.FACTORY.setHover(null);spine(false);window.FACTORY.snapshot();podFly=true;route=r;mode='fly';flyT0=performance.now();buildRail(r);setTrack(r==='workforce'?0:(LABELS[r].length-1+HL(r))*SEG+.6);jump(0)}
-  function toGlobe(){const F=window.FACTORY;if(!F||(mode!=='intro'&&mode!=='route'&&mode!=='hub'&&mode!=='tour'))return;tour.stop();closeDrawer();F.setHover(null);spine(false);F.globeBegin('in');mode='gIn';gT0=performance.now();route=null;buildRail('globe');setTrack(0);jump(0);closeSide()}
+  function toGlobe(){const F=window.FACTORY;if(!F||(mode!=='intro'&&mode!=='route'&&mode!=='hub'&&mode!=='tour'))return;tour.stop();story.hide();closeDrawer();F.setHover(null);spine(false);F.globeBegin('in');mode='gIn';gT0=performance.now();route=null;buildRail('globe');setTrack(0);jump(0);closeSide()}
   function leaveGlobe(next:string|null){const F=window.FACTORY!;if(mode!=='globe'&&mode!=='gIn')return;closeWho();closeSide();F.globeBegin('out');mode='gOut';gT0=performance.now();gNext=next}
   function back(){if(menuOpen){closeMenu();return}if(cd.classList.contains('open')){closeDrawer();return}if(!$('handoff').hidden){hideHandoff();return}if(flatOpen&&!flatAuto){closeFlat();return}if(whoOpen){closeWho();return}if(side.classList.contains('open')){closeSide();return}const F=window.FACTORY;if(!F)return;if(mode==='tour'){if(tour.index>0)tour.travel(tour.index-1);return}if(mode==='globe'||mode==='gIn'){leaveGlobe(null);return}if(mode==='hub'){if(wfAt!==0){wfGo(0);return}F.pod(false);F.snapshot();mode='back';backT0=performance.now();return}if(mode!=='route'&&mode!=='fly')return;F.snapshot();mode='back';backT0=performance.now()}
   function finishBack(){startTour(tour.route,Math.max(0,tour.count-2))}
@@ -273,7 +276,7 @@ export function initController(replayStory: () => void): ControllerApi {
     hint.style.opacity=String(intro?1-sm(3.45,3.75,v):0);{const ph=$('podHint');if(ph)ph.style.opacity=String(intro&&pendLine?1-sm(4.1,4.28,v):0);const at=atPods();if(at&&!wasAtPods){podLock=true;podLastW=performance.now()}wasAtPods=at}
     const sRaw=(v-B1)/SEG;let s=-9,last=0,liftO=0,xfO=0;
     if(F){
-      if(intro){if(!window.__storyShowing)startTour('career',0)}
+      if(intro){if(!window.__storyShowing)startTour('story',0)}
       else if(mode==='gIn'||mode==='gOut'){const gi=mode==='gIn',raw=Math.min(1,(now-gT0)/(gi?(reduce?1400:GIN):2600)),t=reduce&&!gi?1:raw;if(gi&&reduce){liftO=1-Math.abs(raw*2-1);xfO=liftO;F.globeStep(raw<.5?0:1)}else{if(gi)liftO=sm(.04,.16,raw)*(1-sm(.8,.94,raw));F.globeStep(t)}F.render('globe',0);
         if(t>=1){if(mode==='gIn'){F.globeArrive();mode='globe';document.body.style.cursor='grab'}else{F.globeReset();document.body.style.cursor='';finishBack();if(gNext){const n=gNext;gNext=null;choose(n)}}}}
       else if(mode==='globe'){F.globeHold();F.render('globe',0)}
@@ -324,7 +327,7 @@ export function initController(replayStory: () => void): ControllerApi {
     stopFrame(now,s);
     BLOCKS.forEach(b=>{const o=((mode==='route'||mode==='hub')&&route===b.r)?1-sm(.2,.45,Math.abs(s-b.s)):0;vis(b.el,o)});
     hdrLogo.style.opacity=String(1-oReg);hdrLogo.style.pointerEvents=oReg>.5?'none':'auto';
-    hdrBack.style.display=(((mode!=='intro'&&mode!=='gIn')&&!(mode==='tour'&&tour.index===0))||(flatOpen&&!flatAuto))?'inline-flex':'none';const cr=flatOpen?'EMPOWERED · TEXT VIEW':(mode==='globe'||mode==='gIn'||mode==='gOut')?'AI FOR EVERYONE':mode==='tour'?(tour.route==='career'?'CAREER':'WORKFORCE')+' · '+(TOURS[tour.route][tour.index]?.label||'').toUpperCase():'EMPOWERED';if(crumb.textContent!==cr)crumb.textContent=cr;
+    hdrBack.style.display=(((mode!=='intro'&&mode!=='gIn')&&!(mode==='tour'&&tour.index===0))||(flatOpen&&!flatAuto))?'inline-flex':'none';const cr=flatOpen?'EMPOWERED · TEXT VIEW':(mode==='globe'||mode==='gIn'||mode==='gOut')?'AI FOR EVERYONE':mode==='tour'?(tour.route==='career'?'CAREER':tour.route==='story'?'STORY':'WORKFORCE')+' · '+(TOURS[tour.route][tour.index]?.label||'').toUpperCase():'EMPOWERED';if(crumb.textContent!==cr)crumb.textContent=cr;
     vis(rail,(mode==='route'||mode==='fly'||mode==='globe'||mode==='hub')?1:0);
     const gl=mode==='globe',act=gl?(whoOpen?2:sel>=0?1:0):Math.round(Math.max(0,s));dots.forEach((d,i)=>{d.classList.toggle('on',i===act);d.classList.toggle('done',!gl&&i<act);if(i===act)d.setAttribute('aria-current','step');else d.removeAttribute('aria-current')});
     vis(lift,liftO);xf.style.opacity=String(xfO);
@@ -475,6 +478,7 @@ export function initController(replayStory: () => void): ControllerApi {
   const showroom:TourStop={id:'showroom',label:'Showroom',eyebrow:'SHOWROOM',title:'The right capability for you.',copy:'Verified talent, product PODs, workforce academies, campus talent factories and regional programmes, side by side.',pose:()=>wfP(1),
     action:{label:'Open the talent shelf',run:open('workforce',1)},hotspots:[{at:[19.5,2.2,-5.6],label:'Verified talent shelf',run:open('workforce',1)},{at:[30.5,4.5,-13.5],label:'Compare models',run:open('workforce',6)}]};
   const TOURS:Record<TourRoute,TourStop[]>={
+    story:[],
     career:[company,
       {id:'intake',label:'Intake',eyebrow:'INTAKE',title:'Start where you are.',copy:'Your Entry Assessment maps baseline capability, gaps, role direction and readiness. Your starting point determines your recommended path.',pose:()=>FX().routePose('career',CK[1]),
         action:{label:'Explore the assessment',run:open('career',1)},hotspots:[{at:[-3,3.4,-14],label:'Entry Assessment',run:open('career',1)},{at:[4,3.4,-14],label:'How the intake works',run:open('career',0)}]},
@@ -496,20 +500,40 @@ export function initController(replayStory: () => void): ControllerApi {
       {id:'campus',label:'Campus',eyebrow:'CAMPUS TALENT FACTORY',title:'Build the future talent supply.',copy:'A campus plugs into EmpowerED as an extension. Choose an actor to see what it brings.',pose:()=>wfP(4),action:{label:'Explore the campus',run:open('workforce',4)},hotspots:[{at:[-50,3.5,-23],label:'Campus actors',run:open('workforce',4)}]},
       {id:'region',label:'Region',eyebrow:'ECOSYSTEM AT SCALE',title:'Regional and sector capability.',copy:'One pilot POD or regional hub links campuses, industry and government around a sector priority.',pose:()=>wfP(5),action:{label:'Explore the ecosystem',run:open('workforce',5)}},
       {...showroom,pose:()=>wfP(6),title:'Which model fits?',copy:'Compare verified talent, PODs, workforce capability, campus and ecosystem programmes side by side.',action:{label:'Open the comparison',run:open('workforce',6)},hotspots:[{at:[30.5,4.5,-13.5],label:'Compare models',run:open('workforce',6)}]}]};
+  // ---- Story mode (story/guide.ts): the guide walks the visitor's character through the company ----
+  const ROOMEQ:Record<RoomId,number>={entrance:-1,intake:0,develop:3,engineer:5,verify:6,deploy:7};
+  const ROOMS:Record<RoomId,RoomDef>={
+    entrance:{label:'Welcome',eyebrow:'STORY · WELCOME',title:'Meet your guide.',copy:'Tell your EmpowerED guide what you are looking for, then scroll to follow them through the company.'},
+    intake:{label:'Intake',eyebrow:'STORY · INTAKE',title:'Start where you are.',copy:'The Entry Assessment finds your starting point and recommends your track.',action:{label:'Explore the assessment',run:open('career',1)},hotspots:[{at:[9.5,2.2,-11],label:'Entry Assessment',run:open('career',1)}]},
+    develop:{label:'Develop',eyebrow:'STORY · DEVELOP',title:'Build capability with direction.',copy:'Career Launch, Career Pro and Career Accelerate. Every station adds evidence to your passport.',action:{label:'Explore Foundation Hall',run:open('career',3)},hotspots:[{at:[-11.4,9,-40.5],label:'Evidence Passport',run:open('career',3)}]},
+    engineer:{label:'Engineer',eyebrow:'STORY · ENGINEER',title:'Real teams. Real products.',copy:'Build in a cross-functional POD, guided by an industry mentor, through six stages.',action:{label:'Explore engineering PODs',run:open('career',5)},hotspots:[{at:[14.5,2.8,-33.6],label:'Six POD stages',run:open('career',5)}]},
+    verify:{label:'Verify',eyebrow:'STORY · VERIFY',title:'Evidence in. Readiness out.',copy:'ETAF™ checks your assessments, project work and reviewed delivery, then issues your Readiness Passport.',action:{label:'Explore the Readiness Passport',run:open('career',6)},hotspots:[{at:[21,9.2,-43.8],label:'ETAF™ assurance core',run:open('career',6)}]},
+    deploy:{label:'Deploy',eyebrow:'STORY · DEPLOY',title:'Get placed in industry.',copy:'Verified talent walks through the ETAF gate, with placement support matched to your track.',action:{label:'Explore opportunity pathways',run:open('career',7)},hotspots:[{at:[0,6.4,-72],label:'ETAF™ gate',run:open('career',7)}]}};
+  const pendWorld:Object3D[]=[];
+  const story=new Story({
+    project:(x,y,z)=>FX().project(x,y,z),
+    addWorld:(o)=>{if(window.FACTORY)window.FACTORY.addWorld(o);else pendWorld.push(o)},
+    setBeats:(stops,goTo)=>{tour.setStops('story',stops);tour.travel(goTo)},
+    other:(a)=>{story.hide();if(a==='founder')startTour('workforce',3);else if(a==='hr')startTour('workforce',4);else if(a==='university')startTour('workforce',5);else if(a==='professional')toGlobe();else startTour('career',0)},
+    endActions:[{label:'Take the Entry Assessment',primary:true,run:()=>openStop('career',1)},{label:'Keep exploring',run:()=>{story.hide();startTour('career',1)}},{label:'Talk to us',run:()=>openDrawer('ph','Talk to Career Team','Build My Career')},{label:'Try another path',run:()=>{tour.setStops('story',story.reset());tour.jump(0)}}],
+  },ROOMS,STUDENT);
+  (TOURS as Record<TourRoute,TourStop[]>).story=story.entranceStops();
   const tour=new Tour({
     project:(x,y,z)=>FX().project(x,y,z),
-    between:(r,i,e)=>{if(r!=='career')return null;if(i<4)return FX().routePose('career',CK[i]+(CK[i+1]-CK[i])*e);
+    frame:(r,v,settled,dt)=>{if(r==='story'){while(pendWorld.length&&window.FACTORY)window.FACTORY.addWorld(pendWorld.shift()!);story.update(v,settled,dt)}else story.hide()},
+    between:(r,i,e)=>{if(r==='story')return story.camAt(i,e);if(r!=='career')return null;if(i<4)return FX().routePose('career',CK[i]+(CK[i+1]-CK[i])*e);
       if(i===4){const [p0,l0]=FX().routePose('career',CK[4]),[p1,l1]=DEPLOY,c:P3=[10,26,-58],u=1-e,q=(k:number)=>u*u*p0[k]+2*u*e*c[k]+e*e*p1[k];return[[q(0),q(1),q(2)],[l0[0]+(l1[0]-l0[0])*e,l0[1]+(l1[1]-l0[1])*e,l0[2]+(l1[2]-l0[2])*e]]}
       return null},
     onRoute:(r)=>{closeDrawer();route=r},
     onStop:(r,i,settled)=>{const F=window.FACTORY;if(!F)return;
       if(!settled&&cd.classList.contains('open'))closeDrawer();
-      tourSettled=settled;tourCar=r==='career'?CEQ[i]:-1;tourWf=r==='career'?(TOURS.career[i]?.id==='showroom'?1:-1):(i>=1?i-1:-1);
+      tourSettled=settled;const sroom=r==='story'?TOURS_ALL().story[i]?.room as RoomId|undefined:undefined;tourCar=r==='career'?CEQ[i]:r==='story'?(sroom?ROOMEQ[sroom]:-1):-1;tourWf=r==='story'?-1:r==='career'?(TOURS.career[i]?.id==='showroom'?1:-1):(i>=1?i-1:-1);
       if(tourWf>=0&&tourWf!==wfAt){wfAt=tourWf;setBayHv(-1);F.pod(wfAt===2);if(wfAt===2)F.podJump(-1.62);F.wfStop(wfAt);if(wfAt===3||wfAt===4)F.campusIn()}
       if(tourWf<0&&wfAt!==0){wfAt=0;F.pod(false)}
       wfArr=settled;
       if(tourCar===5&&settled)F.setCrate(curStage);
-      if(settled&&TOURS[r][i]?.id==='world')toGlobe()}},TOURS,track);
+      if(settled&&TOURS[r][i]?.id==='world')toGlobe()}},TOURS as Record<TourRoute,TourStop[]>,track);
+  function TOURS_ALL(){return TOURS as Record<TourRoute,TourStop[]>}
   function startTour(r:TourRoute,at:number){closeDrawer();mode='tour';route=r;tour.start(r,at)}
   // Scrolling back up while on the globe returns to the company.
   addEventListener('wheel',e=>{if(mode==='globe'&&e.deltaY<-30&&!(e.target as Element).closest?.('#gSide,#gWho,#gList,aside'))leaveGlobe(null)},{passive:true});
@@ -527,11 +551,11 @@ export function initController(replayStory: () => void): ControllerApi {
   function closeMenu(){if(!menuOpen)return;const f=menu.contains(document.activeElement);menu.hidden=true;menuOpen=false;menuBtn.setAttribute('aria-expanded','false');if(f)menuBtn.focus()}
   menuBtn.onclick=()=>menuOpen?closeMenu():openMenu();
   addEventListener('pointerdown',e=>{if(menuOpen&&!(e.target as Element).closest('#menu,#menuBtn'))closeMenu()});
-  function resetToIntro(r:TourRoute='career',at=0){if(side.classList.contains('open'))closeSide();if(whoOpen)closeWho();if(mode==='globe'||mode==='gIn'||mode==='gOut'){window.FACTORY&&window.FACTORY.globeReset();document.body.style.cursor=''}gNext=null;pending=null;startTour(r,at)}
+  function resetToIntro(r:TourRoute='story',at=0){if(side.classList.contains('open'))closeSide();if(whoOpen)closeWho();if(mode==='globe'||mode==='gIn'||mode==='gOut'){window.FACTORY&&window.FACTORY.globeReset();document.body.style.cursor=''}gNext=null;pending=null;startTour(r,at)}
   const HASH:Record<string,string>={career:'career',workforce:'workforce',globe:'ai-for-everyone',evidence:'evidence',skip:'skip-3d'},ANCH:Record<string,string>={career:'fCareer',workforce:'fWork',globe:'fGlobe',evidence:'fEvidence',skip:'fTop'};
   function openFlat(auto:boolean,anchor:string){flat.hidden=false;flatOpen=true;if(auto)flatAuto=true;$('fNote').hidden=!flatAuto;$('fBack').hidden=flatAuto;closeMenu();document.documentElement.style.overflow='hidden';requestAnimationFrame(()=>{const el=anchor&&$(anchor);flat.scrollTop=el?el.offsetTop-84:0})}
   function closeFlat(){if(flatAuto||!flatOpen)return;flat.hidden=true;flatOpen=false;document.documentElement.style.overflow=''}
-  function nav(k:string){closeMenu();if(k==='story'){replayStory();return}history.replaceState(null,'','#'+HASH[k]);if(k==='skip'||k==='evidence'||flatAuto||!window.FACTORY){openFlat(false,ANCH[k]);return}closeFlat();closeDrawer();if(k==='globe'){resetToIntro('career',0);toGlobe()}else resetToIntro(k==='workforce'?'workforce':'career',1)}
+  function nav(k:string){closeMenu();if(k==='story'){replayStory();return}history.replaceState(null,'','#'+HASH[k]);if(k==='skip'||k==='evidence'||flatAuto||!window.FACTORY){openFlat(false,ANCH[k]);return}closeFlat();closeDrawer();if(k==='globe'){resetToIntro('career',0);toGlobe()}else if(k==='career'){resetToIntro('story',0);story.choose('student')}else resetToIntro('workforce',1)}
   menu.querySelectorAll<El>('[data-go]').forEach(b=>b.onclick=()=>nav(b.dataset.go!));
   document.querySelectorAll<El>('.logo').forEach(a=>a.onclick=e=>{e.preventDefault();closeMenu();closeFlat();history.replaceState(null,'',location.pathname+location.search);resetToIntro(tour.route,0)});
   const esc=(s:string)=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'} as Record<string,string>)[c]);

@@ -637,7 +637,7 @@ window.FACTORY={
   globeReset(){G.dist=0;G.fs=1;Rcur.copy(R0);G.gV=0;G.arcs=0;G.done=false;G.dir=null;G.panel=0;G.panelE=0},
   setPanel(v){G.panel=v},setSel(i){G.gsel=i},
   css(el,par){const o=new CSS3DObject(el);el.style.userSelect='text';el.style.display='none';CAMEL.appendChild(el);(par==='campus'?campus.g:par==='net'?NET:par==='world'?S:factoryG).add(o);return o},
-  cam(){return C},routeWP(r,s){const Q=ROUTES[r];return Q.wp[Q.stops[s]]},brandIcons(){return brand.icons},routePose(r,k){const Q=ROUTES[r],u=Math.min(1,Math.max(0,k/(Q.wp.length-1))),p=Q.pc!.getPoint(u),l=Q.lc!.getPoint(u);return[[p.x,p.y,p.z],[l.x,l.y,l.z]]},
+  cam(){return C},routeWP(r,s){const Q=ROUTES[r];return Q.wp[Q.stops[s]]},brandIcons(){return brand.icons},addWorld(o){factoryG.add(o)},routePose(r,k){const Q=ROUTES[r],u=Math.min(1,Math.max(0,k/(Q.wp.length-1))),p=Q.pc!.getPoint(u),l=Q.lc!.getPoint(u);return[[p.x,p.y,p.z],[l.x,l.y,l.z]]},
   fitBoard(o,p,l,pxW){const P=V(...p),L=V(...l),f=L.clone().sub(P),d=f.length(),ty=Math.tan(C.fov*Math.PI/360),tx=ty*Math.min(1.9,Math.max(1.3,innerWidth/innerHeight));f.normalize();const r=f.clone().cross(V(0,1,0)).normalize();L.addScaledVector(r,d*tx/3);const f2=L.sub(P).normalize(),r2=f2.clone().cross(V(0,1,0)).normalize(),u=r2.clone().cross(f2),D=Math.min(d*.8,13);o.position.copy(P).addScaledVector(f2,D).addScaledVector(r2,D*tx*.6).addScaledVector(u,D*ty*.05);o.scale.setScalar(D*tx*2*.27/pxW);o.rotation.set(0,0,0);o.lookAt(P);o.rotateY(-.17)},
   aim(o,pos,cp,z,flat,ww,pxW){o.position.set(pos[0],pos[1],pos[2]);const c=cp?V(...cp):null;if(flat)o.rotation.set(-Math.PI/2,0,0);else if(c){o.updateMatrixWorld();o.lookAt(c)}const w=V();o.getWorldPosition(w);o.scale.setScalar(ww?ww/pxW!:
 c?w.distanceTo(c)*.001036*(z||1):.02)},

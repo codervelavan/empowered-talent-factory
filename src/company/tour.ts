@@ -4,7 +4,7 @@
 // each stop has a HUD card, glowing hotspots and a place on the stage map.
 import type { P3, ScreenPoint } from '../bridge';
 
-export type TourRoute = 'career' | 'workforce';
+export type TourRoute = 'career' | 'workforce' | 'story';
 
 export interface TourHotspot {
   /** World position of the marker. */
@@ -24,6 +24,8 @@ export interface TourStop {
   pose(): [P3, P3];
   action?: { label: string; run(): void };
   hotspots?: TourHotspot[];
+  /** Stops that share a room show as one place on the stage map (story beats). */
+  room?: string;
 }
 
 export interface TourHost {
@@ -34,6 +36,8 @@ export interface TourHost {
   onRoute(route: TourRoute): void;
   /** Optional camera path between stop i and i+1 at eased progress e (e.g. along an existing curve). */
   between?(route: TourRoute, i: number, e: number): [P3, P3] | null;
+  /** Every frame: continuous position, for overlays that follow the camera (the story guide). */
+  frame?(route: TourRoute, v: number, settled: boolean, dt: number): void;
 }
 
 export interface TourFrame {
@@ -54,7 +58,7 @@ const lerp3 = (a: P3, b: P3, t: number): P3 => [a[0] + (b[0] - a[0]) * t, a[1] +
 
 export class Tour {
   active = false;
-  route: TourRoute = 'career';
+  route: TourRoute = 'story';
   private stops: TourStop[] = [];
   private current = 0;
   private target = 0;
@@ -98,6 +102,12 @@ export class Tour {
     hud.append(this.hots, this.hud, this.hint, this.map, progress);
     this.setVisible(false);
     this.bindInput();
+  }
+
+  /** Replace a route's stops (the story grows once the visitor picks a path). */
+  setStops(route: TourRoute, stops: TourStop[]): void {
+    this.routes[route] = stops;
+    if (this.route === route && this.active) { this.stops = stops; this.track.style.height = ((stops.length - 1) * SEG + 1) * 100 + 'vh'; this.buildMap(); this.shownCard = -1; }
   }
 
   /** Begin (or switch to) a route, at a stop. */
@@ -184,6 +194,7 @@ export class Tour {
       this.host.onStop(this.route, index, settled);
     }
     this.paint(index, v, settled);
+    this.host.frame?.(this.route, v, settled, dt);
     return { pos, look, v, index, settled };
   }
 
@@ -198,7 +209,7 @@ export class Tour {
     const n = this.stops.length;
     this.map.innerHTML =
       '<button type="button" class="tPrev" aria-label="Previous stop">←</button><ol>' +
-      this.stops.map((s, i) => `<li><button type="button" data-ts="${i}" aria-label="Go to ${s.label}"><i></i><span>${s.label}</span></button></li>`).join('') +
+      this.stops.map((s, i) => (s.room && i > 0 && this.stops[i - 1].room === s.room) ? '' : `<li><button type="button" data-ts="${i}" aria-label="Go to ${s.label}"><i></i><span>${s.label}</span></button></li>`).join('') +
       '</ol><button type="button" class="tNext">Next <span aria-hidden="true">→</span></button>';
     this.map.querySelectorAll<HTMLButtonElement>('[data-ts]').forEach((b) => (b.onclick = () => this.travel(+b.dataset.ts!)));
     this.map.querySelector<HTMLButtonElement>('.tPrev')!.onclick = () => this.travel(this.index - 1);
@@ -211,11 +222,14 @@ export class Tour {
   private paint(index: number, v: number, settled: boolean) {
     const n = this.stops.length;
     this.fill.style.width = (n > 1 ? (v / (n - 1)) * 100 : 0) + '%';
+    // With rooms, the current dot is the room the current beat belongs to.
+    const roomStart = (k: number) => { const rm = this.stops[k]?.room; if (!rm) return k; while (k > 0 && this.stops[k - 1].room === rm) k--; return k; };
+    const cur = roomStart(index);
     this.map.querySelectorAll<HTMLElement>('[data-ts]').forEach((b) => {
       const i = +b.dataset.ts!;
-      b.classList.toggle('on', i === index);
-      b.classList.toggle('past', i < index);
-      if (i === index) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
+      b.classList.toggle('on', i === cur);
+      b.classList.toggle('past', i < cur);
+      if (i === cur) b.setAttribute('aria-current', 'step'); else b.removeAttribute('aria-current');
     });
     const next = this.map.querySelector<HTMLButtonElement>('.tNext')!;
     next.disabled = index >= n - 1;
@@ -230,14 +244,14 @@ export class Tour {
     const s = this.stops[i];
     const n = this.stops.length;
     const pad = (x: number) => String(x).padStart(2, '0');
-    const routeChoice = i === 0
+    const routeChoice = i === 0 && this.route !== 'story'
       ? `<div class="tRoutes" role="group" aria-label="Choose your journey">
           <button type="button" data-tr="career" class="${this.route === 'career' ? 'on' : ''}"><b>Build Career <span aria-hidden="true">↗</span></b><span>Inside the company · Students and professionals</span></button>
           <button type="button" data-tr="workforce" class="${this.route === 'workforce' ? 'on' : ''}"><b>Build Workforce <span aria-hidden="true">↗</span></b><span>Around the building · Enterprise, university and government</span></button>
         </div>`
       : '';
     this.hud.innerHTML =
-      `<div class="tEye"><span>${s.eyebrow}</span><span>${pad(i + 1)} / ${pad(n)}</span></div>` +
+      `<div class="tEye"><span>${s.eyebrow}</span><span>${s.room ? '' : pad(i + 1) + ' / ' + pad(n)}</span></div>` +
       `<h2>${s.title}</h2><p>${s.copy}</p>` + routeChoice +
       (s.action ? `<button type="button" class="tAct">${s.action.label} <span aria-hidden="true">↗</span></button>` : '');
     this.hud.querySelectorAll<HTMLButtonElement>('[data-tr]').forEach((b) => {

@@ -40,6 +40,8 @@ export interface FactoryApi {
   routePose(r: string, k: number): [P3, P3];
   /** World positions of the floating entrance icons: Career, Workforce, AI for Everyone. */
   brandIcons(): P3[];
+  /** Add an object to the company building (moves with it onto the globe). */
+  addWorld(o: Object3D): void;
   cam(): PerspectiveCamera;
   render(mode: string, introS: number): void;
   // intro / career floor
