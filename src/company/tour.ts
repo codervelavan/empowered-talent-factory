@@ -52,6 +52,12 @@ export interface TourFrame {
   settled: boolean;
 }
 
+const REDUCE_KEY = 'ee-reduce-motion';
+function readReduce(): boolean {
+  try { const v = localStorage.getItem(REDUCE_KEY); if (v === '1' || v === '0') return v === '1'; } catch { /* storage blocked */ }
+  return matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
 /** One stop takes this many viewport heights of scrolling. */
 const SEG = 1.15;
 const sm = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -74,7 +80,8 @@ export class Tour {
   /** Stop a button or key asked for, and the scroll position this tour last set while moving there. */
   private goal: number | null = null;
   private setY = -1;
-  private readonly reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /** Reduced motion: the system setting, unless the visitor chose otherwise in the guide panel. */
+  reduce = readReduce();
 
   private readonly hud: HTMLElement;
   private readonly map: HTMLElement;
@@ -131,6 +138,7 @@ export class Tour {
 
   stop(): void {
     this.active = false;
+    delete document.documentElement.dataset.route;
     this.setVisible(false);
     this.track.style.height = '';
   }
@@ -150,6 +158,13 @@ export class Tour {
     this.goal = null;
     this.current = this.target = i;
     scrollTo({ top: i * SEG * innerHeight, behavior: 'instant' });
+  }
+
+  /** Turn reduced motion on or off and remember the choice on this device. */
+  setReduce(on: boolean): void {
+    this.reduce = on;
+    try { localStorage.setItem(REDUCE_KEY, on ? '1' : '0'); } catch { /* storage blocked */ }
+    if (on && this.goal !== null) { const g = this.goal; this.goal = null; scrollTo({ top: g * SEG * innerHeight, behavior: 'instant' }); }
   }
 
   get count(): number { return this.stops.length; }

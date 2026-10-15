@@ -55,6 +55,10 @@ html.introOn,html.introOn body{overflow:hidden!important}
 }
 /* The floating career-path cards duplicate the stop panels and collide with the tour card. */
 html[data-route] .cor{visibility:hidden!important;pointer-events:none!important}
+html[data-route] .p3.cor.gate .cx{display:none!important;visibility:hidden!important}
+/* In story mode the guide panel and example board replace the route's in-scene boards and controls. */
+html[data-route="story"] .p3,html[data-route="story"] .b3{visibility:hidden!important;pointer-events:none!important}
+html[data-route="story"] #sheet,html[data-route="story"] #stopL,html[data-route="story"] #ctl{display:none!important}
 
 
 /* ---- Story mode: one guide panel (left on desktop, docked below the scene on phones) ---- */
@@ -119,3 +123,49 @@ html[data-route="story"] #tourHud,html[data-route="story"] #tourMap,html[data-ro
 #resumeTour:focus-visible{outline:2px solid #C9A33A;outline-offset:3px}
 html[data-route="career"] #resumeTour,html[data-route="workforce"] #resumeTour{top:auto;bottom:96px}
 @media (max-width:760px){#resumeTour,html[data-route="career"] #resumeTour,html[data-route="workforce"] #resumeTour{top:74px;bottom:auto;left:12px;font-size:13px;padding:9px 14px}}
+#introStart{position:fixed;top:18px;right:18px;z-index:1001;padding:12px 20px;border:0;border-radius:999px;background:#0F2B22;color:#F6DB2D;font:800 15px/1.2 Manrope,sans-serif;cursor:pointer;box-shadow:0 12px 28px -12px rgba(15,43,34,.7)}
+#introStart[hidden]{display:none}
+#introStart:hover{background:#2B6247}
+#introStart:focus-visible{outline:3px solid #F6DB2D;outline-offset:3px}
+@media (max-width:760px){#introStart{top:auto;bottom:16px;right:50%;transform:translateX(50%);font-size:14px}}
+
+/* ---- Story mode: "Your route", example boards, reduced-motion fade ---- */
+#storyPanel .spCont{margin-left:0;align-self:stretch}
+#storyPanel .spRoute{display:flex;flex-direction:column;gap:0;margin:0;padding:0;list-style:none;counter-reset:r}
+#storyPanel .spRoute li{display:grid;grid-template-columns:24px 1fr;column-gap:10px;padding:8px 0;border-top:1px solid rgba(20,62,46,.12);counter-increment:r}
+#storyPanel .spRoute li::before{content:counter(r);grid-row:span 2;display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:#0F2B22;color:#F2EFE2;font:800 11px/1 Manrope,sans-serif}
+#storyPanel .spRoute b{font:800 14px/1.3 Manrope,sans-serif}
+#storyPanel .spRoute span{font:500 13px/1.4 Inter,sans-serif;color:#4F6655}
+#storyFade{position:fixed;inset:0;z-index:7;background:#F2EFE2;opacity:0;pointer-events:none}
+#storyFade.go{animation:storyFade .32s ease-out}
+@keyframes storyFade{from{opacity:1}to{opacity:0}}
+/* Example board: in the 3D room (CSS3D, 440px wide) or inside the panel on phones */
+.sx{box-sizing:border-box;width:440px;padding:20px 22px 22px;border:2px solid #0F2B22;border-radius:18px;background:rgba(251,250,244,.97);color:#0F2B22;font-family:Manrope,sans-serif;box-shadow:0 0 0 6px rgba(53,220,120,.25),0 20px 40px -20px rgba(15,43,34,.5);pointer-events:none;user-select:none}
+.sx .sxTag{display:inline-block;margin-bottom:8px;padding:4px 9px;border-radius:999px;background:#F4E7BE;color:#7A5E0E;font:800 10px/1 Manrope,sans-serif;letter-spacing:.14em;text-transform:uppercase}
+.sx h4{margin:0 0 12px;font:800 22px/1.15 Manrope,sans-serif;letter-spacing:-.01em;text-wrap:balance}
+.sx .sxRows{display:flex;flex-direction:column;gap:0;margin:0}
+.sx .sxRows div{display:grid;grid-template-columns:132px 1fr;gap:10px;padding:8px 0;border-top:1px solid rgba(20,62,46,.14)}
+.sx dt{font:800 13.5px/1.35 Manrope,sans-serif}
+.sx dd{margin:0;font:500 14px/1.4 Inter,sans-serif;color:#1E4632}
+.sx .sxFlow{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none}
+.sx .sxFlow li{position:relative;display:flex;flex-direction:column;gap:2px;padding:8px 12px;border:1.5px solid rgba(15,43,34,.25);border-radius:10px;background:#fff}
+.sx .sxFlow li+li::before{content:"↓";position:absolute;top:-15px;left:16px;font:800 12px/1 Manrope,sans-serif;color:#1FA85A}
+.sx .sxFlow li[data-on]{border-color:#1FA85A;background:rgba(53,220,120,.16);box-shadow:inset 3px 0 0 #1FA85A}
+.sx .sxFlow b{font:800 14px/1.3 Manrope,sans-serif}
+.sx .sxFlow span{font:500 13px/1.4 Inter,sans-serif;color:#1E4632}
+.sx .sxTable{width:100%;border-collapse:collapse;font:500 13px/1.35 Inter,sans-serif}
+.sx .sxTable th{padding:6px 6px 6px 0;text-align:left;font:800 11px/1.2 Manrope,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#4F6655}
+.sx .sxTable td{padding:7px 6px 7px 0;border-top:1px solid rgba(20,62,46,.14);vertical-align:top}
+.sx .sxTable td:first-child{font-weight:700;font-family:Manrope,sans-serif}
+.sx .sxChips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0;padding:0;list-style:none}
+.sx .sxChips li{padding:5px 10px;border-radius:999px;background:#0F2B22;color:#F2EFE2;font:700 12px/1.2 Manrope,sans-serif}
+.sx .sxNote{margin:10px 0 0;font:600 12.5px/1.4 Inter,sans-serif;color:#4F6655}
+.sx .sxR{opacity:0;transform:translateY(6px)}
+.sx.in .sxR{animation:sxIn .45s ease-out both;animation-delay:calc(var(--i,0) * 110ms)}
+.sx.still .sxR{animation:none;opacity:1;transform:none}
+@keyframes sxIn{to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.sx .sxR{animation:none!important;opacity:1;transform:none}}
+#storyPanel .sx{width:auto;padding:12px 13px 13px;border-width:1.5px;border-radius:12px;box-shadow:none}
+#storyPanel .sx h4{font-size:16px;margin-bottom:8px}
+#storyPanel .sx .sxRows div{grid-template-columns:96px 1fr;padding:6px 0}
+#storyPanel .sx dt{font-size:12.5px}#storyPanel .sx dd,#storyPanel .sx .sxFlow span{font-size:12.5px}

@@ -1,13 +1,15 @@
 // Story mode: a guided tour through the company, one stop per room. A gold-suited EmpowerED
 // guide walks the visitor's own blocky character (picked by "What would you like help with?")
-// from room to room. At each stop one guide panel recognises the visitor's concern, gives the
-// EmpowerED answer, offers a detail to look at and optional questions, then names the next room.
-// Scroll or the named Next button moves one room; both characters walk real paths between rooms.
+// from room to room. After the goal, "Your route" previews what changes and the five stops;
+// then at each stop one guide panel recognises the visitor's concern, gives the EmpowerED
+// answer, stands beside an illustrative example board in the room, offers optional questions
+// and names the next room. Scroll or the named Next button moves one room.
 import * as THREE from 'three';
 import type { P3, ScreenPoint } from '../bridge';
 import type { TourHotspot, TourStop } from '../company/tour';
+import { board, flow } from './exhibits';
 
-export type RoomId = 'entrance' | 'intake' | 'develop' | 'engineer' | 'delivery' | 'verify' | 'deploy' | 'dock' | 'talent' | 'teams' | 'apply' | 'campus' | 'scope' | 'plaza';
+export type RoomId = 'entrance' | 'preview' | 'intake' | 'develop' | 'engineer' | 'delivery' | 'verify' | 'deploy' | 'dock' | 'talent' | 'teams' | 'apply' | 'campus' | 'scope' | 'plaza' | 'pTask' | 'pDemo' | 'pPath' | 'pNext';
 export type Audience = 'student' | 'founder' | 'hr' | 'university' | 'professional' | 'explore';
 export type PathId = Exclude<Audience, 'explore'>;
 
@@ -22,10 +24,14 @@ export interface StoryStop {
   title: string;
   /** How the Next button names this stop ("Next to Verify the work"); defaults to the title. */
   go?: string;
+  /** The whole Next button label, when "Next to …" would suggest a move that isn't one. */
+  nextLabel?: string;
   /** The visitor's concern, in their words. */
   concern: Txt;
   /** The guide's answer. */
   guide: Txt;
+  /** Illustrative example board (HTML) the guide stands beside. */
+  exhibit?: (c: StoryCtx) => string;
   /** A concrete detail to look at: opens one of the site's panels (host.open). */
   show?: { label: Txt; open: string };
   /** Optional questions under "Ask your guide". */
@@ -38,6 +44,8 @@ export interface StoryStop {
 export interface StoryPath {
   /** The goal as the visitor chose it ("Start my career"). */
   goal: string;
+  /** "Your route": what changes for the visitor, and one line per stop on what they'll discover. */
+  preview: { from: string; to: string; lines: string[] };
   stops: StoryStop[];
   primary: EndAction;
   more?: EndAction[];
@@ -46,9 +54,13 @@ export interface RoomDef {
   label: string;
   hotspots?: TourHotspot[];
 }
+/** An example board placed in the 3D scene. */
+export interface Board { place(at: P3, face: P3, width: number): void; show(on: boolean): void }
 export interface StoryHost {
   project(x: number, y: number, z: number): ScreenPoint;
   addWorld(o: THREE.Object3D): void;
+  /** A board in the scene for this element, or null until the scene exists. */
+  board(el: HTMLElement): Board | null;
   /** Replace the story route's stops and go to stop i. */
   setStops(stops: TourStop[], goTo: number): void;
   /** Move to stop i (smoothly). */
@@ -61,6 +73,11 @@ export interface StoryHost {
   explore(): void;
   /** The visitor chose (or cleared) a goal. */
   onAudience(a: PathId | null): void;
+  /** Camera field of view in degrees (for placing boards on screen). */
+  fov(): number;
+  /** Reduced motion (rooms change with a short fade instead of a walk). */
+  reduced(): boolean;
+  setReduced(on: boolean): void;
 }
 /** A profession the professional route can use (complete copy only). */
 export interface Profession { name: string; line: string; uses: string[] }
@@ -70,31 +87,59 @@ interface Spot { guide: P3; you: P3; cam: [P3, P3] }
 const SPOTS: Record<RoomId, Spot> = {
   // Out on the plaza, with the glowing entrance icons and the HQ behind the characters.
   entrance: { guide: [-2, 0, 30], you: [1.5, 0, 31.4], cam: [[3.5, 3.4, 43], [-0.5, 4.6, 14]] },
+  // "Your route": closer to the entrance, the building still in view.
+  preview: { guide: [-1.5, 0, 19.5], you: [1.4, 0, 20.6], cam: [[2.5, 3.2, 29.5], [-1, 4.4, 8]] },
   intake: { guide: [6.5, 0, -9], you: [4.1, 0, -7.1], cam: [[-0.8, 3.4, 2.6], [6.4, 1.9, -11]] },
   develop: { guide: [-9.5, 6, -37.6], you: [-6.6, 6, -36], cam: [[-3.2, 8.8, -27.4], [-9, 7.4, -42]] },
   engineer: { guide: [13.6, 0, -25.6], you: [16.5, 0, -24.4], cam: [[21.6, 3.6, -17.4], [13.4, 1.6, -31]] },
   // Further along the POD floor, by the six stage boards.
-  delivery: { guide: [2.2, 0, -25.6], you: [4.8, 0, -26.4], cam: [[6, 3.2, -19.5], [0, 1.4, -32]] },
+  delivery: { guide: [2.2, 0, -25.6], you: [4.4, 0, -26.2], cam: [[7.5, 3.8, -15.5], [0, 1.4, -32]] },
   verify: { guide: [18.6, 6, -38.6], you: [21.5, 6, -37.3], cam: [[24.6, 8.8, -29.4], [20, 7.6, -44]] },
   deploy: { guide: [-1.6, 0, -77], you: [1.6, 0, -78.4], cam: [[4.5, 3.8, -91], [0, 4.2, -68]] },
   // Outside the east wall, by the five workforce bays.
   dock: { guide: [39, 0, -12], you: [41.4, 0, -14.4], cam: [[50, 4, -4], [35, 2, -15]] },
   // Just inside the east wall, at the verified talent shelf.
-  talent: { guide: [22.2, 0, -3.4], you: [24.8, 0, -6], cam: [[28.8, 3.2, 0], [20.5, 1.6, -7.5]] },
+  talent: { guide: [22.2, 0, -3.4], you: [23.5, 0, -4.9], cam: [[29, 3.8, 1.5], [20.5, 1.6, -7.5]] },
   // West side of the ground floor, at the open front of the reskilling line.
-  teams: { guide: [-25, 0, -2.2], you: [-22.4, 0, -3], cam: [[-21.5, 3.4, 4.5], [-24.5, 1.6, -10]] },
+  teams: { guide: [-25, 0, -2.2], you: [-23.4, 0, -2.7], cam: [[-21.5, 3.6, 5.5], [-24.5, 1.6, -10]] },
   // Inside the reskilling line, beside the Apply station.
   apply: { guide: [-22.2, 0, -9.4], you: [-20.4, 0, -11.2], cam: [[-19.8, 3, -2.4], [-25, 1.4, -13]] },
   // Outside the west wall, where the campus extension slides in.
   campus: { guide: [-41, 0, -8], you: [-38.6, 0, -9.8], cam: [[-31, 4.6, 2], [-48, 2.4, -18]] },
   // Closer to the campus blocks.
   scope: { guide: [-42, 0, -10.2], you: [-40, 0, -12], cam: [[-36, 4, -5], [-52, 2.4, -22]] },
-  // On the plaza under the "AI for Everyone" icon.
-  plaza: { guide: [5, 0, 22.5], you: [8, 0, 24], cam: [[0.5, 3.2, 33], [7, 4.4, 17]] },
+  // Five stations around the "AI for Everyone" icon on the plaza.
+  plaza: { guide: [5, 0, 22.5], you: [7, 0, 23.6], cam: [[0.5, 3.2, 33], [7, 4.4, 17]] },
+  pTask: { guide: [9.5, 0, 20.5], you: [11.3, 0, 21.6], cam: [[6, 3, 29.5], [12, 3, 15]] },
+  pDemo: { guide: [13, 0, 17], you: [14.7, 0, 18.2], cam: [[9, 3, 26], [16, 2.6, 11]] },
+  pPath: { guide: [1, 0, 19], you: [2.8, 0, 20.1], cam: [[-3, 3.2, 28.5], [3, 3.6, 12]] },
+  pNext: { guide: [-2, 0, 23], you: [0, 0, 24], cam: [[3, 3.4, 33], [0, 4.4, 14]] },
+};
+/** Camera field of view (degrees), kept current by the story for screen-space framing. */
+let FOV = 50;
+/**
+ * A spot's camera. On wide screens it is turned so the two characters stand between the guide
+ * panel (left) and the example board (right): their midpoint lands just right of screen centre.
+ */
+const camOf = (room: RoomId): [P3, P3] => {
+  const { cam: [c, l], guide: g, you: y } = SPOTS[room];
+  if (innerWidth <= 760) {
+    // Phones: the panel docks at the bottom, so face the pair and look a little below them;
+    // they appear in the upper part of the screen, above the panel.
+    const mx = (g[0] + y[0]) / 2 - c[0], my = Math.max(g[1], y[1]) + 1 - c[1], mz = (g[2] + y[2]) / 2 - c[2];
+    const h = Math.hypot(mx, mz) || 1, yaw = Math.atan2(mx, mz);
+    const pitch = Math.atan2(my, h) - Math.atan(0.42 * Math.tan((FOV * Math.PI) / 360));
+    return [c, [c[0] + Math.sin(yaw) * h, c[1] + Math.tan(pitch) * h, c[2] + Math.cos(yaw) * h]];
+  }
+  const mx = (g[0] + y[0]) / 2 - c[0], mz = (g[2] + y[2]) / 2 - c[2];
+  const t = Math.tan((FOV * Math.PI) / 360) * (innerWidth / Math.max(1, innerHeight));
+  const yaw = Math.atan2(mx, mz) + Math.atan(0.04 * t), hd = Math.hypot(l[0] - c[0], l[2] - c[2]);
+  return [c, [c[0] + Math.sin(yaw) * hd, l[1], c[2] + Math.cos(yaw) * hd]];
 };
 const UP_STAIRS: P3[] = [[0, 0, -5.6], [0, 6, -22], [8, 6, -26], [16, 6, -32], [18.6, 6, -38.6]];
 /** Walking routes between rooms (guide spot to guide spot), up and down the atrium stairs. */
 const PATHS: Record<string, P3[]> = {
+  'entrance>preview': [[-2, 0, 30], [-1.5, 0, 19.5]],
   'entrance>intake': [[-2, 0, 30], [0, 0, 16], [0, 0, 3], [3, 0, -3], [6.5, 0, -9]],
   'intake>develop': [[6.5, 0, -9], [2, 0, -5], [0, 0, -5.6], [0, 6, -22], [-3, 6, -27], [-7, 6, -33], [-9.5, 6, -37.6]],
   'develop>engineer': [[-9.5, 6, -37.6], [-7, 6, -30], [-1, 6, -24], [0, 6, -22], [0, 0, -6], [4, 0, -10], [10, 0, -18], [13.6, 0, -25.6]],
@@ -140,8 +185,13 @@ const PATH_CACHE: Record<string, Path> = {};
 const pathFor = (a: RoomId, b: RoomId): Path | null => {
   const k = a + '>' + b;
   if (PATH_CACHE[k]) return PATH_CACHE[k];
-  const pts = PATHS[k] ?? (PATHS[b + '>' + a] ? [...PATHS[b + '>' + a]].reverse() : null);
-  return pts ? (PATH_CACHE[k] = new Path(pts)) : null;
+  let pts = PATHS[k] ?? (PATHS[b + '>' + a] ? [...PATHS[b + '>' + a]].reverse() : null);
+  // From "Your route", walk on along the entrance path toward the first room.
+  if (!pts && a === 'preview' && PATHS['entrance>' + b]) {
+    const rest = PATHS['entrance>' + b].filter((p) => p[2] < SPOTS.preview.guide[2] - 0.5);
+    pts = [SPOTS.preview.guide, ...rest];
+  }
+  return pts && pts.length > 1 ? (PATH_CACHE[k] = new Path(pts)) : null;
 };
 
 // ---- Blocky characters --------------------------------------------------------------
@@ -224,6 +274,11 @@ const GOALS: [PathId, string][] = [
   ['professional', 'Use AI in my profession'],
 ];
 
+/** Progress kept for this browser tab, so a replay, reload or the standard page can return to it. */
+const SAVE_KEY = 'ee-story';
+interface Saved { a: PathId; i: number; p: number }
+const loadSaved = (): Saved | null => { try { const s = JSON.parse(sessionStorage.getItem(SAVE_KEY) || 'null'); return s && s.a ? s : null; } catch { return null; } };
+
 // ---- The story ----------------------------------------------------------------------
 export class Story {
   audience: PathId | null = null;
@@ -239,8 +294,18 @@ export class Story {
   private last: { g: P3; y: P3 } | null = null;
   private walkT = 0;
   private panel: HTMLElement;
+  private fade: HTMLElement;
+  private boardEl: HTMLElement;
+  private board: Board | null = null;
+  private boardKey = '';
   private shownKey = '';
   private visible = false;
+  /** Keyboard focus was in the panel when it last re-rendered, so it goes back to the Next button. */
+  private keepFocus = false;
+  /** Where focus goes after a re-render the visitor caused (the control they used). */
+  private focusSel = '';
+  private lastIdx = -1;
+  private saved: Saved | null = loadSaved();
   /** Stop the panel was last fully showing (so Next/Previous step from where the visitor is). */
   private at = 0;
 
@@ -248,13 +313,20 @@ export class Story {
     host.addWorld(this.guide.root);
     for (const r of Object.values(this.rigs)) { host.addWorld(r.root); r.root.visible = false; }
     this.guide.root.visible = false;
+    const hud = document.getElementById('hud') ?? document.body;
     this.panel = document.createElement('aside');
     this.panel.id = 'storyPanel';
     this.panel.setAttribute('aria-live', 'polite');
     this.panel.setAttribute('aria-label', 'Your EmpowerED guide');
     this.panel.hidden = true;
-    (document.getElementById('hud') ?? document.body).appendChild(this.panel);
+    this.fade = document.createElement('div');
+    this.fade.id = 'storyFade';
+    this.boardEl = document.createElement('div');
+    this.boardEl.className = 'sx';
+    hud.append(this.fade, this.panel);
     this.panel.addEventListener('click', (e) => this.onClick(e));
+    // Development builds expose the story for layout checks.
+    if (import.meta.env.DEV) (window as unknown as { __story: Story }).__story = this;
     this.panel.addEventListener('input', (e) => {
       const t = e.target as HTMLInputElement;
       if (t.matches('[data-search]')) { this.filter = t.value; this.paintProfessions(); }
@@ -273,16 +345,21 @@ export class Story {
   }
 
   private welcome(): StoryStop { return { room: 'entrance', title: 'Welcome', concern: '', guide: '' }; }
-  private all(): StoryStop[] { return [this.welcome(), ...this.stops]; }
+  private previewStop(): StoryStop {
+    const p = this.path!;
+    return { room: 'preview', title: 'Your route', concern: '', guide: '', exhibit: () => board('What changes for you', flow([['Today', p.preview.from], ['Through EmpowerED', p.preview.to]])) };
+  }
+  private all(): StoryStop[] { return this.path ? [this.welcome(), this.previewStop(), ...this.stops] : [this.welcome()]; }
 
   private toStops(): TourStop[] {
     return this.all().map((s, i) => {
       const r = this.rooms[s.room];
-      return { id: 'stop' + i, room: 'stop' + i, label: i ? s.title : 'Welcome', eyebrow: '', title: s.title, copy: '', hotspots: i ? r.hotspots : undefined, pose: () => SPOTS[s.room].cam };
+      return { id: 'stop' + i, room: 'stop' + i, label: s.title, eyebrow: '', title: s.title, copy: '', hotspots: i > 1 ? r.hotspots : undefined, pose: () => camOf(s.room) };
     });
   }
 
-  private pick(a: Audience) {
+  /** Choose a goal. A new choice walks on to "Your route"; a resumed one returns to its stop. */
+  private pick(a: Audience, resume?: Saved) {
     if (a === 'explore') { this.host.explore(); return; }
     this.audience = a;
     this.path = this.paths[a];
@@ -293,11 +370,21 @@ export class Story {
     this.you = this.rigs[a];
     this.last = null;
     this.shownKey = '';
+    if (resume) this.ctx.profession = resume.p;
     this.host.onAudience(a);
-    this.host.setStops(this.toStops(), 0);
+    const n = this.all().length;
+    this.host.setStops(this.toStops(), resume ? Math.min(n - 1, resume.i) : 0);
+    if (!resume) this.host.travel(1);
+    this.save(resume ? resume.i : 0);
   }
 
-  /** Start a path directly (e.g. from the menu): goal chosen, waiting at Welcome. */
+  private save(i: number) {
+    if (!this.audience) return;
+    this.saved = { a: this.audience, i, p: this.ctx.profession };
+    try { sessionStorage.setItem(SAVE_KEY, JSON.stringify(this.saved)); } catch { /* storage blocked */ }
+  }
+
+  /** Start a path directly (e.g. from the menu). */
   choose(a: Audience) { this.pick(a); }
 
   /** Back to the goal question. */
@@ -307,12 +394,12 @@ export class Story {
   camAt(i: number, e: number): [P3, P3] {
     const all = this.all();
     const a = all[i]?.room ?? 'entrance', b = all[i + 1]?.room ?? a;
-    if (a === b) return SPOTS[a].cam;
+    if (a === b) return camOf(a);
     const path = pathFor(a, b);
-    if (!path) return mixPose(SPOTS[a].cam, SPOTS[b].cam, e);
+    if (!path) return mixPose(camOf(a), camOf(b), e);
     const { p, dir } = path.at(e * path.length);
     const follow: [P3, P3] = [[p[0] - dir[0] * 6.5, p[1] + 3.3, p[2] - dir[2] * 6.5], [p[0] + dir[0] * 5, p[1] + 1.4, p[2] + dir[2] * 5]];
-    return mixPose(mixPose(SPOTS[a].cam, follow, sm(0, 0.22, e)), SPOTS[b].cam, sm(0.78, 1, e));
+    return mixPose(mixPose(camOf(a), follow, sm(0, 0.22, e)), camOf(b), sm(0.78, 1, e));
   }
 
   hide() {
@@ -320,11 +407,14 @@ export class Story {
     this.visible = false;
     this.guide.root.visible = this.you.root.visible = false;
     this.panel.hidden = true;
+    this.board?.show(false);
+    this.boardKey = '';
     this.shownKey = '';
   }
 
   /** Per frame while the story route is showing. */
   update(v: number, settled: boolean, dt: number) {
+    FOV = this.host.fov();
     const all = this.all();
     this.visible = true;
     this.guide.root.visible = this.you.root.visible = true;
@@ -352,6 +442,11 @@ export class Story {
     const idx = Math.round(v);
     const cam = SPOTS[all[idx].room].cam[0];
     const arrived = settled && Math.abs(v - idx) < 0.03;
+    // Reduced motion: the room changes at once, behind a short fade.
+    if (idx !== this.lastIdx) {
+      if (this.lastIdx >= 0 && this.host.reduced()) { this.fade.classList.remove('go'); void this.fade.offsetWidth; this.fade.classList.add('go'); }
+      this.lastIdx = idx;
+    }
     const place = (rig: Rig, p: P3, other: P3, prev: P3 | undefined, speaking: boolean, pointing: boolean) => {
       rig.root.position.set(p[0], p[1], p[2]);
       let yaw: number;
@@ -363,7 +458,7 @@ export class Story {
       }
       const cur = rig.root.rotation.y;
       let dd = yaw - cur; dd = Math.atan2(Math.sin(dd), Math.cos(dd));
-      rig.root.rotation.y = cur + dd * Math.min(1, dt * 8);
+      rig.root.rotation.y = this.host.reduced() ? yaw : cur + dd * Math.min(1, dt * 8);
       const sw = walking ? Math.sin(this.walkT) * 0.5 : 0;
       rig.legs[0].rotation.x = sw; rig.legs[1].rotation.x = -sw;
       rig.arms[0].rotation.x = -sw * 0.7;
@@ -372,11 +467,42 @@ export class Story {
       rig.body.position.y = walking ? Math.abs(Math.sin(this.walkT)) * 0.05 : 0;
       rig.head.rotation.x = speaking && !walking ? Math.sin(performance.now() / 160) * 0.06 : 0;
     };
-    const hasDetail = idx > 0 && !!(all[idx].show || this.rooms[all[idx].room].hotspots?.length);
-    place(this.guide, g, y, this.last?.g, arrived, arrived && hasDetail);
+    const hasBoard = !!all[idx].exhibit;
+    place(this.guide, g, y, this.last?.g, arrived, arrived && hasBoard && idx > 0);
     place(this.you, y, g, this.last?.y, false, false);
     this.last = { g, y };
     this.paint(idx, v, arrived);
+    this.paintBoard(idx, arrived);
+  }
+
+  /** The example board stands beside the characters, to the right as the camera sees them. */
+  private paintBoard(idx: number, arrived: boolean) {
+    const s = this.all()[idx];
+    const narrow = innerWidth <= 760;
+    const on = arrived && !!s?.exhibit && !narrow && !this.host.detailOpen();
+    if (on && !this.board) this.board = this.host.board(this.boardEl);
+    if (!this.board) return;
+    if (!on) { if (this.boardKey) { this.board.show(false); this.boardKey = ''; } return; }
+    const key = idx + '|' + this.ctx.profession + '|' + (this.audience ?? '');
+    if (key === this.boardKey) return;
+    this.boardKey = key;
+    this.boardEl.innerHTML = s.exhibit!(this.ctx);
+    // Place the board by where it sits on screen (right of the characters, about 30% of the width),
+    // at a depth in front of them, square to the view. The same framing works in every room.
+    const sp = SPOTS[s.room], [c, l] = camOf(s.room);
+    const len = (v: P3) => Math.hypot(v[0], v[1], v[2]) || 1;
+    const fv: P3 = [l[0] - c[0], l[1] - c[1], l[2] - c[2]], fL = len(fv), F: P3 = [fv[0] / fL, fv[1] / fL, fv[2] / fL];
+    const rv: P3 = [-F[2], 0, F[0]], rL = len(rv), Rt: P3 = [rv[0] / rL, 0, rv[2] / rL];
+    const U: P3 = [Rt[1] * F[2] - Rt[2] * F[1], Rt[2] * F[0] - Rt[0] * F[2], Rt[0] * F[1] - Rt[1] * F[0]];
+    const mid: P3 = [(sp.guide[0] + sp.you[0]) / 2, Math.max(sp.guide[1], sp.you[1]) + 1, (sp.guide[2] + sp.you[2]) / 2];
+    const D = Math.min(9, Math.max(3.5, 0.75 * len([mid[0] - c[0], mid[1] - c[1], mid[2] - c[2]])));
+    const halfH = D * Math.tan((this.host.fov() * Math.PI) / 360), halfW = halfH * (innerWidth / Math.max(1, innerHeight));
+    const at: P3 = [0, 1, 2].map((k) => c[k] + F[k] * D + Rt[k] * halfW * 0.56 + U[k] * halfH * 0.14) as P3;
+    this.board.place(at, [at[0] - F[0], at[1] - F[1], at[2] - F[2]], halfW * 2 * 0.3);
+    this.boardEl.classList.remove('in');
+    this.board.show(true);
+    if (this.host.reduced()) this.boardEl.classList.add('in', 'still');
+    else { this.boardEl.classList.remove('still'); requestAnimationFrame(() => this.boardEl.classList.add('in')); }
   }
 
   // ---- The guide panel ----------------------------------------------------------------
@@ -389,11 +515,13 @@ export class Story {
     this.panel.hidden = detail;
     if (detail) return;
     const moving = !arrived && Math.abs(v - idx) > 0.04;
-    if (!moving) this.at = idx;
-    const key = moving ? 'walk' + Math.floor(v) + '>' + (Math.floor(v) + 1) : 'stop' + idx + '|' + (this.ask?.stop === idx ? this.ask.k : -1) + '|' + this.mapOpen + '|' + this.ctx.profession + '|' + (this.audience ?? '');
+    if (!moving && this.at !== idx) { this.at = idx; this.save(idx); }
+    const key = moving ? 'walk' + Math.floor(v) + '>' + (Math.floor(v) + 1) : 'stop' + idx + '|' + (this.ask?.stop === idx ? this.ask.k : -1) + '|' + this.mapOpen + '|' + this.ctx.profession + '|' + (this.audience ?? '') + '|' + this.host.reduced() + '|' + (innerWidth <= 760);
     this.panel.classList.toggle('moving', moving);
     if (key === this.shownKey) return;
     this.shownKey = key;
+    // Keep keyboard focus with the panel while it re-renders.
+    if (this.panel.contains(document.activeElement)) this.keepFocus = true;
     const all = this.all();
     if (moving) {
       // On the way: say why the next room matters; the explanation appears after arrival.
@@ -401,57 +529,92 @@ export class Story {
       const line = v > (this.at ?? 0) ? from.bridge ?? '' : '';
       this.panel.innerHTML = `<div class="spTop"><span class="spEye">On the way to ${esc(to.title)}</span></div>` +
         `<p class="spGuide"><small>Your EmpowerED guide</small>${esc(line || 'Follow me.')}</p>`;
+      this.panel.tabIndex = -1;
+      if (this.keepFocus) this.panel.focus({ preventScroll: true });
       return;
     }
-    this.panel.innerHTML = idx === 0 ? this.welcomeHtml() : this.stopHtml(idx);
-    if (idx > 0 && all[idx].pick === 'profession') this.paintProfessions();
+    this.panel.removeAttribute('tabindex');
+    this.panel.innerHTML = idx === 0 ? this.welcomeHtml() : idx === 1 ? this.previewHtml() : this.stopHtml(idx);
+    if (all[idx]?.pick === 'profession') this.paintProfessions();
+    if (this.keepFocus) {
+      this.keepFocus = false;
+      const to = [this.focusSel, '.spNext', '.spGoals button', 'button'].filter(Boolean).map((q) => this.panel.querySelector<HTMLElement>(q)).find(Boolean);
+      to?.focus({ preventScroll: true });
+      this.focusSel = '';
+    }
   }
 
   private topHtml(eye: string): string {
     const map = this.audience ? `<button type="button" class="spLink" data-act="map" aria-expanded="${this.mapOpen}">Tour map</button>` : '';
-    return `<div class="spTop"><span class="spEye">${esc(eye)}</span><span class="spCtl">${map}<button type="button" class="spLink" data-act="exit">Exit tour</button></span></div>` +
+    const motion = `<button type="button" class="spLink" data-act="motion" aria-pressed="${this.host.reduced()}">Reduce motion</button>`;
+    return `<div class="spTop"><span class="spEye">${esc(eye)}</span><span class="spCtl">${map}${motion}<button type="button" class="spLink" data-act="exit">Exit tour</button></span></div>` +
       (this.mapOpen && this.audience ? this.mapHtml() : '');
   }
 
   private mapHtml(): string {
-    const all = this.all();
-    return `<ol class="spMap">${all.map((s, i) => `<li><button type="button" data-go="${i}"${i === this.at ? ' aria-current="step"' : ''}>${i ? `<b>${i}</b>` : ''}${esc(i ? s.title : 'Welcome')}</button></li>`).join('')}</ol>`;
+    return `<ol class="spMap">${this.all().map((s, i) => `<li><button type="button" data-go="${i}"${i === this.at ? ' aria-current="step"' : ''}>${i > 1 ? `<b>${i - 1}</b>` : ''}${esc(s.title)}</button></li>`).join('')}</ol>`;
+  }
+
+  /** The example board, inside the panel on phones. */
+  private inlineBoard(s: StoryStop): string {
+    return s.exhibit && innerWidth <= 760 ? `<div class="sx in${this.host.reduced() ? ' still' : ''}">${s.exhibit(this.ctx)}</div>` : '';
+  }
+
+  /** Next button text for moving to stop i. */
+  private nextText(i: number): string {
+    const s = this.all()[i];
+    if (i === 1) return 'See your route';
+    if (i === 2) return s.pick === 'profession' ? 'Choose your profession' : `Start at ${s.title}`;
+    return s.nextLabel ?? `Next to ${s.go ?? s.title}`;
   }
 
   private welcomeHtml(): string {
     if (!this.audience || !this.path) {
+      const sv = this.saved, cont = sv ? this.paths[sv.a] : null;
+      const title = sv && cont ? (sv.i > 1 ? cont.stops[sv.i - 2]?.title : sv.i === 1 ? 'Your route' : 'Welcome') : '';
       return this.topHtml('Welcome') +
         `<p class="spGuide"><small>Your EmpowerED guide</small>Hi, I'm your EmpowerED guide. What would you like help with?</p>` +
+        (cont && title ? `<button type="button" class="spNext spCont" data-act="continue">Continue: ${esc(cont.goal)} · ${esc(title)} <span aria-hidden="true">→</span></button>` : '') +
         `<div class="spGoals" role="group" aria-label="Choose your goal">${GOALS.map(([k, t]) => `<button type="button" data-goal="${k}">${esc(t)}</button>`).join('')}</div>` +
         `<button type="button" class="spLink spFree" data-goal="explore">Explore freely instead</button>`;
     }
-    const first = this.stops[0];
+    const sv = this.saved && this.saved.a === this.audience && this.saved.i > 1 ? this.saved : null;
     return this.topHtml('Welcome · ' + this.path.goal) +
       `<p class="spYou"><small>You</small>${esc(this.path.goal)}.</p>` +
-      `<p class="spGuide"><small>Your EmpowerED guide</small>I'll show you how we help with that, what the process produces and how to start. It takes ${this.stops.length} stops.</p>` +
-      `<div class="spNav"><button type="button" class="spLink" data-act="goal">Change my goal</button><button type="button" class="spNext" data-go="1">Next to ${esc(first.go ?? first.title)} <span aria-hidden="true">→</span></button></div>`;
+      `<p class="spGuide"><small>Your EmpowerED guide</small>I'll show you how we help with that, what the process produces and how to start.</p>` +
+      `<div class="spNav"><button type="button" class="spLink" data-act="goal">Change my goal</button>` +
+      (sv ? `<button type="button" class="spLink" data-go="${sv.i}">Continue at ${esc(this.all()[sv.i]?.title ?? '')}</button>` : '') +
+      `<button type="button" class="spNext" data-go="1">${this.nextText(1)} <span aria-hidden="true">→</span></button></div>`;
+  }
+
+  private previewHtml(): string {
+    const p = this.path!;
+    return this.topHtml('Your route · ' + p.goal) +
+      `<p class="spGuide"><small>Your EmpowerED guide</small>Here’s what changes for you, and the ${this.stops.length} stops we’ll visit.</p>` +
+      this.inlineBoard(this.all()[1]) +
+      `<ol class="spRoute">${this.stops.map((s, k) => `<li><b>${esc(s.title)}</b><span>${esc(p.preview.lines[k] ?? '')}</span></li>`).join('')}</ol>` +
+      `<div class="spNav"><button type="button" class="spLink" data-go="0"><span aria-hidden="true">←</span> Welcome</button><button type="button" class="spNext" data-go="2">${esc(this.nextText(2))} <span aria-hidden="true">→</span></button></div>`;
   }
 
   private stopHtml(idx: number): string {
-    const all = this.all(), s = all[idx], n = this.stops.length, last = idx === n;
+    const all = this.all(), s = all[idx], n = this.stops.length, num = idx - 1, last = num === n;
     const asks = this.asksAt(s);
     const picked = this.ask?.stop === idx ? asks[this.ask.k] : undefined;
     const you = picked ? this.txt(picked.q) : this.txt(s.concern);
     const said = picked ? this.txt(picked.a) : this.txt(s.guide);
-    let h = this.topHtml(`${s.title} · Stop ${idx} of ${n}`);
+    let h = this.topHtml(`${s.title} · Stop ${num} of ${n}`);
     h += `<p class="spYou"><small>You</small>${esc(you)}</p><p class="spGuide"><small>Your EmpowerED guide</small>${esc(said)}</p>`;
     if (picked) h += `<button type="button" class="spLink" data-act="unask">Back to ${esc(s.title)}</button>`;
     if (s.pick === 'profession') h += `<div class="spPick"><label class="spSearch"><span>Find your profession</span><input type="search" data-search placeholder="Search professions" value="${esc(this.filter)}" autocomplete="off"></label><div class="spProfs" role="group" aria-label="Professions"></div></div>`;
+    h += this.inlineBoard(s);
     if (s.show) h += `<button type="button" class="spShow" data-act="show">${esc(this.txt(s.show.label))} <span aria-hidden="true">↗</span></button>`;
     if (asks.length) {
       h += `<details class="spAsk"${picked ? ' open' : ''}><summary>Ask your guide</summary><div>` +
         asks.map((q, k) => `<button type="button" data-ask="${k}"${picked === q ? ' aria-pressed="true"' : ''}>${esc(this.txt(q.q))}</button>`).join('') + '</div></details>';
     }
-    const prev = all[idx - 1];
-    const back = `<button type="button" class="spLink" data-go="${idx - 1}"><span aria-hidden="true">←</span> ${esc(idx - 1 ? prev.title : 'Welcome')}</button>`;
+    const back = `<button type="button" class="spLink" data-go="${idx - 1}"><span aria-hidden="true">←</span> ${esc(all[idx - 1].title)}</button>`;
     if (!last) {
-      const nx = all[idx + 1];
-      h += `<div class="spNav">${back}<button type="button" class="spNext" data-go="${idx + 1}">Next to ${esc(nx.go ?? nx.title)} <span aria-hidden="true">→</span></button></div>`;
+      h += `<div class="spNav">${back}<button type="button" class="spNext" data-go="${idx + 1}">${esc(this.nextText(idx + 1))} <span aria-hidden="true">→</span></button></div>`;
     } else if (this.path) {
       h += `<div class="spEnd"><button type="button" class="spNext" data-end="-1">${esc(this.path.primary.label)} <span aria-hidden="true">↗</span></button>` +
         (this.path.more ?? []).map((m, k) => `<button type="button" class="spAlt" data-end="${k}">${esc(m.label)}</button>`).join('') + '</div>' +
@@ -466,7 +629,7 @@ export class Story {
     const f = this.filter.trim().toLowerCase();
     const list = this.professions.map((p, i) => [p, i] as const).filter(([p]) => !f || p.name.toLowerCase().includes(f));
     box.innerHTML = list.length
-      ? list.map(([p, i]) => `<button type="button" data-prof="${i}"${i === this.ctx.profession ? ' aria-pressed="true"' : ''}>${esc(p.name)}</button>`).join('')
+      ? list.map(([p, i]) => `<button type="button" data-prof="${i}" aria-pressed="${i === this.ctx.profession}">${esc(p.name)}</button>`).join('')
       : '<p class="spNone">No match yet. Choose the closest, or ask us about your profession at the last stop.</p>';
   }
 
@@ -476,12 +639,14 @@ export class Story {
     const d = b.dataset;
     if (d.goal) { this.pick(d.goal as Audience); return; }
     if (d.go !== undefined) { this.ask = null; this.mapOpen = false; this.shownKey = ''; this.host.travel(+d.go); return; }
-    if (d.ask !== undefined) { this.ask = { stop: this.at, k: +d.ask }; this.shownKey = ''; return; }
-    if (d.prof !== undefined) { this.ctx.profession = +d.prof; this.shownKey = ''; return; }
+    if (d.ask !== undefined) { this.ask = { stop: this.at, k: +d.ask }; this.shownKey = ''; this.keepFocus = true; this.focusSel = '.spAsk [aria-pressed="true"]'; return; }
+    if (d.prof !== undefined) { this.ctx.profession = +d.prof; this.save(this.at); this.shownKey = ''; this.keepFocus = true; this.focusSel = '.spProfs [aria-pressed="true"]'; return; }
     if (d.end !== undefined && this.path) { const a = +d.end < 0 ? this.path.primary : this.path.more?.[+d.end]; a?.run(this.ctx); return; }
     switch (d.act) {
-      case 'unask': this.ask = null; this.shownKey = ''; break;
-      case 'map': this.mapOpen = !this.mapOpen; this.shownKey = ''; break;
+      case 'continue': if (this.saved) this.pick(this.saved.a, this.saved); break;
+      case 'unask': this.ask = null; this.shownKey = ''; this.keepFocus = true; this.focusSel = '.spAsk summary'; break;
+      case 'map': this.mapOpen = !this.mapOpen; this.shownKey = ''; this.keepFocus = true; this.focusSel = '[data-act="map"]'; break;
+      case 'motion': this.host.setReduced(!this.host.reduced()); this.shownKey = ''; this.boardKey = ''; this.keepFocus = true; this.focusSel = '[data-act="motion"]'; break;
       case 'exit': this.host.explore(); break;
       case 'goal': this.host.setStops(this.reset(), 0); break;
       case 'show': { const s = this.all()[this.at]; if (s?.show) this.host.open(s.show.open, this.ctx); break; }
@@ -495,4 +660,10 @@ export class Story {
   roomAt(i: number): RoomId { return this.all()[i]?.room ?? 'entrance'; }
   /** Stop index the visitor last arrived at. */
   get stopIndex(): number { return this.at; }
+  /** Screen boxes of the characters and the board (development layout checks). */
+  layout() {
+    const box = (r: Rig) => { const p = r.root.position, a = this.host.project(p.x, p.y, p.z), b = this.host.project(p.x, p.y + 2, p.z); const hw = Math.max(12, (a.y - b.y) * 0.22); return [Math.round(a.x - hw), Math.round(b.y), Math.round(a.x + hw), Math.round(a.y)]; };
+    const b = this.boardEl.getBoundingClientRect();
+    return { guide: box(this.guide), you: box(this.you), board: b.width ? [b.left, b.top, b.right, b.bottom].map(Math.round) : null };
+  }
 }

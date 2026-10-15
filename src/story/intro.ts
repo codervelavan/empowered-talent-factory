@@ -22,7 +22,14 @@ export function initStoryIntro(onEnter: () => void, onReplay: () => void): Story
   let settleUntil = 0;
   let reduceSkip = false;
 
-  const keep = (el: Element) => el === fr || el.tagName === 'SCRIPT' || el.tagName === 'STYLE';
+  // A shortcut past the long story, shown while it is on screen (the story stays as optional reading).
+  const start = document.createElement('button');
+  start.type = 'button';
+  start.id = 'introStart';
+  start.innerHTML = 'Start guided tour <span aria-hidden="true">→</span>';
+  start.onclick = () => enter();
+  document.body.appendChild(start);
+  const keep = (el: Element) => el === fr || el === start || el.tagName === 'SCRIPT' || el.tagName === 'STYLE';
   const inertAll = () => {
     for (const el of Array.from(document.body.children) as HTMLElement[]) if (!keep(el)) el.inert = showing;
   };
@@ -30,6 +37,7 @@ export function initStoryIntro(onEnter: () => void, onReplay: () => void): Story
 
   function lock() {
     showing = true;
+    start.hidden = false;
     de.classList.add('introOn');
     inertAll();
     scrollTo(0, 0);
@@ -41,6 +49,7 @@ export function initStoryIntro(onEnter: () => void, onReplay: () => void): Story
   // While the story shows, swallow scroll and keys aimed at the page underneath.
   const block = (e: Event) => {
     if (!showing && performance.now() > settleUntil) return;
+    if (e.target === start) return;
     e.stopImmediatePropagation();
     if (e.cancelable && e.type !== 'keyup') e.preventDefault();
   };
@@ -51,6 +60,7 @@ export function initStoryIntro(onEnter: () => void, onReplay: () => void): Story
     if (!showing) return;
     const me = fr;
     showing = false;
+    start.hidden = true;
     settleUntil = performance.now() + 1200;
     de.classList.remove('introOn');
     inertAll();

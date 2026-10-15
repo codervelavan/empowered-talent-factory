@@ -75,9 +75,9 @@ export function initController(replayStory: () => void): ControllerApi {
   let lvl=0,whoOpen=false,who=0,lastSel=0;const ring=$('gRing');
   ring.innerHTML='<svg viewBox="-150 -150 300 300" aria-hidden="true"><line id="gLead" x1="0" y1="0" x2="0" y2="0" stroke="#C9A33A" stroke-width="1.5" stroke-dasharray="4 4"></line><circle r="118" fill="none" stroke="#C9A33A" stroke-width="1.5"></circle><circle id="gDot" r="5" fill="#C9A33A"></circle></svg>'+LVN.map((n,i)=>{const k=(-90+i*72)*Math.PI/180;const c=Math.cos(k),tf=c>.3?'translate(-17px,-50%)':c<-.3?'translate(calc(-100% + 17px),-50%)':'translate(-50%,-50%)',fd=c<-.3?';flex-direction:row-reverse;padding:6px 6px 6px 11px':'';return'<button type="button" data-lv="'+i+'" style="left:'+Math.round(c*118)+'px;top:'+Math.round(Math.sin(k)*118)+'px;transform:'+tf+fd+'"><i>'+(i+1)+'</i>'+n+'</button>'}).join('');
   ring.querySelectorAll<El>('[data-lv]').forEach(b=>b.onclick=()=>{lvl=+b.dataset.lv!;paintLv()});
-  function paintLv(){if(sel<0)return;const d=INDS[sel];ring.querySelectorAll<El>('[data-lv]').forEach(b=>{const on=+b.dataset.lv! ===lvl;b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on))});const wf=lvl===2&&!d.ph?'<ul>'+d.uses.map(u=>'<li>'+escG(u)+'</li>').join('')+'</ul>':'<p>'+PHG+'</p>';$('gLvD').innerHTML='<small>Level '+(lvl+1)+' of 5</small><b>'+LVN[lvl]+'</b><p>'+LVD[lvl]+'</p><small>Workflows</small>'+wf+'<small>Outputs</small><p>'+PHG+'</p>';paintGo()}
+  function paintLv(){if(sel<0)return;const d=INDS[sel];ring.querySelectorAll<El>('[data-lv]').forEach(b=>{const on=+b.dataset.lv! ===lvl;b.classList.toggle('on',on);b.setAttribute('aria-pressed',String(on))});const wf=lvl===2&&!d.ph?'<ul>'+d.uses.map(u=>'<li>'+escG(u)+'</li>').join('')+'</ul>':'<p>'+PHG+'</p>';$('gLvD').innerHTML='<small>Level '+(lvl+1)+' of 5</small><b>'+LVN[lvl]+'</b><p>'+LVD[lvl]+'</p><small>Workflows</small>'+wf;paintGo()}
   function paintGo(){const n=sel>=0?INDS[sel].name:'';$('gGo').innerHTML=($<HTMLInputElement>('gOrg').checked?'Bring AI Capability to My Team':'Explore AI for '+escG(n))+' <span>→</span>';$('gHand').hidden=true}
-  $('gOrg').onchange=paintGo;$('gGo').onclick=()=>{$('gHandT').textContent=$('gGo').textContent!.replace(/\s*→$/,'');$('gHand').hidden=false};
+  $('gOrg').onchange=paintGo;$('gGo').onclick=()=>{openDrawer('ph','Talk to us',$('gGo').textContent!.replace(/\s*→$/,''))};
   const gQ=$<HTMLInputElement>('gQ'),gList=$('gList');
   gList.innerHTML=INDS.map((d,i)=>'<li data-gl="'+i+'"><button type="button" data-gi="'+i+'">'+escG(d.name)+'<i aria-hidden="true">›</i></button></li>').join('')+'<li class="none" hidden>No profession matches.</li>';
   const gItems=[...gList.querySelectorAll<El>('[data-gi]')];gItems.forEach(b=>b.onclick=()=>openSide(+b.dataset.gi!));
@@ -278,7 +278,7 @@ export function initController(replayStory: () => void): ControllerApi {
     if(F){
       if(intro){if(!window.__storyShowing)startTour('story',0)}
       else if(mode==='gIn'||mode==='gOut'){const gi=mode==='gIn',raw=Math.min(1,(now-gT0)/(gi?(reduce?1400:GIN):2600)),t=reduce&&!gi?1:raw;if(gi&&reduce){liftO=1-Math.abs(raw*2-1);xfO=liftO;F.globeStep(raw<.5?0:1)}else{if(gi)liftO=sm(.04,.16,raw)*(1-sm(.8,.94,raw));F.globeStep(t)}F.render('globe',0);
-        if(t>=1){if(mode==='gIn'){F.globeArrive();mode='globe';document.body.style.cursor='grab';if(pendSide>=0){const k=pendSide;pendSide=-1;openSide(k)}}else{F.globeReset();document.body.style.cursor='';finishBack();if(gNext){const n=gNext;gNext=null;choose(n)}}}}
+        if(t>=1){if(mode==='gIn'){F.globeArrive();mode='globe';document.body.style.cursor='grab';if(pendSide>=0){const k=pendSide;pendSide=-1;openSide(k);lvl=2;paintLv()}}else{F.globeReset();document.body.style.cursor='';finishBack();if(gNext){const n=gNext;gNext=null;choose(n)}}}}
       else if(mode==='globe'){F.globeHold();F.render('globe',0)}
       else if(mode==='tour'){const dt=Math.max(0,Math.min(.1,(now-(tourLast||now))/1000));if(now>tourLast||now<tourLast-5e3)tourLast=now;const fr=tour.update(dt);F.poseAt(fr.pos,fr.look);route=tour.route;
         s=tourCar>=0?tourCar:tourWf>=0?tourWf:-9;floorX=tourCar===5&&tourSettled?curStage:-1;F.render('route',0)}
@@ -486,7 +486,7 @@ export function initController(replayStory: () => void): ControllerApi {
         action:{label:'Explore Foundation Hall',run:open('career',3)},hotspots:[{at:[-7,8.8,-43],label:'Foundation Hall stations',run:open('career',3)},{at:[-11,8.8,-40],label:'Your path',run:open('career',2)}]},
       {id:'engineer',label:'Engineer',eyebrow:'ENGINEER',title:'Real teams. Real products.',copy:'Build in a cross-functional POD, guided by an industry mentor. Discover, Design, Build, Test & Secure, Deploy & Operate, Demo & Validate.',pose:()=>FX().routePose('career',CK[3]),
         action:{label:'Explore engineering PODs',run:open('career',5)},hotspots:[{at:[21.6,2.4,-28.4],label:'Six POD stages',run:open('career',5)},{at:[18,5.2,-33],label:'Career Pro pods',run:open('career',4)}]},
-      {id:'verify',label:'Verify',eyebrow:'VERIFY',title:'Evidence in. Readiness out.',copy:'ETAF™, our readiness framework, checks assessments, project work and reviewed delivery. Your Readiness Passport shows evidence of what you can actually do.',pose:()=>FX().routePose('career',CK[4]),
+      {id:'verify',label:'Verify',eyebrow:'VERIFY',title:'Evidence in. Readiness out.',copy:'ETAF™, our readiness framework, checks assessments, project work and reviewed delivery. After that review, your Evidence Passport becomes your Readiness Passport: evidence of what you can actually do.',pose:()=>FX().routePose('career',CK[4]),
         action:{label:'Explore the Readiness Passport',run:open('career',6)},hotspots:[{at:[21,9.2,-43.8],label:'ETAF™ assurance core',run:open('career',6)}]},
       {id:'deploy',label:'Deploy',eyebrow:'DEPLOY',title:'Get placed in industry.',copy:'Verified talent connects with companies. Products go live. Career-specific placement support helps people take their next step.',pose:()=>DEPLOY,
         action:{label:'Explore opportunity pathways',run:open('career',7)},hotspots:[{at:[0,6.4,-72],label:'ETAF™ gate · opportunity pathways',run:open('career',7)}]},
@@ -518,19 +518,25 @@ export function initController(replayStory: () => void): ControllerApi {
     apply:{label:'Applied work',hotspots:[{at:[-24.3,3.4,-8.8],label:'Apply station',run:open('workforce',3)}]},
     campus:{label:'Campus',hotspots:[{at:[-50,3.5,-23],label:'Campus actors',run:open('workforce',4)}]},
     scope:{label:'Scope',hotspots:[{at:[-50,3.5,-23],label:'Campus scope',run:open('workforce',4)}]},
-    plaza:{label:'AI for Everyone'}};
+    plaza:{label:'AI for Everyone'},
+    preview:{label:'Your route'},pTask:{label:'A familiar task'},pDemo:{label:'Practical example'},pPath:{label:'Learning path'},pNext:{label:'Next step'}};
+  const STORYANCH:Record<PathId,string>={student:'fCareer',founder:'fWork',hr:'fWork',university:'fWork',professional:'fGlobe'};
   const CATS:Record<PathId,string>={student:'For students',founder:'For startups',hr:'For organisations',university:'For universities',professional:'For professionals'};
   let pendSide=-1;
   const pendWorld:Object3D[]=[];
-  const story=new Story({
+  const story:Story=new Story({
     project:(x,y,z)=>FX().project(x,y,z),
     addWorld:(o)=>{if(window.FACTORY)window.FACTORY.addWorld(o);else pendWorld.push(o)},
     setStops:(stops,goTo)=>{tour.setStops('story',stops);if(mode==='tour'&&tour.route==='story')tour.jump(goTo);else startTour('story',goTo)},
     travel:(i)=>tour.travel(i),
+    board:(el)=>{const F=window.FACTORY;if(!F)return null;const o=F.css(el);o.visible=false;return{place:(at,face,w)=>F.aim(o,at,face,1,0,w,440),show:(on)=>{o.visible=on}}},
     open:(key)=>{const [r,i]=key.split(':');openStop(r,+i)},
     detailOpen:()=>cd.classList.contains('open'),
     explore:()=>{story.hide();startTour('career',0)},
     onAudience:(a)=>{stCat=a?CATS[a]:'For students'},
+    fov:()=>window.FACTORY?.cam().fov??50,
+    reduced:()=>tour.reduce,
+    setReduced:(on)=>tour.setReduce(on),
   },ROOMS,makeRoutes({
     openStop:(r,i)=>openStop(r,i),
     talk:(t,e)=>openDrawer('ph',t,e),
@@ -582,7 +588,7 @@ export function initController(replayStory: () => void): ControllerApi {
   const HASH:Record<string,string>={career:'career',workforce:'workforce',globe:'ai-for-everyone',evidence:'evidence',skip:'skip-3d'},ANCH:Record<string,string>={career:'fCareer',workforce:'fWork',globe:'fGlobe',evidence:'fEvidence',skip:'fTop'};
   function openFlat(auto:boolean,anchor:string){flat.hidden=false;flatOpen=true;if(auto)flatAuto=true;$('fNote').hidden=!flatAuto;$('fBack').hidden=flatAuto;closeMenu();document.documentElement.style.overflow='hidden';requestAnimationFrame(()=>{const el=anchor&&$(anchor);flat.scrollTop=el?el.offsetTop-84:0})}
   function closeFlat(){if(flatAuto||!flatOpen)return;flat.hidden=true;flatOpen=false;document.documentElement.style.overflow=''}
-  function nav(k:string){closeMenu();if(k==='story'){replayStory();return}history.replaceState(null,'','#'+HASH[k]);if(k==='skip'||k==='evidence'||flatAuto||!window.FACTORY){openFlat(false,ANCH[k]);return}closeFlat();closeDrawer();if(k==='globe'){resetToIntro('career',0);toGlobe()}else if(k==='career'){resetToIntro('story',0);story.choose('student')}else resetToIntro('workforce',1)}
+  function nav(k:string){closeMenu();if(k==='story'){replayStory();return}history.replaceState(null,'','#'+HASH[k]);if(k==='skip'||k==='evidence'||flatAuto||!window.FACTORY){const inStory=mode==='tour'&&tour.route==='story'&&!!story.audience;$('fBack').textContent=inStory?'← Back to your guided tour':'← Back to the 3D company';openFlat(false,inStory&&k==='skip'?STORYANCH[story.audience!]:ANCH[k]);return}closeFlat();closeDrawer();if(k==='globe'){resetToIntro('career',0);toGlobe()}else if(k==='career'){resetToIntro('story',0);story.choose('student')}else resetToIntro('workforce',1)}
   menu.querySelectorAll<El>('[data-go]').forEach(b=>b.onclick=()=>nav(b.dataset.go!));
   document.querySelectorAll<El>('.logo').forEach(a=>a.onclick=e=>{e.preventDefault();closeMenu();closeFlat();history.replaceState(null,'',location.pathname+location.search);resetToIntro(tour.route,0)});
   const esc=(s:string)=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'} as Record<string,string>)[c]);
