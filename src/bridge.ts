@@ -17,7 +17,7 @@ export type P3 = [x: number, y: number, z: number];
 /** A world point projected to the viewport (`FACTORY.project`); `face` is set by `FACTORY.nodes`. */
 export interface ScreenPoint { x: number; y: number; vis: boolean; face?: number }
 /** One unit on the TaaS talent shelf (UNITD in controller.ts). */
-export interface TalentUnit { id: string; dom: string; band: string; state: string; off?: boolean }
+export interface TalentUnit { id: string; dom: string; band: string; state: string; off?: boolean; /** Part of the chosen engagement model (steps forward on the shelf). */ grp?: boolean }
 /** Ecosystem network state pushed by the controller (`FACTORY.setNet`). */
 export interface EcoNet { sec: number; act: Record<string, number>; mode: number; links: number[] }
 
@@ -79,6 +79,8 @@ export interface FactoryApi {
   setNet(o: EcoNet): void;
   pod(on: boolean): void;
   podJump(i: number): void;
+  /** Light the lead roles (indexes into the POD's six roles) for the chosen problem type. */
+  setPodLead(lead: number[]): void;
   podG(): number;
   podTime(): number;
   campusOn(): boolean;

@@ -8,6 +8,7 @@ import { Opening } from '../story/opening';
 import { currentPath, currentRoute, legacyHashPath, onPathChange, setPath } from '../app/router';
 import { routeFor, type Dest } from '../app/routes';
 import { Passport } from '../app/passport';
+import { SelectionTray } from '../app/selection';
 import { makeRoutes, PROFESSIONS } from '../story/routes';
 import type { StoryIntroIntent } from '../story/intro';
 import type { Object3D } from 'three';
@@ -190,11 +191,12 @@ export function initController(replayStory: () => void): ControllerApi {
   const FXW=[22,15.6,9.2,2.8,-3.6,-10],WFP:([P3,P3]|null)[]=[[[54,8,-13.5],[30,3.5,-13.5]],[[29.4,2.6,-5.6],[19,1.1,-5.6]],null,[[-9,4.5,-1.5],[-21.9,2.2,-14]],[[-35,12.5,3],[-50,3,-23]],[[-6,62,6],[-6,27,-31]],[[62,11,-13.5],[30,4,-13.5]]];
   function wfPose(i:number):{p:P3;l:P3}{if(i===3){const tx=Math.tan(25*Math.PI/180)*Math.min(1.9,Math.max(1.3,innerWidth/innerHeight)),a=-46*Math.PI/180-Math.atan(tx/3);return{p:WFP[3]![0],l:[-9+18*Math.sin(a),2.2,-1.5-18*Math.cos(a)]}}if(i!==2)return{p:WFP[i]![0],l:WFP[i]![1]};const F=window.FACTORY,g=F?F.podG():-1;let x;if(g<0)x=FXW[0]+(-g)*9.5;else{const k=Math.min(4,Math.floor(g));x=FXW[k]+(FXW[k+1]-FXW[k])*(g-k)}const px=Math.min(26,x);return{p:[px,3.2,-22.8],l:[px,1.3,-32.5]}}
   function wfGo(i:number){if(mode==='tour'){if(tour.route!=='workforce')startTour('workforce',0);tour.travel(i+1);return}if(mode!=='hub'||i===wfAt)return;closeDrawer();const F=window.FACTORY;wfFrom=lastPose?{p:lastPose.p.slice(),l:lastPose.l.slice(),i:wfAt}:null;wfAt=i;wfT0=performance.now();wfArr=false;setBayHv(-1);if(F){F.pod(i===2);if(i===2)F.podJump(-1.62);F.wfStop(i);if(i===3||i===4)F.campusIn()}}
-  const WFAM=["Verified Talent (TaaS)","Product Engineering PODs","Workforce Capability","Campus Talent Factory","Ecosystem at Scale"],WPREV=['Consume verified capability.','Bring an industry problem.','Upgrade the team you already have.','Build the future talent supply.','Regional and sector capability building.'],FIL:Record<string,number[]>={all:[0,1,2,3,4],ent:[0,1,2],uni:[1,3],gov:[2,3,4]};
+  const WFAM=["Verified Talent (TaaS)","Product Engineering PODs","Workforce Capability","Campus Talent Factory","Ecosystem at Scale"],WPREV=['Consume verified capability.','Bring an industry problem.','Upgrade the team you already have.','Build the future talent supply.','Regional and sector capability building.'],FIL:Record<string,number[]>={all:[0,1,2,3,4],ent:[0,1,2],uni:[1,3],gov:[2,3,4],st:[1,0]};
   const bayTip=$('bayTip');
   function setBayHv(i:number){bayHv=i;document.querySelectorAll<El>('[data-bay]').forEach(b=>b.classList.toggle('hov',+b.dataset.bay! ===i));if(i>=0){bayTip.firstChild!.textContent='0'+(i+1)+' · '+WFAM[i];bayTip.lastChild!.textContent=WPREV[i]}}
   document.querySelectorAll<El>('[data-bay]').forEach(b=>{const i=+b.dataset.bay!;b.addEventListener('pointerenter',()=>setBayHv(i));b.addEventListener('focus',()=>setBayHv(i));b.addEventListener('pointerleave',()=>setBayHv(-1));b.addEventListener('blur',()=>setBayHv(-1));b.onclick=()=>wfGo(i+1)});
-  document.querySelectorAll<El>('[data-fil]').forEach(b=>b.onclick=()=>{wfFil=b.dataset.fil!;document.querySelectorAll('[data-fil]').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll<El>('[data-bay]').forEach(x=>x.classList.toggle('dim',!FIL[wfFil].includes(+x.dataset.bay!)))});
+  function applyFil(k:string){wfFil=FIL[k]?k:'all';document.querySelectorAll('[data-fil]').forEach(x=>x.classList.toggle('on',(x as El).dataset.fil===wfFil));document.querySelectorAll<El>('#bayBtns [data-bay]').forEach(x=>{const i=+x.dataset.bay!,s=wfFil!=='all'&&FIL[wfFil].includes(i);x.classList.toggle('sug',s);x.style.order=s?String(FIL[wfFil].indexOf(i)-9):''})}
+  document.querySelectorAll<El>('[data-fil]').forEach(b=>b.onclick=()=>{applyFil(b.dataset.fil!);tray?.setAudience(wfFil)});
   const DOMS=['AI/ML','Data','Cloud/DevOps','Cybersecurity','Full Stack'],STC:Record<string,string>={Available:'#C9A33A',Deployed:'#1E4632','In Training':'#FFFFFF'};
   const UNITD:TalentUnit[]=([[0,2,'Available'],[1,1,'Deployed'],[2,3,'Available'],[3,2,'In Training'],[4,1,'Available'],[0,3,'Deployed'],[1,2,'Available'],[2,1,'In Training'],[3,3,'Available'],[4,2,'Deployed'],[0,1,'In Training'],[2,2,'Available']] as [number,number,string][]).map(([d,b,s],i)=>({id:'U-'+String(i+1).padStart(2,'0'),dom:DOMS[d],band:'Band '+b,state:s}));
   const ENGL=['Reserve individual verified units.','Reserve a cross-functional squad as one unit.','Draw on senior expertise when you need it.','EmpowerED builds and runs the team, then transfers it to you.'];
@@ -202,7 +204,7 @@ export function initController(replayStory: () => void): ControllerApi {
   $('bandBtns').innerHTML=['All','Band 1','Band 2','Band 3'].map(d=>'<button class="opt'+(d==='All'?' on':'')+'" type="button" data-band="'+d+'">'+(d==='All'?'All bands':d)+'</button>').join('');
   $('shelf').innerHTML=UNITD.map(u=>'<div class="unit"><b>'+u.id+'</b><span>'+u.dom+'</span><span>'+u.band+'</span><span class="st" style="--c:'+STC[u.state]+'">'+u.state+'</span></div>').join('');
   const unitEls=[...document.querySelectorAll('.unit')];
-  function paintShelf(){const grp=eng===1?[0,1,2,4,6]:eng===2?UNITD.map((u,i)=>u.band==='Band 3'?i:-1).filter(i=>i>=0):[];UNITD.forEach((u,i)=>{u.off=(dom!=='All'&&u.dom!==dom)||(band!=='All'&&u.band!==band);unitEls[i].classList.toggle('off',u.off);unitEls[i].classList.toggle('grp',grp.includes(i))});$('engLine').textContent=ENGL[eng];window.FACTORY&&window.FACTORY.setUnits(UNITD)}
+  function paintShelf(){UNITD.forEach(u=>{u.off=(dom!=='All'&&u.dom!==dom)||(band!=='All'&&u.band!==band)});const avail=UNITD.map((u,i)=>!u.off&&u.state==='Available'?i:-1).filter(i=>i>=0);const grp=eng===1||eng===3?[0,1,2,4,6].filter(i=>!UNITD[i].off):eng===2?UNITD.map((u,i)=>u.band==='Band 3'&&!u.off?i:-1).filter(i=>i>=0):avail.slice(0,1);UNITD.forEach((u,i)=>{u.grp=grp.includes(i);unitEls[i].classList.toggle('off',u.off);unitEls[i].classList.toggle('grp',grp.includes(i))});$('engLine').textContent=ENGL[eng];window.FACTORY&&window.FACTORY.setUnits(UNITD)}
   document.querySelectorAll<El>('[data-dom]').forEach(b=>b.onclick=()=>{dom=b.dataset.dom!;document.querySelectorAll('[data-dom]').forEach(x=>x.classList.toggle('on',x===b));paintShelf()});
   document.querySelectorAll<El>('[data-band]').forEach(b=>b.onclick=()=>{band=b.dataset.band!;document.querySelectorAll('[data-band]').forEach(x=>x.classList.toggle('on',x===b));paintShelf()});
   document.querySelectorAll<El>('[data-eng]').forEach(b=>b.onclick=()=>{eng=+b.dataset.eng!;document.querySelectorAll('[data-eng]').forEach(x=>x.classList.toggle('on',x===b));paintShelf()});
@@ -217,6 +219,7 @@ export function initController(replayStory: () => void): ControllerApi {
   $('cfgInd').innerHTML=INDS.map(d=>'<option>'+escW(d.name)+'</option>').join('');$('cfgType').innerHTML=Object.keys(TYPES).map(k=>'<option>'+k+'</option>').join('');$('cfgOut').innerHTML=Object.keys(OUTS).map(k=>'<option>'+escW(k)+'</option>').join('');
   function paintCfg(){const ld=TYPES[$<HTMLSelectElement>('cfgType').value],em=OUTS[$<HTMLSelectElement>('cfgOut').value];$('cfgPrev').innerHTML='<small>Illustrative POD · '+escW($<HTMLSelectElement>('cfgInd').value)+'</small><div class="opts">'+ROLES.map((r,i)=>'<span class="opt'+(ld.includes(i)?' lead':'')+'">'+r+(ld.includes(i)?' · lead':'')+'</span>').join('')+'</div><small>Lifecycle emphasis</small><div class="opts">'+STGN.map((n,i)=>'<span class="opt'+(em.includes(i)?' lead':'')+'">'+escW(n)+'</span>').join('')+'</div>'}
   ['cfgInd','cfgType','cfgOut'].forEach(id=>$(id).onchange=paintCfg);paintCfg();
+  const leadCfg=()=>window.FACTORY?.setPodLead(TYPES[$<HTMLSelectElement>('cfgType').value]??[]);$('cfgType').addEventListener('change',leadCfg);setTimeout(leadCfg,1500);
   function wform(t:string){$('wfT').textContent=t;$<HTMLInputElement>('pfInd').value=$<HTMLSelectElement>('cfgInd').value;$<HTMLInputElement>('pfOut').value=$<HTMLSelectElement>('cfgOut').value;$('wfSum').textContent=t==='Design My POD'?'Configurator: '+$<HTMLSelectElement>('cfgInd').value+' · '+$<HTMLSelectElement>('cfgType').value+' · '+$<HTMLSelectElement>('cfgOut').value+' (illustrative).':'';openDrawer('wform')}
   window.__wform=wform;window.__goForm=(i,tt)=>goForm(i,tt);$('probBtn').onclick=()=>wform('Bring Us a Problem');$('designBtn').onclick=()=>wform('Design My POD');
   const MODS=['AI foundations','Copilots & prompting','Data literacy','Workflow automation','Responsible AI','Applied ML','LLM app engineering','MLOps & cloud AI'],LVLS=['Aware','Practitioner','Builder'];
@@ -262,6 +265,25 @@ export function initController(replayStory: () => void): ControllerApi {
   $('assessBtn').onclick=()=>goForm(2,'Assess My Workforce');$('acadBtn').onclick=()=>goForm(2,'Design a Corporate Academy');
   $('campBtn').onclick=()=>goForm(3,'Build a Campus Talent Factory');$('spodBtn').onclick=()=>{con=3;paintAct();window.FACTORY&&window.FACTORY.podCross();goForm(3,'Launch a Student POD')};
   $('sectBtn').onclick=()=>goForm(4,'Design a Sector Talent Program');$('hubBtn').onclick=()=>{eMode=1;paintEco();goForm(4,'Explore a Regional Talent Hub')};
+  const NEXT_L=['Model My Requirement','Bring Us a Problem','Assess My Workforce','Build a Campus Talent Factory','Design a Sector Talent Program'];
+  const sv=(id:string)=>$<HTMLSelectElement>(id).value;
+  function wfControls(){return{eng,dom,band,ind:sv('cfgInd'),type:sv('cfgType'),out:sv('cfgOut'),lfn:sv('lensFn'),lout:sv('lensOut'),act,con,sec:eSec,em:eMode,ea:Object.assign({},eAct)}}
+  const tray:SelectionTray=new SelectionTray({text:i=>selText(i),next:i=>NEXT_L[i],openBay:i=>{closeDrawer();if(mode==='tour'&&tour.route==='story'){setPath(pathOfBay(i),true);go({k:'bay',stop:(['talent','pods','teams','campus','region'] as const)[i]})}else wfGo(i+1);setTimeout(()=>{if(tourWf===i+1||wfAt===i+1)openStop('workforce',i+1)},reduce?200:1600)},openSummary:()=>openDrawer('wsum'),changed:()=>paintPicks()});
+  function pathOfBay(i:number){return['workforce/verified-talent/','workforce/product-engineering/','workforce/capability/','workforce/campus/','workforce/ecosystem/'][i]}
+  // Restore last visit's choices.
+  {const c=tray.data.ctl as Record<string,unknown>,num=(v:unknown,d:number,max:number)=>typeof v==='number'&&v>=-1&&v<max?v:d,setSel=(id:string,v:unknown)=>{const el=$<HTMLSelectElement>(id);if(typeof v==='string'&&[...el.options].some(o=>o.value===v))el.value=v};
+    eng=num(c.eng,0,4);if(typeof c.dom==='string'&&(c.dom==='All'||DOMS.includes(c.dom)))dom=c.dom;if(typeof c.band==='string'&&/^(All|Band [123])$/.test(c.band))band=c.band;
+    document.querySelectorAll<El>('[data-eng]').forEach(x=>x.classList.toggle('on',+x.dataset.eng! ===eng));document.querySelectorAll<El>('[data-dom]').forEach(x=>x.classList.toggle('on',x.dataset.dom===dom));document.querySelectorAll<El>('[data-band]').forEach(x=>x.classList.toggle('on',x.dataset.band===band));
+    setSel('cfgInd',c.ind);setSel('cfgType',c.type);setSel('cfgOut',c.out);setSel('lensFn',c.lfn);setSel('lensOut',c.lout);
+    act=Math.max(0,num(c.act,0,ACTS.length));con=num(c.con,-1,CONS.length);eSec=Math.max(0,num(c.sec,0,ECO.sect.length));eMode=num(c.em,0,2)===1?1:0;
+    if(c.ea&&typeof c.ea==='object')for(const k of ['c','i','g'])eAct[k]=(c.ea as Record<string,number>)[k]?1:0;
+    applyFil(tray.data.aud);paintShelf();paintCfg();paintLens();paintAct();paintEco()}
+  // Save whenever a bay control changes.
+  {const WFC='[data-eng],[data-dom],[data-band],#cfgInd,#cfgType,#cfgOut,#lensFn,#lensOut,#actBtns [data-act],[data-con],[data-sec],[data-ea],[data-em],#spodBtn,#hubBtn',save=(e:Event)=>{if((e.target as Element).closest?.(WFC))setTimeout(()=>tray.saveControls(wfControls()),0)};document.addEventListener('click',save);document.addEventListener('change',save)}
+  // "Add to my selection" in each bay (mirrored into the drawer like the other bay controls).
+  [1,2,3,4,5].forEach(n=>{const acts=$('w'+n+'p').querySelector('.acts');const b=document.createElement('button');b.type='button';b.className='opt pick';b.dataset.pick=String(n-1);b.onclick=()=>tray.toggle(n-1);acts?.after(b)});
+  function paintPicks(){document.querySelectorAll<El>('[data-pick]').forEach(b=>{const on=tray.has(+b.dataset.pick!);b.classList.toggle('on',on);b.textContent=on?'✓ In your selection':'+ Add to my selection'})}
+  paintPicks();
   const NEXT=['Model My Requirement','Bring Us a Problem','Assess My Workforce','Build a Campus Talent Factory','Design a Sector Talent Program'],CMPR=['Best when','Engagement shape','What EmpowerED produces','What you contribute','Evidence / assurance'];
   const CMPD=[['You need verified people in roles now, without running a hiring cycle.','Individual talent, a dedicated POD, expert-on-demand or build–operate–transfer.','Deployment-ready talent matched to your roles.','Role requirements, onboarding and day-to-day direction.','An ETAF™ readiness passport for every unit.'],
     ['You have a real problem and want a working product or PoC.','A cross-functional POD taking the problem through six stages, Discover to Demo & Validate.','A product or PoC, capability evidence and a deployment pipeline.','The problem statement, access to data and a product owner.','Stage demos and ETAF™ evidence from the build.'],
@@ -277,7 +299,7 @@ export function initController(replayStory: () => void): ControllerApi {
   paintCmp();
   const podEls=[...document.querySelectorAll('#nodeBtns .opt')],loopEls=[...document.querySelectorAll('#loop span')];
   function wfFrame(F:FactoryApi,now:number,W:number,H:number){const on=mode==='tour'?tourWf>=0:route==='workforce'&&(mode==='hub'||mode==='fly');F.setWf(on);if(!on){F.pod(false);vis(bayTip,0);return}
-    const atDock=(mode==='hub'||(mode==='tour'&&tourWf===0))&&wfAt===0&&wfArr;if(atDock&&W>900){const pr=$('w0p').getBoundingClientRect().right+30,p=F.project(32,2.5,-3.5);if(Number.isFinite(p.x)){if(p.x<pr)wfShift=Math.min(18,wfShift+.25);else if(p.x>pr+80&&wfShift>0)wfShift=Math.max(0,wfShift-.25)}}else if(W<=900)wfShift=0;F.setBays(atDock?bayHv:-1,wfAt===6?cmp:[],wfAt===6&&cmp.length?[0,1,2,3,4].filter(i=>!cmp.includes(i)):FIL[wfFil].length===5?[]:[0,1,2,3,4].filter(i=>!FIL[wfFil].includes(i)));
+    const atDock=(mode==='hub'||(mode==='tour'&&tourWf===0))&&wfAt===0&&wfArr;if(atDock&&W>900){const pr=$('w0p').getBoundingClientRect().right+30,p=F.project(32,2.5,-3.5);if(Number.isFinite(p.x)){if(p.x<pr)wfShift=Math.min(18,wfShift+.25);else if(p.x>pr+80&&wfShift>0)wfShift=Math.max(0,wfShift-.25)}}else if(W<=900)wfShift=0;F.setBays(atDock?bayHv:-1,wfAt===6?cmp:atDock&&wfFil!=='all'?FIL[wfFil]:[],wfAt===6&&cmp.length?[0,1,2,3,4].filter(i=>!cmp.includes(i)):[]);
     if(atDock&&bayHv>=0){const p=F.project(30.1,6,[-3.5,-8.5,-13.5,-18.5,-23.5][bayHv]);bayTip.style.transform='translate('+Math.min(Math.max(p.x-130,12),W-272)+'px,'+Math.max(p.y-bayTip.offsetHeight-14,72)+'px)';vis(bayTip,1);bayTip.style.pointerEvents='none'}else vis(bayTip,0);
     if(wfAt===1){const k=Math.floor(now/1300)%4;loopEls.forEach((l,i)=>l.classList.toggle('on',i===k))}
     if(wfAt===2){const tp=F.podTime(),g=F.podG();podEls.forEach((n,i)=>{n.classList.toggle('asm',tp<2.8+i*.3);n.classList.toggle('lit',tp>=2.8+i*.3)});const cs=g<0?-1:Math.round(g);document.querySelectorAll<El>('[data-wst]').forEach(b=>b.classList.toggle('on',+b.dataset.wst! ===cs))}}
@@ -351,6 +373,7 @@ export function initController(replayStory: () => void): ControllerApi {
     stopFrame(now,s);
     BLOCKS.forEach(b=>{const o=((mode==='route'||mode==='hub')&&route===b.r)?1-sm(.2,.45,Math.abs(s-b.s)):0;vis(b.el,o)});
     hdrLogo.style.opacity=String(1-oReg);hdrLogo.style.pointerEvents=oReg>.5?'none':'auto';
+    tray.visible(!flatOpen&&!cd.classList.contains('open')&&mode!=='opening'&&mode!=='globe'&&mode!=='gIn'&&mode!=='gOut'&&(tourWf>=0||mode==='hub'||currentPath().startsWith('workforce/')));
     hdrBack.style.display=(((mode!=='intro'&&mode!=='gIn'&&mode!=='opening')&&!(mode==='tour'&&tour.index===0))||(flatOpen&&!flatAuto))?'inline-flex':'none';const cr=flatOpen?'EMPOWERED · TEXT VIEW':(mode==='globe'||mode==='gIn'||mode==='gOut')?'AI FOR EVERYONE':mode==='tour'?(tour.route==='career'?'CAREER':tour.route==='story'?'STORY':'WORKFORCE')+' · '+(TOURS[tour.route][tour.index]?.label||'').toUpperCase():'EMPOWERED';if(crumb.textContent!==cr)crumb.textContent=cr;
     vis(rail,(mode==='route'||mode==='fly'||mode==='globe'||mode==='hub')?1:0);
     const gl=mode==='globe',act=gl?(whoOpen?2:sel>=0?1:0):Math.round(Math.max(0,s));dots.forEach((d,i)=>{d.classList.toggle('on',i===act);d.classList.toggle('done',!gl&&i<act);if(i===act)d.setAttribute('aria-current','step');else d.removeAttribute('aria-current')});
@@ -421,7 +444,8 @@ export function initController(replayStory: () => void): ControllerApi {
     [['ent','Enterprise'],['uni','University'],['gov','Government']].forEach(([k,n],i)=>add({label:n,cls:'pc stand',pos:[32.5+i*2.6,1.2,-1.5],cam:CP('workforce',0),z:.85,at:[['workforce',0]],tg:1,src:()=>qs('[data-fil="'+k+'"]'),fn:()=>{const x=qs('[data-fil="'+k+'"]')!;(x.classList.contains('on')?qs('[data-fil="all"]')!:x).click()}}));
     grp({cls:'pgrp v',html:'<span class="gl">ENGAGEMENT MODEL</span>',pos:[20.5,5.6,-1.2],cam:CP('workforce',1),z:.6,sw:1,at:[['workforce',1]]},'#engBtns [data-eng]');
     grp({cls:'pgrp strip',pos:[19.42,3.9,-5.75],face:[40,3.9,-5.75],ww:6.2,pxW:640,at:[['workforce',1]]},'#domBtns [data-dom],#bandBtns [data-band]');
-    UNITD.forEach((u,i)=>{const r=Math.floor(i/4),c=i%4,y=.44+r*1.2,z=-3.3-c*1.5;add({html:'<b>'+u.id+'</b><span>'+ex(u.dom)+'</span><span>'+u.band+'</span><span>'+u.state+'</span>',cls:'utag',fix:1,pos:[19.99,y,z],face:[40,y,z],ww:.98,pxW:100,at:[['workforce',1]],cond:()=>route==='workforce',upd:(e,a)=>{e.el!.style.opacity=String((a?1:.3)*(u.off?.22:1))}})});
+    UNITD.forEach((u,i)=>{const r=Math.floor(i/4),c=i%4,y=.44+r*1.2,z=-3.3-c*1.5;add({html:'<b>'+u.id+'</b><span>'+ex(u.dom)+'</span><span>'+u.band+'</span><span>'+u.state+'</span>',cls:'utag',fix:1,pos:[19.99,y,z],face:[40,y,z],ww:.98,pxW:100,at:[['workforce',1]],cond:()=>route==='workforce',upd:(e,a)=>{e.el!.style.opacity=String((a?1:.3)*(u.off?.22:1));const o=e.o;if(o){const x=e as {bx?:number};if(x.bx===undefined)x.bx=o.position.x;o.position.x+=((x.bx+(u.grp?.55:0))-o.position.x)*.2}}})});
+    [1,2,3,4,5].forEach(n=>add({noObj:1,label:'Add to my selection',tg:1,src:()=>qs('[data-pick="'+(n-1)+'"]'),at:[['workforce',n]]}));
     add({noObj:1,label:'Replay',fn:()=>$('podReplay').click(),at:[['workforce',2]]});
     add({noObj:1,label:'Capability lens',fn:()=>openDrawer('lens'),at:[['workforce',3]]});
     const CP4=CP('workforce',4),APOS:P3[]=[[-54,11.6,-29.6],[-37,2.6,-10.6],[-45,11.2,-17.6],[-67,3.2,-7]];
@@ -478,7 +502,8 @@ export function initController(replayStory: () => void): ControllerApi {
     const key=mode==='globe'?(whoOpen?'gpw':sel>=0?'glv':''):act?act.r+act.s:'';if(key!==ctlKey){ctlKey=key;buildCtl(key)}
     vis(ctl,curCtl.length&&mode==='globe'?1:0);
     if(act!==b3Act){if(act)act.tw=undefined;b3Act=act;if(act)$('srNow').textContent=act.h}}
-  setInterval(()=>{drwCtl.forEach(e=>{if(!e.db)return;const v=stateOf(e.src&&e.src());e.db.classList.toggle('on',v);if(e.tg)e.db.setAttribute('aria-pressed',String(v))});curCtl.forEach(e=>{if(!e.rb)return;const v=stateOf(e.src&&e.src());e.rb.classList.toggle('on',v);if(e.tg)e.rb.setAttribute('aria-pressed',String(v))});
+  const mirror=(b:El,x:El|null|undefined)=>{if(!x)return;b.classList.toggle('sug',x.classList.contains('sug'));b.style.order=x.style.order;if(x.dataset.pick&&b.textContent!==x.textContent)b.textContent=x.textContent};
+  setInterval(()=>{drwCtl.forEach(e=>{if(!e.db)return;const x=e.src&&e.src(),v=stateOf(x);e.db.classList.toggle('on',v);if(e.tg)e.db.setAttribute('aria-pressed',String(v));mirror(e.db,x)});curCtl.forEach(e=>{if(!e.rb)return;const x=e.src&&e.src(),v=stateOf(x);e.rb.classList.toggle('on',v);if(e.tg)e.rb.setAttribute('aria-pressed',String(v));mirror(e.rb,x)});
     PHS.forEach(e=>{if(!e.src||!e.el||e.el.classList.contains('cor'))return;const x=e.src();if(!x)return;e.el.classList.toggle('sel',stateOf(x));e.el.classList.toggle('lead',x.classList.contains('lead'))});
     document.querySelectorAll<El>('[data-open="result"]').forEach(b=>b.hidden=!hasResult)},200);
   addEventListener('resize',()=>{const F=window.FACTORY;if(!b3||!F)return;BDS.forEach(b=>{if(b.place)return;F.fitBoard(b.o,b.pose[0],b.pose[1],440);b.bx=b.o.position.x})});
@@ -562,9 +587,9 @@ export function initController(replayStory: () => void): ControllerApi {
     open:(key)=>{if(key==='etaf:demo'){playEtafDemo();return}const [r,i]=key.split(':');openStop(r,+i)},
     detailOpen:()=>cd.classList.contains('open')||flatOpen,
     explore:()=>{story.hide();startTour('career',0)},
-    onAudience:(a)=>{stCat=a?CATS[a]:'For students'},
+    onAudience:(a)=>{stCat=a?CATS[a]:'For students';const au=a?({hr:'ent',university:'uni',founder:'st'} as Record<string,string>)[a]:undefined;if(au){applyFil(au);tray.setAudience(au)}},
     journey:(j)=>{if(mode==='tour'&&tour.route==='story')syncPath(j==='workforce'?'workforce/':'')},
-    region:()=>{setPath('workforce/ecosystem/',true);go({k:'bay',stop:'region'})},
+    region:()=>{applyFil('gov');tray.setAudience('gov');setPath('workforce/ecosystem/',true);go({k:'bay',stop:'region'})},
     fov:()=>window.FACTORY?.cam().fov??50,
     reduced:()=>tour.reduce,
     setReduced:(on)=>tour.setReduce(on),
@@ -656,7 +681,7 @@ export function initController(replayStory: () => void): ControllerApi {
     form.addEventListener('submit',event=>event.preventDefault());
   }
   for(const id of ['regForm','modelForm','probForm'])markFormUnavailable($<HTMLFormElement>(id));
-  function openMenu(){passport.close();menu.hidden=false;menuOpen=true;menuBtn.setAttribute('aria-expanded','true');[...menu.querySelectorAll<El>('button')].find(b=>b.offsetParent)?.focus()}
+  function openMenu(){passport.close();tray.close();menu.hidden=false;menuOpen=true;menuBtn.setAttribute('aria-expanded','true');[...menu.querySelectorAll<El>('button')].find(b=>b.offsetParent)?.focus()}
   function closeMenu(){if(!menuOpen)return;const f=menu.contains(document.activeElement);menu.hidden=true;menuOpen=false;menuBtn.setAttribute('aria-expanded','false');if(f)menuBtn.focus()}
   menuBtn.onclick=()=>menuOpen?closeMenu():openMenu();
   addEventListener('pointerdown',e=>{if(menuOpen&&!(e.target as Element).closest('#menu,#menuBtn'))closeMenu()});
