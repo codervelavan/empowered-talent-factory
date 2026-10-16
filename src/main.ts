@@ -6,18 +6,18 @@ import { initController } from './factory/controller';
 import { initStoryIntro } from './story/intro';
 import { initFactory } from './factory/scene';
 
-// The story intro plays first, over everything else. When it hands over, the company
-// tour starts at the Company stop. The 3D scene starts last; the controller waits for
-// window.FACTORY and falls back to the flat page if WebGL isn't available.
-window.__storyShowing = true;
+// The 3D world opens first: the controller plays the opening, or goes straight to the place
+// in the address (/career/assurance/, /workforce/campus/…). The story intro is optional
+// reading from the menu. The 3D scene starts last; the controller waits for window.FACTORY
+// and falls back to the standard page if WebGL isn't available.
+window.__storyShowing = false;
 drawSketches();
 const controller = initController(() => story.replay());
 const story = initStoryIntro(
   (intent) => { window.__storyShowing = false; controller.enterFromStory(intent); },
   () => { window.__storyShowing = true; controller.beforeStory(); },
+  { startHidden: true },
 );
-// Deep links (#career, #workforce, #ai-for-everyone, #evidence, #skip-3d) go straight into the site.
-if (/^#(career|workforce|ai-for-everyone|globe|evidence|skip-3d|skip)$/.test(location.hash)) story.skip();
 try {
   initFactory();
 } catch (err) {

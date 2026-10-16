@@ -177,3 +177,23 @@ html[data-route="career"] #resumeTour,html[data-route="workforce"] #resumeTour{t
 @media (max-width:900px){#finGlobe{padding:16px;max-height:52vh}}
 /* Phones use the level chips under the panel; the ring around the globe would sit on top of it. */
 @media (max-width:760px){#gRing{display:none!important}}
+
+/* ---- 3D opening: captions over the scene, a skip button, still-frame fades ---- */
+#opening{position:fixed;inset:0;z-index:30;pointer-events:none;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:min(18vh,150px) 20px 0}
+#opening[hidden]{display:none}
+#opening .opCap{margin:0;padding:.3em .6em;border-radius:18px;background:rgba(242,239,226,.82);max-width:22ch;text-align:center;color:#0F2B22;font-family:Manrope,sans-serif;opacity:0;transform:translateY(10px);transition:opacity .6s ease,transform .6s ease;text-wrap:balance;text-shadow:0 2px 18px rgba(242,239,226,.9)}
+#opening .opCap.big{font-weight:800;font-size:clamp(34px,6vw,76px);line-height:1;letter-spacing:-.02em}
+#opening .opCap.mid{max-width:30ch;font-weight:800;font-size:clamp(22px,3vw,36px);line-height:1.2}
+#opening .opCap.in{opacity:1;transform:none}
+#opening .opCap:empty{display:none}
+#opening .opSkip{position:fixed;right:clamp(16px,3vw,40px);bottom:max(24px,env(safe-area-inset-bottom,0px));pointer-events:auto;padding:12px 20px;border:1.5px solid #0F2B22;border-radius:999px;background:rgba(250,248,240,.92);color:#0F2B22;font:800 14px/1.2 Manrope,sans-serif;cursor:pointer}
+#opening .opSkip:hover{background:#0F2B22;color:#F2EFE2}
+#opening .opSkip:focus-visible{outline:3px solid #C9A33A;outline-offset:3px}
+#opFade{position:fixed;inset:0;z-index:29;background:#F2EFE2;opacity:0;pointer-events:none}
+#opFade.go{animation:storyFade .45s ease-out}
+html.opening #hud>*:not(#opening),html.opening #resumeTour{visibility:hidden}
+@media (prefers-reduced-motion:reduce){#opening .opCap{transition:none}}
+/* Lobby: three journeys with a line each */
+#storyPanel .spJourneys button{display:flex;flex-direction:column;gap:3px}
+#storyPanel .spJourneys button b{font:800 15.5px/1.25 Manrope,sans-serif}
+#storyPanel .spJourneys button span{font:500 13px/1.35 Inter,sans-serif;opacity:.8}

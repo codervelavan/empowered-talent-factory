@@ -23,11 +23,12 @@ const INTRO_ACTIONS: ReadonlyArray<readonly [RegExp, StoryIntroIntent]> = [
   [/^View as a page\b/i, 'skip'],
 ];
 
-export function initStoryIntro(onEnter: (intent: StoryIntroIntent) => void, onReplay: () => void): StoryIntro {
+export function initStoryIntro(onEnter: (intent: StoryIntroIntent) => void, onReplay: () => void, opts: { startHidden?: boolean } = {}): StoryIntro {
   const de = document.documentElement;
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let fr = document.getElementById('storyIntro') as HTMLIFrameElement;
-  let showing = true;
+  let fr = document.getElementById('storyIntro') as HTMLIFrameElement | null as HTMLIFrameElement;
+  // The 3D opening now comes first; the story is optional reading from the menu ("Read our story").
+  let showing = !opts.startHidden && !!fr;
   /** After the hand-over, ignore leftover scroll momentum for a moment so the tour starts at its first stop. */
   let settleUntil = 0;
   let reduceSkip = false;
@@ -52,9 +53,8 @@ export function initStoryIntro(onEnter: (intent: StoryIntroIntent) => void, onRe
     inertAll();
     scrollTo(0, 0);
   }
-  lock();
   try { history.scrollRestoration = 'manual'; } catch { /* ignore */ }
-  fr.src = storyIntroUrl();
+  if (showing) { lock(); fr.src = storyIntroUrl(); } else { start.hidden = true; fr?.remove(); }
 
   // While the story shows, swallow scroll and keys aimed at the page underneath.
   const block = (e: Event) => {
@@ -163,8 +163,7 @@ export function initStoryIntro(onEnter: (intent: StoryIntroIntent) => void, onRe
     let n = 0;
     const iv = setInterval(() => { hook(); if (++n > 40 || !showing) clearInterval(iv); }, 250);
   };
-  fr.addEventListener('load', hook);
-  pollHook();
+  if (showing) { fr.addEventListener('load', hook); pollHook(); }
 
   return {
     isShowing: () => showing,

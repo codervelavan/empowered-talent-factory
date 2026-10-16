@@ -73,6 +73,10 @@ export interface StoryHost {
   explore(): void;
   /** The visitor chose (or cleared) a goal. */
   onAudience(a: PathId | null): void;
+  /** The visitor picked a journey in the lobby before choosing a route (keeps the address bar in step). */
+  journey(j: Journey | null): void;
+  /** Government and regional visitors go to the Ecosystem bay. */
+  region(): void;
   /** Camera field of view in degrees (for placing boards on screen). */
   fov(): number;
   /** Reduced motion (rooms change with a short fade instead of a walk). */
@@ -83,12 +87,13 @@ export interface StoryHost {
 export interface Profession { name: string; line: string; uses: string[] }
 
 // ---- Where things happen ----------------------------------------------------------
-interface Spot { guide: P3; you: P3; cam: [P3, P3] }
+interface Spot { guide: P3; you: P3; cam: [P3, P3]; /** On wide screens, where the pair sits across the screen (-1 left … 1 right). */ aim?: number }
 const SPOTS: Record<RoomId, Spot> = {
   // Out on the plaza, with the glowing entrance icons and the HQ behind the characters.
-  entrance: { guide: [-2, 0, 30], you: [1.5, 0, 31.4], cam: [[3.5, 3.4, 43], [-0.5, 4.6, 14]] },
+  // The lobby on the plaza, under the Career, Workforce and AI for Everyone icons.
+  entrance: { guide: [-1.6, 0, 25], you: [1.6, 0, 27.5], cam: [[3.5, 4.2, 41], [-0.5, 4.8, 10]], aim: 0.24 },
   // "Your route": closer to the entrance, the building still in view.
-  preview: { guide: [-1.5, 0, 19.5], you: [1.4, 0, 20.6], cam: [[2.5, 3.2, 29.5], [-1, 4.4, 8]] },
+  preview: { guide: [-1, 0, 10], you: [1.6, 0, 11.2], cam: [[3, 3.2, 20], [-0.5, 4, -2]] },
   intake: { guide: [6.5, 0, -9], you: [4.1, 0, -7.1], cam: [[-0.8, 3.4, 2.6], [6.4, 1.9, -11]] },
   develop: { guide: [-9.5, 6, -37.6], you: [-6.6, 6, -36], cam: [[-3.2, 8.8, -27.4], [-9, 7.4, -42]] },
   engineer: { guide: [13.6, 0, -25.6], you: [16.5, 0, -24.4], cam: [[21.6, 3.6, -17.4], [13.4, 1.6, -31]] },
@@ -122,7 +127,7 @@ let FOV = 50;
  * panel (left) and the example board (right): their midpoint lands just right of screen centre.
  */
 const camOf = (room: RoomId): [P3, P3] => {
-  const { cam: [c, l], guide: g, you: y } = SPOTS[room];
+  const { cam: [c, l], guide: g, you: y, aim } = SPOTS[room];
   if (innerWidth <= 760) {
     // Phones: the panel docks at the bottom, so face the pair and look a little below them;
     // they appear in the upper part of the screen, above the panel.
@@ -133,13 +138,16 @@ const camOf = (room: RoomId): [P3, P3] => {
   }
   const mx = (g[0] + y[0]) / 2 - c[0], mz = (g[2] + y[2]) / 2 - c[2];
   const t = Math.tan((FOV * Math.PI) / 360) * (innerWidth / Math.max(1, innerHeight));
-  const yaw = Math.atan2(mx, mz) + Math.atan(0.04 * t), hd = Math.hypot(l[0] - c[0], l[2] - c[2]);
+  const yaw = Math.atan2(mx, mz) + Math.atan((aim ?? 0.04) * t), hd = Math.hypot(l[0] - c[0], l[2] - c[2]);
   return [c, [c[0] + Math.sin(yaw) * hd, l[1], c[2] + Math.cos(yaw) * hd]];
 };
 const UP_STAIRS: P3[] = [[0, 0, -5.6], [0, 6, -22], [8, 6, -26], [16, 6, -32], [18.6, 6, -38.6]];
 /** Walking routes between rooms (guide spot to guide spot), up and down the atrium stairs. */
 const PATHS: Record<string, P3[]> = {
-  'entrance>preview': [[-2, 0, 30], [-1.5, 0, 19.5]],
+  'entrance>preview': [[-1.6, 0, 25], [-1.2, 0, 16], [-1, 0, 10]],
+  'preview>dock': [[-1, 0, 10], [12, 0, 12], [28, 0, 12], [40, 0, 4], [42, 0, -6], [39, 0, -12]],
+  'preview>campus': [[-1, 0, 10], [-14, 0, 13], [-34, 0, 12], [-42, 0, 0], [-41, 0, -8]],
+  'preview>plaza': [[-1, 0, 10], [1, 0, 16], [5, 0, 22.5]],
   'entrance>intake': [[-2, 0, 30], [0, 0, 16], [0, 0, 3], [3, 0, -3], [6.5, 0, -9]],
   'intake>develop': [[6.5, 0, -9], [2, 0, -5], [0, 0, -5.6], [0, 6, -22], [-3, 6, -27], [-7, 6, -33], [-9.5, 6, -37.6]],
   'develop>engineer': [[-9.5, 6, -37.6], [-7, 6, -30], [-1, 6, -24], [0, 6, -22], [0, 0, -6], [4, 0, -10], [10, 0, -18], [13.6, 0, -25.6]],
@@ -157,7 +165,7 @@ const PATHS: Record<string, P3[]> = {
   'entrance>campus': [[-2, 0, 30], [-16, 0, 24], [-36, 0, 14], [-42, 0, 0], [-41, 0, -8]],
   'campus>scope': [[-41, 0, -8], [-42, 0, -10.2]],
   'scope>engineer': [[-42, 0, -10.2], [-42, 0, -6], [-42, 0, 0], [-36, 0, 14], [-16, 0, 16], [0, 0, 16], [0, 0, 3], [4, 0, -10], [10, 0, -18], [13.6, 0, -25.6]],
-  'entrance>plaza': [[-2, 0, 30], [2, 0, 25], [5, 0, 22.5]],
+  'entrance>plaza': [[-1.6, 0, 25], [2, 0, 24], [5, 0, 22.5]],
 };
 
 const sm = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -265,14 +273,35 @@ const makeProfessional = () => blocky({ top: 0xd8dde2, legs: 0x2f3b4c, skin: 0xa
   box(0xffffff, 0.14, 0.18, 0.02, 0, 1.08, 0.16); // badge
 } });
 
-/** The goals offered at the entrance, in the order shown. */
-const GOALS: [PathId, string][] = [
-  ['student', 'Start my career'],
-  ['founder', 'Build a product or find a team'],
-  ['hr', 'Upskill my workforce'],
-  ['university', 'Build industry readiness at my university'],
-  ['professional', 'Use AI in my profession'],
+/** The three journeys offered in the lobby, in the order shown. */
+export type Journey = 'career' | 'workforce' | 'ai';
+const JOURNEYS: [Journey, string, string][] = [
+  ['career', 'Build my career', 'Find out what you’re capable of'],
+  ['workforce', 'Build my workforce', 'Talent, teams, campuses and product PODs'],
+  ['ai', 'AI for everyone', 'What AI means for the work you already do'],
 ];
+/** Who a workforce visitor is building for: a guided route, or the region bay for government. */
+const WORKFORCE_FOR: [PathId | 'region', string][] = [
+  ['hr', 'My company’s teams'],
+  ['university', 'A university or college'],
+  ['founder', 'A product or startup'],
+  ['region', 'Government or a region'],
+];
+const JOURNEY_OF: Record<PathId, Journey> = { student: 'career', founder: 'workforce', hr: 'workforce', university: 'workforce', professional: 'ai' };
+
+/** The site path (relative to the base) for a guided stop, so the address bar follows the tour. */
+export function storyPath(a: PathId | null, i: number, room: RoomId): string {
+  if (!a || i === 0) return '';
+  if (a === 'professional') return 'ai-for-everyone/';
+  if (a === 'student') {
+    if (i === 1) return 'career/';
+    return ({ intake: 'career/assessment/', develop: 'career/launch/', engineer: 'career/accelerate/', verify: 'career/assurance/', deploy: 'career/opportunities/' } as Partial<Record<RoomId, string>>)[room] ?? 'career/';
+  }
+  if (i === 1) return 'workforce/';
+  return ({ talent: 'workforce/verified-talent/', engineer: 'workforce/product-engineering/', delivery: 'workforce/product-engineering/', teams: 'workforce/capability/', apply: 'workforce/capability/', intake: 'workforce/capability/', campus: 'workforce/campus/', scope: 'workforce/campus/' } as Partial<Record<RoomId, string>>)[room] ?? 'workforce/';
+}
+/** The lobby: where the opening ends (guide spot and the camera the tour will use there). */
+export const lobbyPose = () => ({ guide: SPOTS.entrance.guide, cam: camOf('entrance') });
 
 /** Progress kept for this browser tab, so a replay, reload or the standard page can return to it. */
 const SAVE_KEY = 'ee-story';
@@ -287,6 +316,8 @@ export class Story {
   private ctx: StoryCtx = { profession: -1 };
   private ask: { stop: number; k: number } | null = null;
   private mapOpen = false;
+  /** The lobby is asking a workforce visitor who they're building for. */
+  private wfAsk = false;
   private filter = '';
   private guide = makeGuide();
   private rigs: Record<PathId, Rig> = { student: makeStudent(), founder: makeFounder(), hr: makeManager(), university: makeDean(), professional: makeProfessional() };
@@ -342,6 +373,7 @@ export class Story {
     this.path = null;
     this.ask = null;
     this.mapOpen = false;
+    this.wfAsk = false;
     this.stops = [];
     this.shownKey = '';
     return this.toStops();
@@ -389,6 +421,59 @@ export class Story {
 
   /** Start a path directly (e.g. from the menu). */
   choose(a: Audience) { this.pick(a); }
+
+  /** Start a route at stop i directly (a deep link such as /career/assurance/). */
+  chooseAt(a: PathId, i: number) { this.pick(a, { a, i, p: this.ctx.profession }); }
+
+  /** A lobby journey: Career and AI start their guided routes; Workforce asks who it's for. */
+  chooseJourney(j: Journey) {
+    if (j === 'career') { this.pick('student'); return; }
+    if (j === 'ai') { this.pick('professional'); return; }
+    this.askWorkforce();
+  }
+
+  /** Show the lobby's workforce question (also used by /workforce/). */
+  askWorkforce() {
+    this.wfAsk = true;
+    this.shownKey = '';
+    this.keepFocus = true;
+    this.host.journey('workforce');
+  }
+
+  /** The journey a route belongs to. */
+  journeyOf(a: PathId): Journey { return JOURNEY_OF[a]; }
+
+  /** Site path for stop i of the current route (the address bar follows the tour). */
+  pathAt(i: number): string {
+    if (!this.audience) return this.wfAsk ? 'workforce/' : '';
+    return storyPath(this.audience, i, this.roomAt(i));
+  }
+
+  /** Saved progress for this tab, and the path it was at (to resume it on reload). */
+  savedState(): { saved: { a: PathId; i: number; p: number }; path: string } | null {
+    const sv = this.saved;
+    if (!sv) return null;
+    const rooms: RoomId[] = ['entrance', 'preview', ...this.paths[sv.a].stops.map((x) => x.room)];
+    return { saved: sv, path: storyPath(sv.a, sv.i, rooms[sv.i] ?? 'entrance') };
+  }
+
+  /** Resume this tab's saved route and stop (and profession). */
+  resumeSaved() { if (this.saved) this.pick(this.saved.a, this.saved); }
+
+  /** The stop on the current route whose path matches, nearest to `from` (preferring earlier stops), or -1. */
+  indexNear(path: string, from: number): number {
+    const n = this.all().length;
+    for (let d = 0; d < n; d++) {
+      for (const k of [from - d, from + d]) if (k >= 0 && k < n && this.pathAt(k) === path) return k;
+    }
+    return -1;
+  }
+
+  /** The stop index of a room on a route (first match). */
+  indexOfRoom(a: PathId, room: RoomId): number {
+    const k = this.paths[a].stops.findIndex((x) => x.room === room);
+    return k < 0 ? 1 : k + 2;
+  }
 
   /** Back to the goal question. */
   reset(): TourStop[] { this.host.onAudience(null); return this.entranceStops(); }
@@ -450,32 +535,57 @@ export class Story {
       if (this.lastIdx >= 0 && this.host.reduced()) { this.fade.classList.remove('go'); void this.fade.offsetWidth; this.fade.classList.add('go'); }
       this.lastIdx = idx;
     }
-    const place = (rig: Rig, p: P3, other: P3, prev: P3 | undefined, speaking: boolean, pointing: boolean) => {
-      rig.root.position.set(p[0], p[1], p[2]);
-      let yaw: number;
-      if (walking && prev && Math.hypot(p[0] - prev[0], p[2] - prev[2]) > 0.0005) yaw = Math.atan2(p[0] - prev[0], p[2] - prev[2]);
-      else {
-        const toOther = Math.atan2(other[0] - p[0], other[2] - p[2]), toCam = Math.atan2(cam[0] - p[0], cam[2] - p[2]);
-        let d = toCam - toOther; d = Math.atan2(Math.sin(d), Math.cos(d));
-        yaw = toOther + d * 0.5;
-      }
-      const cur = rig.root.rotation.y;
-      let dd = yaw - cur; dd = Math.atan2(Math.sin(dd), Math.cos(dd));
-      rig.root.rotation.y = this.host.reduced() ? yaw : cur + dd * Math.min(1, dt * 8);
-      const sw = walking ? Math.sin(this.walkT) * 0.5 : 0;
-      rig.legs[0].rotation.x = sw; rig.legs[1].rotation.x = -sw;
-      rig.arms[0].rotation.x = -sw * 0.7;
-      rig.arms[1].rotation.x = pointing ? -1.35 : sw * 0.7;
-      rig.arms[1].rotation.z = pointing ? 0.25 : 0;
-      rig.body.position.y = walking ? Math.abs(Math.sin(this.walkT)) * 0.05 : 0;
-      rig.head.rotation.x = speaking && !walking ? Math.sin(performance.now() / 160) * 0.06 : 0;
-    };
     const hasBoard = !!all[idx].exhibit;
-    place(this.guide, g, y, this.last?.g, arrived, arrived && hasBoard && idx > 0);
-    place(this.you, y, g, this.last?.y, false, false);
+    this.pose(this.guide, g, y, this.last?.g, cam, walking, dt, arrived, arrived && hasBoard && idx > 0, 0);
+    this.pose(this.you, y, g, this.last?.y, cam, walking, dt, false, false, 0);
     this.last = { g, y };
     this.paint(idx, v, arrived);
     this.paintBoard(idx, arrived);
+  }
+
+  /** Place and animate one character: walk when moving, otherwise face the other (turned a little to the camera). */
+  private pose(rig: Rig, p: P3, other: P3, prev: P3 | undefined, cam: P3, walking: boolean, dt: number, speaking: boolean, pointing: boolean, wave: number) {
+    rig.root.position.set(p[0], p[1], p[2]);
+    let yaw: number;
+    if (walking && prev && Math.hypot(p[0] - prev[0], p[2] - prev[2]) > 0.0005) yaw = Math.atan2(p[0] - prev[0], p[2] - prev[2]);
+    else {
+      const toOther = Math.atan2(other[0] - p[0], other[2] - p[2]), toCam = Math.atan2(cam[0] - p[0], cam[2] - p[2]);
+      let d = toCam - toOther; d = Math.atan2(Math.sin(d), Math.cos(d));
+      yaw = toOther + d * (wave ? 0.85 : 0.5);
+    }
+    const cur = rig.root.rotation.y;
+    let dd = yaw - cur; dd = Math.atan2(Math.sin(dd), Math.cos(dd));
+    rig.root.rotation.y = this.host.reduced() ? yaw : cur + dd * Math.min(1, dt * 8);
+    const sw = walking ? Math.sin(this.walkT) * 0.5 : 0;
+    rig.legs[0].rotation.x = sw; rig.legs[1].rotation.x = -sw;
+    rig.arms[0].rotation.x = -sw * 0.7;
+    if (wave > 0) {
+      // A friendly wave: arm up, hand swinging side to side, then back down.
+      const up = Math.sin(Math.min(1, wave) * Math.PI);
+      rig.arms[1].rotation.x = -2.7 * Math.min(1, up * 1.6);
+      rig.arms[1].rotation.z = 0.25 + Math.sin(performance.now() / 120) * 0.35 * up;
+    } else {
+      rig.arms[1].rotation.x = pointing ? -1.35 : sw * 0.7;
+      rig.arms[1].rotation.z = pointing ? 0.25 : 0;
+    }
+    rig.body.position.y = walking ? Math.abs(Math.sin(this.walkT)) * 0.05 : 0;
+    rig.head.rotation.x = speaking && !walking ? Math.sin(performance.now() / 160) * 0.06 : 0;
+  }
+
+  /** During the opening: the guide comes out through the doors and waves; the visitor waits in the lobby. */
+  openingPose(o: { guide: P3; walking: boolean; wave: number; guideVisible: boolean }, cam: P3, dt: number) {
+    this.panel.hidden = true;
+    this.board?.show(false);
+    this.boardKey = '';
+    this.shownKey = '';
+    this.visible = true;
+    const y = SPOTS.entrance.you;
+    if (o.walking) this.walkT += dt * 9;
+    this.guide.root.visible = o.guideVisible;
+    this.you.root.visible = true;
+    this.pose(this.guide, o.guide, y, this.last?.g, cam, o.walking, dt, false, false, o.wave);
+    this.pose(this.you, y, o.guide, undefined, cam, false, dt, false, false, 0);
+    this.last = { g: o.guide, y };
   }
 
   /** The example board stands beside the characters, to the right as the camera sees them. */
@@ -520,7 +630,7 @@ export class Story {
     const moving = !arrived && Math.abs(v - idx) > 0.04;
     const changedStop = !moving && this.at !== idx;
     if (!moving && this.at !== idx) { this.at = idx; this.save(idx); }
-    const key = moving ? 'walk' + Math.floor(v) + '>' + (Math.floor(v) + 1) : 'stop' + idx + '|' + (this.ask?.stop === idx ? this.ask.k : -1) + '|' + this.mapOpen + '|' + this.ctx.profession + '|' + (this.audience ?? '') + '|' + this.host.reduced() + '|' + (innerWidth <= 760);
+    const key = moving ? 'walk' + Math.floor(v) + '>' + (Math.floor(v) + 1) : 'stop' + idx + '|' + (this.ask?.stop === idx ? this.ask.k : -1) + '|' + this.mapOpen + '|' + this.wfAsk + '|' + this.ctx.profession + '|' + (this.audience ?? '') + '|' + this.host.reduced() + '|' + (innerWidth <= 760);
     this.panel.classList.toggle('moving', moving);
     if (key === this.shownKey) return;
     this.shownKey = key;
@@ -577,12 +687,19 @@ export class Story {
 
   private welcomeHtml(): string {
     if (!this.audience || !this.path) {
+      if (this.wfAsk) {
+        return this.topHtml('Welcome · Build my workforce') +
+          `<p class="spYou"><small>You</small>I want to build my workforce.</p>` +
+          `<p class="spGuide"><small>Your EmpowerED guide</small>Great. Who are you building for?</p>` +
+          `<div class="spGoals" role="group" aria-label="Who are you building for?">${WORKFORCE_FOR.map(([k, t]) => k === 'region' ? `<button type="button" data-act="region">${esc(t)}</button>` : `<button type="button" data-goal="${k}">${esc(t)}</button>`).join('')}</div>` +
+          `<button type="button" class="spLink spFree" data-act="unwf"><span aria-hidden="true">←</span> Back to the three journeys</button>`;
+      }
       const sv = this.saved, cont = sv ? this.paths[sv.a] : null;
       const title = sv && cont ? (sv.i > 1 ? cont.stops[sv.i - 2]?.title : sv.i === 1 ? 'Your route' : 'Welcome') : '';
       return this.topHtml('Welcome') +
-        `<p class="spGuide"><small>Your EmpowerED guide</small>Hi, I'm your EmpowerED guide. What would you like help with?</p>` +
+        `<p class="spGuide"><small>Your EmpowerED guide</small>Hi, I'm your EmpowerED guide. What would you like to explore?</p>` +
         (cont && title ? `<button type="button" class="spNext spCont" data-act="continue">Continue: ${esc(cont.goal)} · ${esc(title)} <span aria-hidden="true">→</span></button>` : '') +
-        `<div class="spGoals" role="group" aria-label="Choose your goal">${GOALS.map(([k, t]) => `<button type="button" data-goal="${k}">${esc(t)}</button>`).join('')}</div>` +
+        `<div class="spGoals spJourneys" role="group" aria-label="Choose a journey">${JOURNEYS.map(([k, t, s]) => `<button type="button" data-journey="${k}"><b>${esc(t)}</b><span>${esc(s)}</span></button>`).join('')}</div>` +
         `<button type="button" class="spLink spFree" data-goal="explore">Explore freely instead</button>`;
     }
     const sv = this.saved && this.saved.a === this.audience && this.saved.i > 1 ? this.saved : null;
@@ -645,12 +762,15 @@ export class Story {
     if (!b || !this.panel.contains(b)) return;
     const d = b.dataset;
     if (d.goal) { this.pick(d.goal as Audience); return; }
+    if (d.journey) { this.chooseJourney(d.journey as Journey); return; }
     if (d.go !== undefined) { this.ask = null; this.mapOpen = false; this.shownKey = ''; this.host.travel(+d.go); return; }
     if (d.ask !== undefined) { this.ask = { stop: this.at, k: +d.ask }; this.shownKey = ''; this.keepFocus = true; this.focusSel = '.spAsk [aria-pressed="true"]'; return; }
     if (d.prof !== undefined) { this.ctx.profession = +d.prof; this.save(this.at); this.shownKey = ''; this.keepFocus = true; this.focusSel = '.spProfs [aria-pressed="true"]'; return; }
     if (d.end !== undefined && this.path) { const a = +d.end < 0 ? this.path.primary : this.path.more?.[+d.end]; a?.run(this.ctx); return; }
     switch (d.act) {
       case 'continue': if (this.saved) this.pick(this.saved.a, this.saved); break;
+      case 'unwf': this.wfAsk = false; this.shownKey = ''; this.keepFocus = true; this.host.journey(null); break;
+      case 'region': this.host.region(); break;
       case 'unask': this.ask = null; this.shownKey = ''; this.keepFocus = true; this.focusSel = '.spAsk summary'; break;
       case 'map': this.mapOpen = !this.mapOpen; this.shownKey = ''; this.keepFocus = true; this.focusSel = '[data-act="map"]'; break;
       case 'motion': this.host.setReduced(!this.host.reduced()); this.shownKey = ''; this.boardKey = ''; this.keepFocus = true; this.focusSel = '[data-act="motion"]'; break;
