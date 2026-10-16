@@ -197,3 +197,8 @@ html.opening #hud>*:not(#opening),html.opening #resumeTour{visibility:hidden}
 #storyPanel .spJourneys button{display:flex;flex-direction:column;gap:3px}
 #storyPanel .spJourneys button b{font:800 15.5px/1.25 Manrope,sans-serif}
 #storyPanel .spJourneys button span{font:500 13px/1.35 Inter,sans-serif;opacity:.8}
+/* The labelled ETAF example review */
+#etafNote{position:fixed;left:50%;bottom:28px;transform:translateX(-50%);z-index:9;display:flex;gap:10px;align-items:center;max-width:min(560px,calc(100vw - 32px));margin:0;padding:10px 16px;border:1.5px solid #C9A33A;border-radius:999px;background:rgba(15,43,34,.94);color:#F2EFE2;font:600 13.5px/1.35 Manrope,sans-serif;box-shadow:0 10px 28px -14px rgba(15,43,34,.7)}
+#etafNote[hidden]{display:none}
+#etafNote b{flex:none;padding:3px 9px;border-radius:999px;background:#F6DB2D;color:#0F2B22;font:800 11px/1.2 Manrope,sans-serif;letter-spacing:.06em;text-transform:uppercase}
+@media (max-width:760px){#etafNote{border-radius:14px;top:70px;bottom:auto}}

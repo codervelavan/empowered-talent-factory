@@ -42,6 +42,14 @@ export interface FactoryApi {
   brandIcons(): P3[];
   /** Add an object to the company building (moves with it onto the globe). */
   addWorld(o: Object3D): void;
+  /** Development check: points where the segment a→b passes through a wall or object (horizontal surfaces and story characters are ignored). */
+  rayHits(a: P3, b: P3): { p: P3; d: number }[];
+  /** Development check: what the segment a→b hits first (for diagnosing the wall check). */
+  rayWhat(a: P3, b: P3): unknown[];
+  /** Development check: many segments at once; true where a segment hits a wall (walls) or a floor (!walls). */
+  rayBatch(segs: [P3, P3][], walls: boolean): boolean[];
+  /** Development check: wall segments (x1,z1,x2,z2…) in a height band, and floor triangles (x,z ×3…) at its base. */
+  obstacles(y0: number, y1: number): { walls: number[]; floor: number[]; low: number[]; high: number[]; highY: number[] };
   cam(): PerspectiveCamera;
   render(mode: string, introS: number): void;
   // intro / career floor

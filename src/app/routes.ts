@@ -11,7 +11,7 @@ export type Dest =
   /** The lobby, with a journey already chosen (Career starts its guided route; Workforce asks who it's for). */
   | { k: 'journey'; j: Journey }
   /** A room on the guided student route (career journey). */
-  | { k: 'career'; room: 'intake' | 'develop' | 'engineer' | 'verify' | 'deploy'; panel?: string }
+  | { k: 'career'; room: 'intake' | 'develop' | 'pro' | 'engineer' | 'verify' | 'deploy'; panel?: string }
   /** A workforce bay on the free workforce tour (stop id from the controller's workforce tour). */
   | { k: 'bay'; stop: 'talent' | 'pods' | 'teams' | 'campus' | 'region' }
   | { k: 'globe' }
@@ -52,10 +52,10 @@ export const ROUTES: RouteDef[] = [
     description: 'Career Launch builds your foundations in Foundation Hall. Everything you make collects in your Evidence Passport.',
     heading: 'Career Launch and Foundation Hall',
     body: ['Career Launch builds foundations, Career Pro develops depth in a role and Career Accelerate adds product engineering experience.', 'Everything you make collects in your Evidence Passport, so you can see your progress.'] },
-  { path: 'career/specialisation/', dest: { k: 'career', room: 'engineer', panel: 'career:4' }, title: `Career Pro · Specialisation pods · ${SITE}`,
+  { path: 'career/specialisation/', dest: { k: 'career', room: 'pro' }, title: `Career Pro · Specialisation pods · ${SITE}`,
     description: 'Career Pro builds depth in one role through specialisation pods.',
     heading: 'Career Pro specialisation pods',
-    body: ['Each pod builds depth in one role. The final track list is being confirmed.'] },
+    body: ['On Career Pro you work in a specialisation pod, building depth in one role with work that’s specific to it, reviewed by a mentor.', 'The final list of specialisations is being confirmed.'] },
   { path: 'career/accelerate/', dest: { k: 'career', room: 'engineer' }, title: `Career Accelerate · Engineering floor · ${SITE}`,
     description: 'On Career Pro and Career Accelerate you join a POD: a small team taking on a real industry problem with a mentor beside you.',
     heading: 'Career Accelerate and the engineering floor',

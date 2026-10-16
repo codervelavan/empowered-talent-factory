@@ -9,7 +9,7 @@ import type { P3, ScreenPoint } from '../bridge';
 import type { TourHotspot, TourStop } from '../company/tour';
 import { board, flow } from './exhibits';
 
-export type RoomId = 'entrance' | 'preview' | 'intake' | 'develop' | 'engineer' | 'delivery' | 'verify' | 'deploy' | 'dock' | 'talent' | 'teams' | 'apply' | 'campus' | 'scope' | 'plaza' | 'pTask' | 'pDemo' | 'pPath' | 'pNext';
+export type RoomId = 'entrance' | 'preview' | 'intake' | 'develop' | 'pro' | 'engineer' | 'delivery' | 'verify' | 'deploy' | 'dock' | 'talent' | 'teams' | 'apply' | 'campus' | 'scope' | 'plaza' | 'pTask' | 'pDemo' | 'pPath' | 'pNext';
 export type Audience = 'student' | 'founder' | 'hr' | 'university' | 'professional' | 'explore';
 export type PathId = Exclude<Audience, 'explore'>;
 
@@ -34,6 +34,8 @@ export interface StoryStop {
   exhibit?: (c: StoryCtx) => string;
   /** A concrete detail to look at: opens one of the site's panels (host.open). */
   show?: { label: Txt; open: string };
+  /** A second action at the stop (host.open), e.g. playing a labelled example. */
+  extra?: { label: Txt; open: string };
   /** Optional questions under "Ask your guide". */
   asks?: Ask[] | ((c: StoryCtx) => Ask[]);
   /** Said on the way out, while walking to the next stop. */
@@ -96,6 +98,8 @@ const SPOTS: Record<RoomId, Spot> = {
   preview: { guide: [-1, 0, 10], you: [1.6, 0, 11.2], cam: [[3, 3.2, 20], [-0.5, 4, -2]] },
   intake: { guide: [6.5, 0, -9], you: [4.1, 0, -7.1], cam: [[-0.8, 3.4, 2.6], [6.4, 1.9, -11]] },
   develop: { guide: [-9.5, 6, -37.6], you: [-6.6, 6, -36], cam: [[-3.2, 8.8, -27.4], [-9, 7.4, -42]] },
+  // Upstairs at the Develop · Pro room: the Career Pro specialisation pods.
+  pro: { guide: [5.6, 6, -37.6], you: [8.4, 6, -36.2], cam: [[11, 8.8, -27.4], [6.5, 7.4, -42]] },
   engineer: { guide: [13.6, 0, -25.6], you: [16.5, 0, -24.4], cam: [[21.6, 3.6, -17.4], [13.4, 1.6, -31]] },
   // Further along the POD floor, by the six stage boards.
   delivery: { guide: [2.2, 0, -25.6], you: [4.4, 0, -26.2], cam: [[7.5, 3.8, -15.5], [0, 1.4, -32]] },
@@ -107,8 +111,8 @@ const SPOTS: Record<RoomId, Spot> = {
   talent: { guide: [22.2, 0, -3.4], you: [23.5, 0, -4.9], cam: [[29, 3.8, 1.5], [20.5, 1.6, -7.5]] },
   // West side of the ground floor, at the open front of the reskilling line.
   teams: { guide: [-25, 0, -2.2], you: [-23.4, 0, -2.7], cam: [[-21.5, 3.6, 5.5], [-24.5, 1.6, -10]] },
-  // Inside the reskilling line, beside the Apply station.
-  apply: { guide: [-22.2, 0, -9.4], you: [-20.4, 0, -11.2], cam: [[-19.8, 3, -2.4], [-25, 1.4, -13]] },
+  // Beside the reskilling line's glass, looking in at the Apply station.
+  apply: { guide: [-17.3, 0, -8.4], you: [-17, 0, -11], cam: [[-10.5, 3.2, -5], [-24, 1.6, -10.5]] },
   // Outside the west wall, where the campus extension slides in.
   campus: { guide: [-41, 0, -8], you: [-38.6, 0, -9.8], cam: [[-31, 4.6, 2], [-48, 2.4, -18]] },
   // Closer to the campus blocks.
@@ -141,31 +145,37 @@ const camOf = (room: RoomId): [P3, P3] => {
   const yaw = Math.atan2(mx, mz) + Math.atan((aim ?? 0.04) * t), hd = Math.hypot(l[0] - c[0], l[2] - c[2]);
   return [c, [c[0] + Math.sin(yaw) * hd, l[1], c[2] + Math.cos(yaw) * hd]];
 };
-const UP_STAIRS: P3[] = [[0, 0, -5.6], [0, 6, -22], [8, 6, -26], [16, 6, -32], [18.6, 6, -38.6]];
-/** Walking routes between rooms (guide spot to guide spot), up and down the atrium stairs. */
+/**
+ * Walking routes between rooms (guide spot to guide spot). Planned against the building's walls,
+ * glass and furniture (including line-art walls) with a clearance of about half a metre, so the
+ * characters never pass through them; floors change only on the atrium stairs, and the walk to the
+ * ETAF gate goes out through its doorway in the back wall.
+ */
 const PATHS: Record<string, P3[]> = {
-  'entrance>preview': [[-1.6, 0, 25], [-1.2, 0, 16], [-1, 0, 10]],
-  'preview>dock': [[-1, 0, 10], [12, 0, 12], [28, 0, 12], [40, 0, 4], [42, 0, -6], [39, 0, -12]],
-  'preview>campus': [[-1, 0, 10], [-14, 0, 13], [-34, 0, 12], [-42, 0, 0], [-41, 0, -8]],
-  'preview>plaza': [[-1, 0, 10], [1, 0, 16], [5, 0, 22.5]],
-  'entrance>intake': [[-2, 0, 30], [0, 0, 16], [0, 0, 3], [3, 0, -3], [6.5, 0, -9]],
-  'intake>develop': [[6.5, 0, -9], [2, 0, -5], [0, 0, -5.6], [0, 6, -22], [-3, 6, -27], [-7, 6, -33], [-9.5, 6, -37.6]],
-  'develop>engineer': [[-9.5, 6, -37.6], [-7, 6, -30], [-1, 6, -24], [0, 6, -22], [0, 0, -6], [4, 0, -10], [10, 0, -18], [13.6, 0, -25.6]],
-  'engineer>verify': [[13.6, 0, -25.6], [8, 0, -14], [0, 0, -6], ...UP_STAIRS.slice(1)],
-  'verify>deploy': [[18.6, 6, -38.6], [20, 6, -31], [6, 6, -24], [0, 6, -22], [0, 0, -6], [-4, 0, -9], [-4, 0, -57], [0, 0, -61], [0, 0, -70], [-1.6, 0, -77]],
-  'entrance>dock': [[-2, 0, 30], [10, 0, 24], [28, 0, 14], [40, 0, 4], [42, 0, -6], [39, 0, -12]],
-  'dock>engineer': [[39, 0, -12], [34, 0, -13.5], [30, 0, -13.5], [24, 0, -14], [18, 0, -20], [13.6, 0, -25.6]],
-  'engineer>delivery': [[13.6, 0, -25.6], [8, 0, -24.6], [2.2, 0, -25.6]],
-  'delivery>verify': [[2.2, 0, -25.6], [3, 0, -14], [1.5, 0, -7], ...UP_STAIRS],
-  'verify>talent': [[18.6, 6, -38.6], [16, 6, -32], [8, 6, -26], [0, 6, -22], [0, 0, -5.6], [2, 0, -5], [12, 0, -4.4], [22.2, 0, -3.4]],
-  'intake>teams': [[6.5, 0, -9], [2, 0, -4], [-8, 0, 1], [-22, 0, 1], [-25, 0, -2.2]],
-  'teams>apply': [[-25, 0, -2.2], [-22.6, 0, -4.2], [-22.2, 0, -9.4]],
-  'apply>verify': [[-22.2, 0, -9.4], [-22, 0, -4], [-22, 0, 1], [-8, 0, 1], [-1.5, 0, -3], ...UP_STAIRS],
-  'verify>dock': [[18.6, 6, -38.6], [16, 6, -32], [8, 6, -26], [0, 6, -22], [0, 0, -6], [12, 0, -11], [26, 0, -13.5], [30, 0, -13.5], [36, 0, -13.5], [39, 0, -12]],
-  'entrance>campus': [[-2, 0, 30], [-16, 0, 24], [-36, 0, 14], [-42, 0, 0], [-41, 0, -8]],
+  'entrance>preview': [[-1.6, 0, 25], [-1, 0, 10]],
+  'preview>intake': [[-1, 0, 10], [6.5, 0, -9]],
+  'intake>develop': [[6.5, 0, -9], [4, 0, -5.5], [2.5, 0, -5], [0, 0, -5.6], [0, 6, -22], [-9.5, 6, -37.6]],
+  'develop>pro': [[-9.5, 6, -37.6], [5.6, 6, -37.6]],
+  'pro>engineer': [[5.6, 6, -37.6], [0, 6, -22], [0, 0, -5.6], [3.5, 0, -5], [6, 0, -8], [9, 0, -20.5], [13.6, 0, -25.6]],
+  'engineer>verify': [[13.6, 0, -25.6], [3.5, 0, -13.5], [3.5, 0, -5], [0, 0, -5.6], [0, 6, -22], [13, 6, -35], [18.6, 6, -38.6]],
+  'verify>deploy': [[18.6, 6, -38.6], [11.5, 6, -34], [0, 6, -22], [0, 0, -5.6], [-3.5, 0, -5], [-3.5, 0, -33.5], [-1, 0, -36], [-2, 0, -76.5], [-1.6, 0, -77]],
+  'preview>dock': [[-1, 0, 10], [14.5, 0, 4.5], [30, 0, 4], [34.5, 0, -1], [39, 0, -12]],
+  'dock>engineer': [[39, 0, -12], [34.5, 0, -0.5], [30, 0, 1], [29, 0, 1], [26.5, 0, -12], [13.6, 0, -25.6]],
+  'engineer>delivery': [[13.6, 0, -25.6], [2.2, 0, -25.6]],
+  'delivery>verify': [[2.2, 0, -25.6], [3.5, 0, -21.5], [3.5, 0, -5], [0, 0, -5.6], [0, 6, -22], [13, 6, -35], [18.6, 6, -38.6]],
+  'verify>talent': [[18.6, 6, -38.6], [11.5, 6, -34], [0, 6, -22], [0, 0, -5.6], [4, 0, -5], [11, 0, -5], [13.5, 0, -2.5], [20.5, 0, -2], [22.2, 0, -3.4]],
+  'intake>teams': [[6.5, 0, -9], [4, 0, -5.5], [2.5, 0, -5], [-10.5, 0, -5], [-13, 0, -2.5], [-25, 0, -2.2]],
+  'teams>apply': [[-25, 0, -2.2], [-18.5, 0, -4.5], [-17.3, 0, -8.4]],
+  'apply>verify': [[-17.3, 0, -8.4], [-12, 0, -6.5], [-1.5, 0, -5], [0, 0, -5.6], [0, 6, -22], [13, 6, -35], [18.6, 6, -38.6]],
+  'verify>dock': [[18.6, 6, -38.6], [11.5, 6, -34], [0, 6, -22], [0, 0, -5.6], [5, 0, -1], [28.5, 0, -1], [29, 0, 0.5], [29.5, 0, 1], [34, 0, 0], [39, 0, -12]],
+  'preview>campus': [[-1, 0, 10], [-19.5, 0, 2.5], [-31.5, 0, 1], [-41, 0, -8]],
   'campus>scope': [[-41, 0, -8], [-42, 0, -10.2]],
-  'scope>engineer': [[-42, 0, -10.2], [-42, 0, -6], [-42, 0, 0], [-36, 0, 14], [-16, 0, 16], [0, 0, 16], [0, 0, 3], [4, 0, -10], [10, 0, -18], [13.6, 0, -25.6]],
-  'entrance>plaza': [[-1.6, 0, 25], [2, 0, 24], [5, 0, 22.5]],
+  'scope>engineer': [[-42, 0, -10.2], [-30.5, 0, 1], [-22.5, 0, -0.5], [-3, 0, -22.5], [13.6, 0, -25.6]],
+  'preview>plaza': [[-1, 0, 10], [5, 0, 22.5]],
+  'plaza>pTask': [[5, 0, 22.5], [9.5, 0, 20.5]],
+  'pTask>pDemo': [[9.5, 0, 20.5], [13, 0, 17]],
+  'pDemo>pPath': [[13, 0, 17], [1, 0, 19]],
+  'pPath>pNext': [[1, 0, 19], [-2, 0, 23]],
 };
 
 const sm = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -193,12 +203,7 @@ const PATH_CACHE: Record<string, Path> = {};
 const pathFor = (a: RoomId, b: RoomId): Path | null => {
   const k = a + '>' + b;
   if (PATH_CACHE[k]) return PATH_CACHE[k];
-  let pts = PATHS[k] ?? (PATHS[b + '>' + a] ? [...PATHS[b + '>' + a]].reverse() : null);
-  // From "Your route", walk on along the entrance path toward the first room.
-  if (!pts && a === 'preview' && PATHS['entrance>' + b]) {
-    const rest = PATHS['entrance>' + b].filter((p) => p[2] < SPOTS.preview.guide[2] - 0.5);
-    pts = [SPOTS.preview.guide, ...rest];
-  }
+  const pts = PATHS[k] ?? (PATHS[b + '>' + a] ? [...PATHS[b + '>' + a]].reverse() : null);
   return pts && pts.length > 1 ? (PATH_CACHE[k] = new Path(pts)) : null;
 };
 
@@ -295,7 +300,7 @@ export function storyPath(a: PathId | null, i: number, room: RoomId): string {
   if (a === 'professional') return 'ai-for-everyone/';
   if (a === 'student') {
     if (i === 1) return 'career/';
-    return ({ intake: 'career/assessment/', develop: 'career/launch/', engineer: 'career/accelerate/', verify: 'career/assurance/', deploy: 'career/opportunities/' } as Partial<Record<RoomId, string>>)[room] ?? 'career/';
+    return ({ intake: 'career/assessment/', develop: 'career/launch/', pro: 'career/specialisation/', engineer: 'career/accelerate/', verify: 'career/assurance/', deploy: 'career/opportunities/' } as Partial<Record<RoomId, string>>)[room] ?? 'career/';
   }
   if (i === 1) return 'workforce/';
   return ({ talent: 'workforce/verified-talent/', engineer: 'workforce/product-engineering/', delivery: 'workforce/product-engineering/', teams: 'workforce/capability/', apply: 'workforce/capability/', intake: 'workforce/capability/', campus: 'workforce/campus/', scope: 'workforce/campus/' } as Partial<Record<RoomId, string>>)[room] ?? 'workforce/';
@@ -341,6 +346,8 @@ export class Story {
   private at = 0;
 
   constructor(private host: StoryHost, private rooms: Record<RoomId, RoomDef>, private paths: Record<PathId, StoryPath>, private professions: Profession[]) {
+    // The characters never count as obstacles in the wall check.
+    for (const r of [this.guide, ...Object.values(this.rigs)]) r.root.userData.noRay = true;
     host.addWorld(this.guide.root);
     for (const r of Object.values(this.rigs)) { host.addWorld(r.root); r.root.visible = false; }
     this.guide.root.visible = false;
@@ -360,7 +367,7 @@ export class Story {
     hud.append(this.fade, this.panel);
     this.panel.addEventListener('click', (e) => this.onClick(e));
     // Development builds expose the story for layout checks.
-    if (import.meta.env.DEV) (window as unknown as { __story: Story }).__story = this;
+    if (import.meta.env.DEV) Object.assign(window as object, { __story: this, __storyGeo: { SPOTS, pathFor, PATHS } });
     this.panel.addEventListener('input', (e) => {
       const t = e.target as HTMLInputElement;
       if (t.matches('[data-search]')) { this.filter = t.value; this.paintProfessions(); }
@@ -732,6 +739,7 @@ export class Story {
     if (s.pick === 'profession') h += `<div class="spPick"><label class="spSearch"><span>Find your profession</span><input type="search" data-search placeholder="Search professions" value="${esc(this.filter)}" autocomplete="off"></label><div class="spProfs" role="group" aria-label="Professions"></div></div>`;
     h += this.inlineBoard(s);
     if (s.show) h += `<button type="button" class="spShow" data-act="show">${esc(this.txt(s.show.label))} <span aria-hidden="true">↗</span></button>`;
+    if (s.extra) h += `<button type="button" class="spShow spExtra" data-act="extra">${esc(this.txt(s.extra.label))} <span aria-hidden="true">▶</span></button>`;
     if (asks.length) {
       h += `<details class="spAsk"${picked ? ' open' : ''}><summary>Ask your guide</summary><div>` +
         asks.map((q, k) => `<button type="button" data-ask="${k}"${picked === q ? ' aria-pressed="true"' : ''}>${esc(this.txt(q.q))}</button>`).join('') + '</div></details>';
@@ -777,6 +785,7 @@ export class Story {
       case 'exit': this.host.explore(); break;
       case 'goal': this.host.setStops(this.reset(), 0); break;
       case 'show': { const s = this.all()[this.at]; if (s?.show) this.host.open(s.show.open, this.ctx); break; }
+      case 'extra': { const s = this.all()[this.at]; if (s?.extra) this.host.open(s.extra.open, this.ctx); break; }
     }
   }
 

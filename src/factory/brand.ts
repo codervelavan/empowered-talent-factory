@@ -314,6 +314,7 @@ export function buildBrand(k: BrandKit, mobile: boolean): Brand {
     k.box(dep, 0, 5.2, -60.1, 7.2, 0.5, 0.4, { solid: 'green' });
     const door = new THREE.Mesh(new THREE.PlaneGeometry(6.4, 5.1), glow(dep, 0.28));
     door.position.set(0, 2.55, -60.25);
+    door.userData.noRay = true; // a glowing doorway people walk through, not a wall
     k.root.add(door);
     // The gate arch.
     const gz = -71;

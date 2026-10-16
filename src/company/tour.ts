@@ -356,11 +356,13 @@ export class Tour {
       this.hots.appendChild(b);
       this.hotEls.push(b);
     }
+    // Panels and example boards sit above the scene; a hotspot under one would cover its text.
+    const cover = hs.length ? [...document.querySelectorAll<HTMLElement>('#storyPanel, .sx')].filter((el) => el.offsetParent && getComputedStyle(el).opacity !== '0').map((el) => el.getBoundingClientRect()) : [];
     this.hotEls.forEach((b, k) => {
       const h = hs[k];
       if (!h) { b.hidden = true; return; }
       const p = this.host.project(...h.at);
-      const onScreen = p.vis && p.x > 20 && p.x < innerWidth - 20 && p.y > 70 && p.y < innerHeight - 90;
+      const onScreen = p.vis && p.x > 20 && p.x < innerWidth - 20 && p.y > 70 && p.y < innerHeight - 90 && !cover.some((r) => p.x > r.left - 14 && p.x < r.right + 14 && p.y > r.top - 14 && p.y < r.bottom + 14);
       b.hidden = !onScreen;
       if (!onScreen) return;
       b.style.transform = `translate(${p.x.toFixed(1)}px,${p.y.toFixed(1)}px)`;
