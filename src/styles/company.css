@@ -266,3 +266,49 @@ html.opening #hud>*:not(#opening),html.opening #resumeTour{visibility:hidden}
 .evx .ill{font-size:13px}
 .evx.evCase li{background:none;border:2px dashed rgba(201,163,58,.7)}
 #storyPanel .spMore{display:flex;flex-wrap:wrap;gap:6px 18px}
+/* Guide panel: readable sizes and a pinned Back/Next row (visual direction v4, audit finding A).
+   Body 20px desktop / 18px phone, controls 16px, touch targets 44px. Only .spBody scrolls. */
+#storyPanel{width:min(460px,38vw);overflow:hidden;gap:0;padding:0}
+#storyPanel .spBody{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:14px;padding:22px 24px 14px;scrollbar-gutter:stable}
+#storyPanel>.spNav{flex:none;padding:12px 24px 18px;border-top:1px solid rgba(20,62,46,.14);background:rgba(250,248,240,.98)}
+#storyPanel .spEye{font-size:12px}
+#storyPanel small{font-size:11px}
+#storyPanel .spYou{font-size:18px;line-height:1.4;padding:12px 15px}
+#storyPanel .spGuide{font-size:20px;line-height:1.5;padding:14px 16px}
+#storyPanel .spLink{font-size:16px;min-height:44px;display:inline-flex;align-items:center}
+#storyPanel .spNext{font-size:16px;min-height:48px;padding:12px 20px}
+#storyPanel .spAlt{font-size:16px;min-height:44px}
+#storyPanel .spShow{font-size:16px;min-height:44px;padding:10px 16px}
+#storyPanel .spGoals button{font-size:16px;min-height:48px}
+#storyPanel .spGoals button span{font-size:15px}
+#storyPanel .spAsk summary{font-size:16px;min-height:44px;display:flex;align-items:center}
+#storyPanel .spAsk button{font-size:16px;min-height:44px}
+#storyPanel .spAsk p{font-size:18px;line-height:1.5}
+#storyPanel .spMap button{font-size:16px;min-height:44px}
+#storyPanel .spProfs button{font-size:16px;min-height:44px}
+#storyPanel .spSearch input{font-size:16px;min-height:44px}
+#storyPanel .spNone{font-size:16px}
+#storyPanel .sx{font-size:16px}
+@media (max-width:760px){
+  #storyPanel{width:auto;max-height:56vh;padding:0;gap:0}
+  #storyPanel .spBody{padding:16px 16px 10px;gap:11px}
+  #storyPanel>.spNav{padding:10px 16px 12px}
+  #storyPanel .spYou{font-size:18px;padding:10px 13px}
+  #storyPanel .spGuide{font-size:18px;padding:12px 14px}
+  #storyPanel .spGoals button{font-size:16px;padding:11px 13px}
+  #storyPanel .spNext{font-size:16px;padding:12px 16px}
+}
+/* Short landscape phones: the panel docks on the left at full height; the example sits inside it. */
+@media (max-height:500px) and (orientation:landscape){
+  #storyPanel{top:64px;bottom:10px;left:10px;right:auto;width:46vw;max-height:none}
+  #storyPanel .spBody{padding:14px 16px 8px;gap:10px}
+  #storyPanel>.spNav{padding:8px 16px 10px}
+  #storyPanel .spYou,#storyPanel .spGuide{font-size:18px}
+}
+/* Free-tour card and stop map: readable text and 44px targets. */
+#tourHud p{font-size:18px}
+#tourHud .tAct{font-size:16px;min-height:48px}
+#tourHud .tRoutes button{min-height:48px}
+#tourMap [data-ts]{min-height:44px;justify-content:center}
+#tourMap .tPrev,#tourMap .tNext,#tourMap>button{min-height:44px;min-width:44px;font-size:16px}
+@media (max-width:760px){#tourHud p{font-size:18px}}

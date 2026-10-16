@@ -8,6 +8,8 @@ import { Opening } from '../story/opening';
 import { currentPath, currentRoute, legacyHashPath, onPathChange, setPath } from '../app/router';
 import { routeFor, type Dest } from '../app/routes';
 import { Passport } from '../app/passport';
+import { motion } from '../app/motion';
+import { quality } from '../app/quality';
 import { SelectionTray } from '../app/selection';
 import { makeRoutes, PROFESSIONS, PROFESSION_NODE, DEMOS } from '../story/routes';
 import type { StoryIntroIntent } from '../story/intro';
@@ -46,7 +48,7 @@ export interface ControllerApi {
 
 export function initController(replayStory: () => void): ControllerApi {
   const $=<T extends El=El>(id:string)=>document.getElementById(id) as T;
-  const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let reduce=motion.reduced;motion.on(v=>{reduce=v});
   const B1=3.8,SEG=1.3,INTRO_END=B1+.55;
   const HOLD:Record<string,[number,number]>={career:[5,3.6]},HL=(r:string)=>HOLD[r]?HOLD[r][1]:0,topOf=(r:string,i:number)=>((HOLD[r]&&i>HOLD[r][0])?i+HOLD[r][1]:i)*SEG*innerHeight,dwell=(x:number)=>{const i=Math.floor(x);return i+sm(.3,.7,x-i)};
   const LABELS:Record<string,string[]>={career:['Intake','Assessment','Your Path','Career Launch','Career Pro','Career Accelerate','ETAF™','Opportunity'],globe:['Professions','Journey','Who is this for?'],workforce:['Dock','Verified Talent','PODs','Workforce Capability','Campus','Ecosystem','Compare']};
@@ -59,9 +61,13 @@ export function initController(replayStory: () => void): ControllerApi {
   const jump=(top:number)=>{scrollTo({top,behavior:'instant'});yS=top};
   function buildRail(r:string){rail.innerHTML='';LABELS[r].forEach((l,i)=>{const b=document.createElement('button');b.type='button';b.innerHTML='<i></i><span>'+l+'</span>';b.setAttribute('aria-label','Go to '+l);b.onclick=()=>{if(r==='workforce'){wfGo(i);return}if(r==='globe'){if(mode==='globe')globeRail(i)}else if(mode==='route')scrollTo({top:topOf(r,i),behavior:reduce?'auto':'smooth'})};rail.appendChild(b)});dots=[...rail.children] as El[]}
   function choose(r:string){if(mode!=='intro'||!window.FACTORY)return;stCat=stWho||(r==='career'?'For students':'For startups');stWho=null;window.FACTORY.setHover(null);spine(false);window.FACTORY.snapshot();podFly=true;route=r;mode='fly';flyT0=performance.now();buildRail(r);setTrack(r==='workforce'?0:(LABELS[r].length-1+HL(r))*SEG+.6);jump(0)}
-  function toGlobe(){const F=window.FACTORY;if(!F||(mode!=='intro'&&mode!=='route'&&mode!=='hub'&&mode!=='tour'))return;syncPath('ai-for-everyone/');tour.stop();story.hide();closeDrawer();F.setHover(null);spine(false);F.globeBegin('in');mode='gIn';gT0=performance.now();route=null;buildRail('globe');setTrack(0);jump(0);closeSide()}
+  /** Where the visitor came from when they entered the globe (null: opened directly), so Back returns there. */
+  let gReturn:{route:TourRoute;index:number}|null=null;
+  function toGlobe(){const F=window.FACTORY;if(!F||(mode!=='intro'&&mode!=='route'&&mode!=='hub'&&mode!=='tour'))return;gReturn=mode==='tour'?{route:tour.route,index:TOURS_ALL()[tour.route][tour.index]?.id==='world'?Math.max(0,tour.index-1):tour.index}:null;paintGlobeBack();syncPath('ai-for-everyone/');tour.stop();story.hide();closeDrawer();F.setHover(null);spine(false);F.globeBegin('in');mode='gIn';gT0=performance.now();route=null;buildRail('globe');setTrack(0);jump(0);closeSide()}
   function leaveGlobe(next:string|null){const F=window.FACTORY!;if(mode!=='globe'&&mode!=='gIn')return;closeWho();closeSide();F.globeBegin('out');mode='gOut';gT0=performance.now();gNext=next}
   function back(){if(menuOpen){closeMenu();return}if(cd.classList.contains('open')){closeDrawer();return}if(!$('handoff').hidden){hideHandoff();return}if(flatOpen&&!flatAuto){closeFlat();return}if(whoOpen){closeWho();return}if(side.classList.contains('open')){closeSide();return}const F=window.FACTORY;if(!F)return;if(mode==='tour'){if(tour.index>0)tour.travel(tour.index-1);return}if(mode==='globe'||mode==='gIn'){leaveGlobe(null);return}if(mode==='hub'){if(wfAt!==0){wfGo(0);return}F.pod(false);F.snapshot();mode='back';backT0=performance.now();return}if(mode!=='route'&&mode!=='fly')return;F.snapshot();mode='back';backT0=performance.now()}
+  /** The globe's back button names where it goes. */
+  function paintGlobeBack(){const b=$('finGlobe').querySelector<El>('.backBtn:not(#whoBtn)');if(b)b.textContent=gReturn?'← Back to your tour':'← Back to the entrance'}
   function finishBack(){startTour(tour.route,Math.max(0,tour.count-2))}
   $('doorCareer').onclick=()=>choose('career');
   const atPods=()=>false;
@@ -182,7 +188,7 @@ export function initController(replayStory: () => void): ControllerApi {
   $('stgBtns').innerHTML=STG.map((p,i)=>'<button class="opt" type="button" data-stg="'+i+'" data-hit="stg'+i+'">'+(i+1)+' · '+p[0].replace('&','&amp;')+'</button>').join('');
   $('srBtns').innerHTML=SRN.map((p,i)=>'<button class="opt" type="button" data-sr="'+i+'" data-hit="sr'+i+'">'+p[0].replace('&','&amp;')+'</button>').join('');
   function paintPass(){const n=ticks.size;lpB.querySelectorAll('.tk i').forEach((d,i)=>d.classList.toggle('on',ticks.has(i)));$('lpN').textContent=n+' / 5';lpL.querySelectorAll('li').forEach((l,i)=>l.classList.toggle('on',ticks.has(i)));document.querySelectorAll<El>('[data-st]').forEach(b=>b.classList.toggle('done',ticks.has(+b.dataset.st!)));window.FACTORY&&window.FACTORY.setTicks([...ticks])}
-  function selStation(i:number){ticks.add(i);paintPass();document.querySelectorAll<El>('[data-st]').forEach(b=>b.classList.toggle('on',+b.dataset.st! ===i));$('stDet').innerHTML='<small>Station '+(i+1)+' of 5 · evidence added to your Learner Passport</small><b>'+STN[i][0]+'</b><p>'+STN[i][1]+'</p>'}
+  function selStation(i:number){ticks.add(i);paintPass();document.querySelectorAll<El>('[data-st]').forEach(b=>b.classList.toggle('on',+b.dataset.st! ===i));$('stDet').innerHTML='<small>Station '+(i+1)+' of 5 · explored</small><b>'+STN[i][0]+'</b><p>'+STN[i][1]+'</p>'}
   function openPod(i:number){$('podT').textContent=PODS[i];document.querySelectorAll<El>('[data-pod]').forEach(b=>b.classList.toggle('on',+b.dataset.pod! ===i));openDrawer('pod')}
   function showStage(i:number){document.querySelectorAll<El>('[data-stg]').forEach(b=>b.classList.toggle('on',+b.dataset.stg! ===i));$('stgDet').innerHTML='<small>Stage '+(i+1)+' of 6</small><b>'+STG[i][0].replace('&','&amp;')+'</b><p>'+STG[i][1]+'</p><small>Evidence produced</small><p><span class="tbc">To be confirmed</span></p>'}
   function goStage(i:number){showStage(i);curStage=i;if(mode==='tour'){window.FACTORY&&window.FACTORY.setCrate(i);return}if(mode==='route'&&route==='career')scrollTo({top:(5+i/5*HOLD.career[1])*SEG*innerHeight+2,behavior:reduce?'auto':'smooth'})}
@@ -333,7 +339,10 @@ export function initController(replayStory: () => void): ControllerApi {
       if(intro){if(!window.__storyShowing&&!entered)beginEntry()}
       else if(mode==='opening'){while(pendWorld.length)F.addWorld(pendWorld.shift()!);const tNow=performance.now(),dt=openLast?Math.min(.1,Math.max(0,(tNow-openLast)/1000)):0;openLast=tNow;const o=opening.frame(tNow,tour.reduce);F.poseAt(o.pos,o.look);story.openingPose(o,o.pos,dt);F.render('route',0);if(o.done)opening.finish()}
       else if(mode==='gIn'||mode==='gOut'){const gi=mode==='gIn',raw=Math.min(1,(now-gT0)/(gi?(reduce?1400:GIN):2600)),t=reduce&&!gi?1:raw;if(gi&&reduce){liftO=1-Math.abs(raw*2-1);xfO=liftO;F.globeStep(raw<.5?0:1)}else{if(gi)liftO=sm(.04,.16,raw)*(1-sm(.8,.94,raw));F.globeStep(t)}F.render('globe',0);
-        if(t>=1){if(mode==='gIn'){F.globeArrive();mode='globe';document.body.style.cursor='grab';if(pendSide>=0){const k=pendSide,v=pendView;pendSide=-1;pendView='path';openSide(k,v);if(v==='path'){lvl=2;paintLv()}}}else{F.globeReset();document.body.style.cursor='';finishBack();if(gNext){const n=gNext;gNext=null;choose(n)}}}}
+        if(t>=1){if(mode==='gIn'){F.globeArrive();mode='globe';document.body.style.cursor='grab';if(pendSide>=0){const k=pendSide,v=pendView;pendSide=-1;pendView='path';openSide(k,v);if(v==='path'){lvl=2;paintLv()}}}else{F.globeReset();document.body.style.cursor='';const n=gNext,ret=gReturn;gNext=null;gReturn=null;paintGlobeBack();
+          if(n){const p=n==='career'?'career/':'workforce/';setPath(p,true);go(routeFor(p)!.dest)}
+          else if(ret){startTour(ret.route,ret.index);syncPath(pathOfStop(ret.route,ret.index))}
+          else{enterLobby();setPath('',true)}}}}
       else if(mode==='globe'){F.globeHold();F.render('globe',0)}
       else if(mode==='tour'){const dt=Math.max(0,Math.min(.1,(now-(tourLast||now))/1000));if(now>tourLast||now<tourLast-5e3)tourLast=now;const fr=tour.update(dt);F.poseAt(fr.pos,fr.look);route=tour.route;
         s=tourCar>=0?tourCar:tourWf>=0?tourWf:-9;floorX=tourCar===5&&tourSettled?curStage:-1;F.render('route',0)}
@@ -417,7 +426,7 @@ export function initController(replayStory: () => void): ControllerApi {
     ['The intake','Your career path starts with where you are. EmpowerED assesses your current capability first, then recommends the path that fits.',['Entry Assessment first','Path matched to you','No score until complete'],'How the assessment works'],
     ['Entry assessment','The Entry Assessment maps your baseline capability, your gaps, the role direction that fits you, and how ready you are today.',['Baseline capability','Capability gaps','Readiness today'],'Open the Entry Assessment'],
     ['Your path','Career Launch, Career Pro and Career Accelerate stay locked until the Entry Assessment recommends the one that fits you.',['Career Launch','Career Pro','Career Accelerate'],'See your path options'],
-    ['Build your foundation','Become job-ready. Each station you inspect in Foundation Hall adds an evidence tick to your Learner Passport.',['Portfolio development','Interview preparation','Placement assistance (no guarantee)'],'Explore the stations'],
+    ['Build your foundation','Become job-ready. Inspect each station in Foundation Hall to see the kind of work you practise there.',['Portfolio development','Interview preparation','Placement assistance (no guarantee)'],'Explore the stations'],
     ['Specialise in a role','Each pod builds depth in one role. Select a pod to see what you build there.',['One role per pod','Role-specific projects','Track list being confirmed'],'Explore the pods'],
     ['Build in a POD','An industry problem arrives from the Workforce side. The squad owns the engineering; a mentor guides. Scroll to follow it across the floor.',['POD assignments','6+ months industry exposure','1:1 expert coaching'],'Follow the six stages'],
     ['ETAF™ assurance','Evidence from Career Launch, Career Pro and the Product Engineering floor arrives at the assurance core. A gate lights only when its evidence arrives.',['Evidence from every floor','Gates light on evidence','Readiness passport'],'View readiness passport'],
@@ -622,8 +631,8 @@ export function initController(replayStory: () => void): ControllerApi {
     journey:(j)=>{if(mode==='tour'&&tour.route==='story')syncPath(j==='workforce'?'workforce/':'')},
     gallery:()=>{setPath('evidence-impact/',true);go({k:'evidence'})},region:()=>{applyFil('gov');tray.setAudience('gov');setPath('workforce/ecosystem/',true);go({k:'bay',stop:'region'})},
     fov:()=>window.FACTORY?.cam().fov??50,
-    reduced:()=>tour.reduce,
-    setReduced:(on)=>tour.setReduce(on),
+    reduced:()=>motion.reduced,
+    setReduced:(on)=>motion.set(on),
   },ROOMS,makeRoutes({
     openStop:(r,i)=>openStop(r,i),
     talk:(t,e)=>openDrawer('ph',t,e),
@@ -682,7 +691,7 @@ export function initController(replayStory: () => void): ControllerApi {
       case 'journey':enterLobby();if(d.j==='career')story.chooseAt('student',1);else if(d.j==='ai')story.chooseAt('professional',1);else story.askWorkforce();break;
       case 'career':{enterLobby();story.chooseAt('student',story.indexOfRoom('student',d.room));const pnl=d.panel;if(pnl){const [r,i]=pnl.split(':');setTimeout(()=>openStop(r,+i),900)}break}
       case 'bay':{const i=TOURS.workforce.findIndex(x=>x.id===d.stop);resetToIntro('workforce',Math.max(1,i));break}
-      case 'globe':resetToIntro('career',0);toGlobe();break;
+      case 'globe':resetToIntro('career',0);toGlobe();gReturn=null;paintGlobeBack();break;
       case 'page':enterLobby();openFlat(false,d.anchor);break;
       case 'evidence':resetToIntro('evidence',0);break;
     }}
@@ -735,7 +744,9 @@ export function initController(replayStory: () => void): ControllerApi {
     if(mode==='tour')syncPath(pathOfStop(tour.route,tour.index));
     requestAnimationFrame(()=>{if(mode==='tour'&&tour.route==='story')story.restoreFocus(null);else menuBtn.focus({preventScroll:true})});
   }
-  function nav(k:string){closeMenu();if(k==='story'){replayStory();return}if(k==='opening'){setPath('',true);playOpening();return}
+  function paintLight(){const b=menu.querySelector<El>('[data-go="light"]');if(b){b.setAttribute('aria-pressed',String(quality.light));b.innerHTML='Lighter 3D <span>'+(quality.light?'On':'Off')+'</span>'}}
+  paintLight();quality.on(paintLight);
+  function nav(k:string){if(k==='light'){quality.set(!quality.light);return}closeMenu();if(k==='story'){replayStory();return}if(k==='opening'){setPath('',true);playOpening();return}
     if(k==='skip'||flatAuto||!window.FACTORY){history.replaceState(history.state,'',location.pathname+location.search+'#skip-3d');const inStory=mode==='tour'&&tour.route==='story'&&!!story.audience;$('fBack').textContent=inStory?'← Back to your guided tour':'← Back to the 3D company';openFlat(false,inStory&&k==='skip'?STORYANCH[story.audience!]:ANCH[k]);return}
     const p=({career:'career/',workforce:'workforce/',globe:'ai-for-everyone/',evidence:'evidence-impact/'} as Record<string,string>)[k];if(p===undefined)return;setPath(p,true);go(routeFor(p)!.dest)}
   menu.querySelectorAll<El>('[data-go]').forEach(b=>b.onclick=()=>nav(b.dataset.go!));

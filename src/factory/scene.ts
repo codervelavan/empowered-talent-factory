@@ -5,6 +5,8 @@ import { CSS3DRenderer, CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRe
 import { POSES, HEAD, LANDMASK, INDS, ECO, type Pose } from '../data/content';
 import type { P3, TalentUnit, EcoNet } from '../bridge';
 import { buildBrand, drawLogo, whenLogo } from './brand';
+import { motion } from '../app/motion';
+import { quality } from '../app/quality';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 type Tone = 'ink' | 'fine' | 'faint' | 'gold';
@@ -43,7 +45,7 @@ const PAPER=new THREE.Color(0xF2EFE2),INK=new THREE.Color(0x1E4632),GOLD=new THR
 const TONES:Record<Tone,THREE.Color>={ink:INK,fine:INK.clone().lerp(PAPER,.45),faint:INK.clone().lerp(PAPER,.84),gold:GOLD};
 const cv=document.getElementById('c') as HTMLCanvasElement;
 const R=new THREE.WebGLRenderer({canvas:cv,antialias:true,preserveDrawingBuffer:true});
-R.setPixelRatio(Math.min(devicePixelRatio,2));R.setSize(innerWidth,innerHeight,false);R.setClearColor(PAPER,1);
+R.setPixelRatio(quality.pixelRatio());R.setSize(innerWidth,innerHeight,false);R.setClearColor(PAPER,1);
 const S=new THREE.Scene();S.fog=new THREE.Fog(PAPER,45,190);
 const C=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,.1,600);
 const CR=new CSS3DRenderer();CR.setSize(innerWidth,innerHeight);CR.domElement.id='c3d';CR.domElement.style.overflow='clip';document.body.insertBefore(CR.domElement,document.getElementById('hud'));const CAMEL=CR.domElement.firstChild!.firstChild as HTMLElement;
@@ -604,7 +606,9 @@ const ROUTES:Record<string,Route>={
 [11,12,13,14,15,16,22].forEach(i=>{const w=ROUTES.career.wp[i];w[0][0]=w[1][0]});
 Object.values(ROUTES).forEach(r=>{r.pc=new THREE.CatmullRomCurve3(r.wp.map(w=>V(...w[0])),false,'centripetal');r.lc=new THREE.CatmullRomCurve3(r.wp.map(w=>V(...w[1])),false,'centripetal')});
 const sm=(a:number,b:number,x:number)=>{const t=Math.min(1,Math.max(0,(x-a)/(b-a)));return t*t*(3-2*t)};
-const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
+// One site-wide motion setting (src/app/motion.ts); Lighter 3D also stills ambient animation.
+let reduce=motion.reduced;motion.on(v=>{reduce=v});
+quality.on(()=>{R.setPixelRatio(quality.pixelRatio());R.setSize(innerWidth,innerHeight,false)});
 let mx=0,my=0;addEventListener('pointermove',e=>{mx=e.clientX/innerWidth-.5;my=e.clientY/innerHeight-.5});
 const look=V(0,0,0),tmp=V(0,0,0),lt=V(0,0,0),snapP=V(0,0,0),snapL=V(0,0,0);let lastT=performance.now();
 const Rcur=R0.clone(),ONE=V(1,1,1),TMPM=new THREE.Matrix4(),T30=new THREE.Matrix4().makeTranslation(0,0,30);
@@ -660,7 +664,7 @@ window.FACTORY={
   snapshot(){snapP.copy(C.position);snapL.copy(look)},
   poseBack(t){const e=sm(0,1,t);const q=podCam(G.podK);C.position.lerpVectors(snapP,q.p,e);C.position.y+=Math.sin(Math.PI*e)*8;look.lerpVectors(snapL,q.l,e)},
   render(mode,introS){
-    if(innerHeight>0&&!(Math.abs(C.aspect-innerWidth/innerHeight)<=1e-4)){fitExt();C.aspect=innerWidth/innerHeight;C.updateProjectionMatrix();R.setSize(innerWidth,innerHeight,false);CR.setSize(innerWidth,innerHeight)}
+    if(innerHeight>0&&!(Math.abs(C.aspect-innerWidth/innerHeight)<=1e-4)){fitExt();R.setPixelRatio(quality.pixelRatio());C.aspect=innerWidth/innerHeight;C.updateProjectionMatrix();R.setSize(innerWidth,innerHeight,false);CR.setSize(innerWidth,innerHeight)}
     const now=performance.now(),dt=Math.min(.1,(now-lastT)/1000);lastT=now;podsTick(mode,dt);
     if(G.focus){const k=reduce?1:Math.min(1,(now-G.focus.t0)/900);Rcur.slerpQuaternions(G.focus.q0,G.focus.q1,sm(0,1,k));if(k>=1)G.focus=null}
     if(G.done)G.arcs=Math.min(1,G.arcs+dt*(reduce?9:.6));
@@ -715,7 +719,7 @@ window.FACTORY={
       a.u.value=a.r;a.mats.forEach(m=>{const op=m.userData.base*a.r;m.opacity=op;m.visible=a.r>.002;
         // Fully revealed solids draw in the opaque pass (hundreds of sorted transparent draws were the frame-rate cost).
         const tr=op<.999||m.blending!==THREE.NormalBlending||m.depthWrite===false;if(m.transparent!==tr){m.transparent=tr;m.needsUpdate=true}})});
-    brand.tick(now,dt);
+    brand.tick(reduce||quality.light?0:now,dt);
     R.render(S,C);CR.render(S,C);
   },
   globeBegin(dir){G.dir=dir;G.done=false;G.focus=null;G.panel=0;G.A={p:C.position.clone(),l:lt.clone(),s:G.fs,q:Rcur.clone()};G.B=dir==='in'?{p:GPOS,l:GLOOK,s:SF,q:Rg}:{p:EXTP,l:EXTL,s:1,q:R0};if(dir==='in'){const a=G.A;G.cp=new THREE.CatmullRomCurve3([a.p.clone(),V(2,31,-4),V(0,62,-18),GPOS.clone()],false,'centripetal');G.cl=new THREE.CatmullRomCurve3([a.l.clone(),V(0,26.4,-10),V(0,4,-30),GLOOK.clone()],false,'centripetal')}},

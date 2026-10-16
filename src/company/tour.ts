@@ -3,6 +3,7 @@
 // sets the target stop; the camera eases toward it, can be dragged to look around, and
 // each stop has a HUD card, glowing hotspots and a place on the stage map.
 import type { P3, ScreenPoint } from '../bridge';
+import { motion } from '../app/motion';
 
 export type TourRoute = 'career' | 'workforce' | 'story' | 'evidence';
 
@@ -52,11 +53,6 @@ export interface TourFrame {
   settled: boolean;
 }
 
-const REDUCE_KEY = 'ee-reduce-motion';
-function readReduce(): boolean {
-  try { const v = localStorage.getItem(REDUCE_KEY); if (v === '1' || v === '0') return v === '1'; } catch { /* storage blocked */ }
-  return matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
 
 /** One stop takes this many viewport heights of scrolling. */
 const SEG = 1.15;
@@ -86,7 +82,7 @@ export class Tour {
   private viewportHeight = innerHeight;
   private scrollIdle = 0;
   /** Reduced motion: the system setting, unless the visitor chose otherwise in the guide panel. */
-  reduce = readReduce();
+  reduce = motion.reduced;
 
   private readonly hud: HTMLElement;
   private readonly map: HTMLElement;
@@ -171,11 +167,13 @@ export class Tour {
   }
 
   /** Turn reduced motion on or off and remember the choice on this device. */
-  setReduce(on: boolean): void {
+  setReduce(on: boolean): void { motion.set(on); }
+
+  /** Follows the site-wide motion setting (src/app/motion.ts). */
+  private onMotion = motion.on((on) => {
     this.reduce = on;
-    try { localStorage.setItem(REDUCE_KEY, on ? '1' : '0'); } catch { /* storage blocked */ }
     if (on && this.active) this.jump(this.goal ?? Math.round(this.target));
-  }
+  });
 
   get count(): number { return this.stops.length; }
   get index(): number { return Math.round(this.current); }

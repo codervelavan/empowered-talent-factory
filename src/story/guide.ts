@@ -132,6 +132,9 @@ let FOV = 50;
  * A spot's camera. On wide screens it is turned so the two characters stand between the guide
  * panel (left) and the example board (right): their midpoint lands just right of screen centre.
  */
+/** Phones and short landscape screens show the example inside the guide panel, not on a board in the scene. */
+const compact = () => innerWidth <= 760 || innerHeight <= 500;
+
 const camOf = (room: RoomId): [P3, P3] => {
   const { cam: [c, l], guide: g, you: y, aim } = SPOTS[room];
   if (innerWidth <= 760) {
@@ -600,8 +603,7 @@ export class Story {
   /** The example board stands beside the characters, to the right as the camera sees them. */
   private paintBoard(idx: number, arrived: boolean) {
     const s = this.all()[idx];
-    const narrow = innerWidth <= 760;
-    const on = arrived && !!s?.exhibit && !narrow && !this.host.detailOpen();
+    const on = arrived && !!s?.exhibit && !compact() && !this.host.detailOpen();
     if (on && !this.board) this.board = this.host.board(this.boardEl);
     if (!this.board) return;
     if (!on) { if (this.boardKey) { this.board.show(false); this.boardKey = ''; } return; }
@@ -639,7 +641,7 @@ export class Story {
     const moving = !arrived && Math.abs(v - idx) > 0.04;
     const changedStop = !moving && this.at !== idx;
     if (!moving && this.at !== idx) { this.at = idx; this.save(idx); }
-    const key = moving ? 'walk' + Math.floor(v) + '>' + (Math.floor(v) + 1) : 'stop' + idx + '|' + (this.ask?.stop === idx ? this.ask.k : -1) + '|' + this.mapOpen + '|' + this.wfAsk + '|' + this.ctx.profession + '|' + (this.audience ?? '') + '|' + this.host.reduced() + '|' + (innerWidth <= 760);
+    const key = moving ? 'walk' + Math.floor(v) + '>' + (Math.floor(v) + 1) : 'stop' + idx + '|' + (this.ask?.stop === idx ? this.ask.k : -1) + '|' + this.mapOpen + '|' + this.wfAsk + '|' + this.ctx.profession + '|' + (this.audience ?? '') + '|' + this.host.reduced() + '|' + compact();
     this.panel.classList.toggle('moving', moving);
     if (key === this.shownKey) return;
     this.shownKey = key;
@@ -651,16 +653,19 @@ export class Story {
       const back = Math.max(0, Math.floor(v)), forward = Math.min(all.length - 1, back + 1);
       const from = all[back], to = all[v < this.at ? back : forward];
       const line = v > (this.at ?? 0) ? from.bridge ?? '' : '';
+      const keep = this.panel.querySelector('.spBody')?.scrollTop ?? 0;
       this.panel.innerHTML = this.topHtml(`On the way to ${to.title}`) +
         `<p class="spGuide"><small>Your EmpowerED guide</small>${esc(line || 'Follow me.')}</p>` +
         `<div class="spNav"><button type="button" class="spLink" data-go="${back}">Back to ${esc(all[back].title)}</button><button type="button" class="spNext" data-go="${forward}">Continue to ${esc(all[forward].title)} →</button></div>`;
+      this.pinNav(keep);
       this.panel.tabIndex = -1;
       if (this.keepFocus) this.panel.focus({ preventScroll: true });
       return;
     }
     this.panel.removeAttribute('tabindex');
+    const keep = changedStop ? 0 : this.panel.querySelector('.spBody')?.scrollTop ?? 0;
     this.panel.innerHTML = idx === 0 ? this.welcomeHtml() : idx === 1 ? this.previewHtml() : this.stopHtml(idx);
-    if (changedStop) this.panel.scrollTop = 0;
+    this.pinNav(keep);
     if (all[idx]?.pick === 'profession') this.paintProfessions();
     if (this.keepFocus) {
       this.keepFocus = false;
@@ -668,6 +673,15 @@ export class Story {
       to?.focus({ preventScroll: true });
       this.focusSel = '';
     }
+  }
+
+  /** Everything but the Back/Next row scrolls; the row stays pinned at the bottom of the panel. */
+  private pinNav(scrollTop: number) {
+    const body = document.createElement('div');
+    body.className = 'spBody';
+    [...this.panel.childNodes].filter((n) => !(n instanceof HTMLElement && n.classList.contains('spNav'))).forEach((n) => body.appendChild(n));
+    this.panel.prepend(body);
+    body.scrollTop = scrollTop;
   }
 
   private topHtml(eye: string): string {
@@ -683,7 +697,7 @@ export class Story {
 
   /** The example board, inside the panel on phones. */
   private inlineBoard(s: StoryStop): string {
-    return s.exhibit && innerWidth <= 760 ? `<div class="sx in${this.host.reduced() ? ' still' : ''}">${s.exhibit(this.ctx)}</div>` : '';
+    return s.exhibit && compact() ? `<div class="sx in${this.host.reduced() ? ' still' : ''}">${s.exhibit(this.ctx)}</div>` : '';
   }
 
   /** Next button text for moving to stop i. */
