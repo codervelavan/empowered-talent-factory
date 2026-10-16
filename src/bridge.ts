@@ -81,6 +81,18 @@ export interface FactoryApi {
   podJump(i: number): void;
   /** Light the lead roles (indexes into the POD's six roles) for the chosen problem type. */
   setPodLead(lead: number[]): void;
+  /** Zoom the globe camera onto a profession's workflow diorama (-1 zooms back out). */
+  globeZoom(node: number): void;
+  /** Show one diorama step (0 sample input, 1 AI draft, 2 you check), or -1 to play them in turn. */
+  dioStep(k: number): void;
+  /** The diorama step currently shown. */
+  dioAt(): number;
+  /** Evidence & Impact gallery frames (centre and the point each exhibit faces). */
+  gallery(): { at: P3; face: P3 }[];
+  /** Whether a profession (globe node) has a workflow diorama. */
+  hasDio(node: number): boolean;
+  /** Development check: where the zoomed diorama sits. */
+  dioDebug(): unknown;
   podG(): number;
   podTime(): number;
   campusOn(): boolean;

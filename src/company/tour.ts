@@ -4,7 +4,7 @@
 // each stop has a HUD card, glowing hotspots and a place on the stage map.
 import type { P3, ScreenPoint } from '../bridge';
 
-export type TourRoute = 'career' | 'workforce' | 'story';
+export type TourRoute = 'career' | 'workforce' | 'story' | 'evidence';
 
 export interface TourHotspot {
   /** World position of the marker. */
@@ -325,7 +325,7 @@ export class Tour {
     const s = this.stops[i];
     const n = this.stops.length;
     const pad = (x: number) => String(x).padStart(2, '0');
-    const routeChoice = i === 0 && this.route !== 'story'
+    const routeChoice = i === 0 && (this.route === 'career' || this.route === 'workforce')
       ? `<div class="tRoutes" role="group" aria-label="Choose your journey">
           <button type="button" data-tr="career" class="${this.route === 'career' ? 'on' : ''}"><b>Build Career <span aria-hidden="true">↗</span></b><span>Inside the company · Students and professionals</span></button>
           <button type="button" data-tr="workforce" class="${this.route === 'workforce' ? 'on' : ''}"><b>Build Workforce <span aria-hidden="true">↗</span></b><span>Around the building · Enterprise, university and government</span></button>

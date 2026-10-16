@@ -79,6 +79,8 @@ export interface StoryHost {
   journey(j: Journey | null): void;
   /** Government and regional visitors go to the Ecosystem bay. */
   region(): void;
+  /** Visit the Evidence & Impact gallery on the plaza. */
+  gallery(): void;
   /** Camera field of view in degrees (for placing boards on screen). */
   fov(): number;
   /** Reduced motion (rooms change with a short fade instead of a walk). */
@@ -707,7 +709,7 @@ export class Story {
         `<p class="spGuide"><small>Your EmpowerED guide</small>Hi, I'm your EmpowerED guide. What would you like to explore?</p>` +
         (cont && title ? `<button type="button" class="spNext spCont" data-act="continue">Continue: ${esc(cont.goal)} · ${esc(title)} <span aria-hidden="true">→</span></button>` : '') +
         `<div class="spGoals spJourneys" role="group" aria-label="Choose a journey">${JOURNEYS.map(([k, t, s]) => `<button type="button" data-journey="${k}"><b>${esc(t)}</b><span>${esc(s)}</span></button>`).join('')}</div>` +
-        `<button type="button" class="spLink spFree" data-goal="explore">Explore freely instead</button>`;
+        `<div class="spMore"><button type="button" class="spLink" data-act="gallery">Visit the Evidence &amp; Impact gallery</button><button type="button" class="spLink" data-goal="explore">Explore freely instead</button></div>`;
     }
     const sv = this.saved && this.saved.a === this.audience && this.saved.i > 1 ? this.saved : null;
     return this.topHtml('Welcome · ' + this.path.goal) +
@@ -779,6 +781,7 @@ export class Story {
       case 'continue': if (this.saved) this.pick(this.saved.a, this.saved); break;
       case 'unwf': this.wfAsk = false; this.shownKey = ''; this.keepFocus = true; this.host.journey(null); break;
       case 'region': this.host.region(); break;
+      case 'gallery': this.host.gallery(); break;
       case 'unask': this.ask = null; this.shownKey = ''; this.keepFocus = true; this.focusSel = '.spAsk summary'; break;
       case 'map': this.mapOpen = !this.mapOpen; this.shownKey = ''; this.keepFocus = true; this.focusSel = '[data-act="map"]'; break;
       case 'motion': this.host.setReduced(!this.host.reduced()); this.shownKey = ''; this.boardKey = ''; this.keepFocus = true; this.focusSel = '[data-act="motion"]'; break;

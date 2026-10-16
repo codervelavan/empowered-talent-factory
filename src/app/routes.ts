@@ -15,6 +15,8 @@ export type Dest =
   /** A workforce bay on the free workforce tour (stop id from the controller's workforce tour). */
   | { k: 'bay'; stop: 'talent' | 'pods' | 'teams' | 'campus' | 'region' }
   | { k: 'globe' }
+  /** The Evidence & Impact gallery on the plaza. */
+  | { k: 'evidence' }
   /** A section of the standard page. */
   | { k: 'page'; anchor: string };
 
@@ -98,10 +100,11 @@ export const ROUTES: RouteDef[] = [
     description: 'AI for every profession: explore how AI is reshaping the work people already do, level by level.',
     heading: 'AI for Everyone',
     body: ['Choose your profession and see where AI can support the work you already do: AI Awareness, AI Productivity, AI for your profession, applied projects and career readiness.'] },
-  { path: 'evidence-impact/', dest: { k: 'page', anchor: 'fEvidence' }, title: `Evidence & Impact · ${SITE}`,
-    description: 'Evidence of what EmpowerED delivers: projects, capability evidence and approved outcomes.',
+  { path: 'evidence-impact/', dest: { k: 'evidence' }, title: `Evidence & Impact · ${SITE}`,
+    description: 'How EmpowerED work becomes evidence: career passports, product POD delivery, workforce and campus programmes, and case studies once approved.',
     heading: 'Evidence & Impact',
-    body: ['Approved evidence, case studies and outcomes are being prepared. Examples shown on this site are labelled as illustrative.'] },
+    body: ['A gallery of how EmpowerED work becomes evidence: a sample Evidence and Readiness Passport, a product POD taken through six stages, a capability lens report, a campus partnership map and the regional hub model.',
+      'Every example is labelled as illustrative. Case studies, including Malaysia, appear only once the organisations involved have approved them.'] },
 ];
 
 /** Old hash links and where they live now. */

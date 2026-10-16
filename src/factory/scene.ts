@@ -29,7 +29,7 @@ interface GlobeEnd { p: THREE.Vector3; l: THREE.Vector3; s: number; q: THREE.Qua
 interface SceneState {
   fogB: number; actor: number; hlA: number[]; gsel: number; gdE: number; dist: number; wf: boolean; bayHv: number; baySel: number[]; stop: number;
   cam: { t0: number }; cc: { t0: number }; act: number[]; con: number; net: EcoNet; netA: number; bayDim: number[]; units: TalentUnit[];
-  pod: { on: boolean; t0: number }; podGv: number; podLead: number[]; crate: number | null; ticks: number[]; walk: boolean; et: { on: boolean; t0: number };
+  pod: { on: boolean; t0: number }; podGv: number; podLead: number[]; zoom: number; zoomL: number; zoomE: number; dioStep: number; dioT0: number; dioCur: number; crate: number | null; ticks: number[]; walk: boolean; et: { on: boolean; t0: number };
   gl: { p: THREE.Vector3; i: number; t0: number } | null; car: number; sample: boolean; sh: number; shE: number; hover: string | null;
   spine: boolean; spT0: number; fs: number; gV: number; arcs: number; done: boolean; dir: string | null;
   focus: { q0: THREE.Quaternion; q1: THREE.Quaternion; t0: number } | null; panel: number; panelE: number; A: GlobeEnd | null; B: GlobeEnd | null;
@@ -269,6 +269,78 @@ const BUILD:Record<string,(a:Area,P:THREE.Matrix4)=>void>={
 };
 const NF=llv(20,78),QF=new THREE.Quaternion().setFromUnitVectors(V(0,1,0),NF),R0=QF.clone().invert(),SF=.06;
 const NODES=INDS.map(d=>{const n=llv(d.lat,d.lon),q=new THREE.Quaternion().setFromUnitVectors(V(0,1,0),n);BUILD[d.kind](gA,new THREE.Matrix4().compose(n.clone().multiplyScalar(GR),q,V(1.35,1.35,1.35)));return{n,tip:n.clone().multiplyScalar(GR+2.2)}});
+// AI for Everyone: a small workflow diorama beside each complete profession's building on the globe.
+// Three stations: the sample input, the AI draft and the person who checks it. Revealed when the camera zooms in.
+const DIO_KIND:Record<string,{draft:string;props:(a:Area)=>void}>={
+  bank:{draft:'Draft commentary',props:a=>{box(a,-2.3,0,0,1.5,.75,.8);box(a,-2.65,.75,.05,.5,.22,.6,{tone:'fine'});box(a,-2.65,.97,.05,.46,.12,.56,{tone:'fine'});dataPanel(a,-2.3,1.75,-.45,1.4,.85,0,'bars')}},
+  hospital:{draft:'Draft visit summary',props:a=>{box(a,-2.7,0,-.2,1,.55,1.9);box(a,-2.7,.55,-.85,.8,.16,.4,{tone:'fine'});box(a,-1.75,0,.35,.55,.95,.45);box(a,-1.75,.95,.35,.42,.04,.32,{solid:'gold'});figure(a,'stand',-1.6,0,1.1,Math.PI*.85,1,1.75)}},
+  school:{draft:'Draft lesson outline',props:a=>{plane(a,-2.3,1.55,-.7,2,1.1,{fill:true,tone:'ink'});[1.75,1.55,1.35].forEach((y,i)=>line(a,'gold',[-3.05,y,-.68],[-2.0+i*.15,y,-.68]));box(a,-2.85,0,.35,.7,.5,.5);box(a,-1.85,0,.35,.7,.5,.5);figure(a,'stand',-2.85,0,1.05,Math.PI,1,1.25);figure(a,'stand',-1.85,0,1.05,Math.PI,-1,1.25)}},
+  hotel:{draft:'Draft reply',props:a=>{box(a,-2.3,0,-.1,1.9,1.05,.6);box(a,-1.75,1.05,-.1,.24,.1,.24,{solid:'gold'});figure(a,'stand',-2.5,0,.95,Math.PI,1,1.75);box(a,-1.75,0,1.0,.45,.62,.26,{solid:'gold'})}},
+  factory:{draft:'Draft maintenance summary',props:a=>{box(a,-2.75,0,-.35,1.2,1.35,1);cyl(a,-2.75,1.7,-.35,.26,.7);box(a,-1.75,0,.25,1.3,.45,.5,{tone:'fine'});[-2.2,-1.75,-1.3].forEach(x=>box(a,x,.45,.25,.28,.22,.28,{solid:'gold'}));figure(a,'point',-2.1,0,1.0,Math.PI*.8,1,1.75)}},
+};
+interface Dio{node:number;pivot:THREE.Group;g:THREE.Group;a:Area;labels:THREE.Mesh<THREE.PlaneGeometry,THREE.MeshBasicMaterial>[];token:THREE.Mesh<THREE.BoxGeometry,THREE.MeshBasicMaterial>;check:THREE.Group;checkM:THREE.MeshBasicMaterial[];screen:THREE.MeshBasicMaterial;st:THREE.Vector3[]}
+const DIOS:Dio[]=[];
+const dioLabel=(n:number,t:string)=>ctex(640,140,(x,w,h)=>{x.fillStyle='#0F2B22';x.beginPath();x.roundRect(4,4,w-8,h-8,64);x.fill();x.fillStyle='#C9A33A';x.beginPath();x.arc(70,h/2,40,0,Math.PI*2);x.fill();x.fillStyle='#0F2B22';x.font='800 46px Manrope, sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText(String(n),70,h/2+2);x.fillStyle='#F2EFE2';x.textAlign='left';x.font='800 44px Manrope, sans-serif';sp(x,'4px');x.fillText(t,132,h/2+2)});
+const DIO_LT=[dioLabel(1,'SAMPLE INPUT'),dioLabel(2,'AI DRAFT'),dioLabel(3,'YOU CHECK')];
+{const prevTG=TG;INDS.forEach((d,ni)=>{const k=DIO_KIND[d.kind];if(d.ph||!k)return;
+  const pivot=new THREE.Group();pivot.position.copy(NODES[ni].n).multiplyScalar(GR);pivot.quaternion.setFromUnitVectors(V(0,1,0),NODES[ni].n);globeG.add(pivot);
+  const g=new THREE.Group();g.scale.setScalar(.42);g.visible=false;pivot.add(g);TG=g;
+  const a=area('dio'+ni,{manual:1,parent:g});
+  hring(a,'fine',0,.02,0,3.5,72);hring(a,'gold',0,.02,0,3.65,72);
+  const st=[V(-2.3,0,.3),V(0,0,-.5),V(2.3,0,.3)];
+  poly(a,'gold',[[-2.3,.03,1.4],[0,.03,.75],[2.3,.03,1.4]]);
+  k.props(a);
+  // The AI station: a screen on a desk, showing the draft.
+  box(a,0,0,-1.0,1.9,.75,.8);box(a,0,.75,-1.3,1.6,1.05,.08);box(a,0,.75,-1.2,.12,.1,.12,{tone:'fine'});
+  const scrT=ctex(512,336,(x,w,h)=>{x.fillStyle='#F2EFE2';x.fillRect(0,0,w,h);x.fillStyle='#0F2B22';x.fillRect(0,0,w,64);x.fillStyle='#F6DB2D';x.font='800 30px Manrope, sans-serif';x.textBaseline='middle';sp(x,'3px');x.fillText('AI DRAFT',24,33);x.fillStyle='#0F2B22';x.font='700 30px Manrope, sans-serif';sp(x,'0px');x.fillText(k.draft,24,104);x.fillStyle='rgba(30,70,50,.28)';[150,186,222,258].forEach((y,i)=>x.fillRect(24,y,w-48-(i%2)*120,14));x.fillStyle='#C9A33A';x.fillRect(24,292,170,16)});
+  const screen=new THREE.MeshBasicMaterial({map:scrT,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false});const so=new THREE.Mesh(PL,screen);so.scale.set(1.5,.98,1);so.position.set(0,1.27,-1.25);g.add(so);
+  // The reviewer: the professional checks the draft at a lectern.
+  box(a,2.3,0,-.45,1.1,.95,.6);box(a,2.3,.95,-.45,.7,.03,.45,{solid:'gold'});figure(a,'point',2.25,0,.55,Math.PI*1.12,1,1.75);
+  const labels=DIO_LT.map((t,i)=>{const m=new THREE.Mesh(PL,new THREE.MeshBasicMaterial({map:t,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false}));m.scale.set(2.05,.45,1);m.position.set(st[i].x,i===1?2.75:3.05,st[i].z);g.add(m);return m});
+  const token=new THREE.Mesh(BOX,new THREE.MeshBasicMaterial({color:GOLD,transparent:true,opacity:0}));token.scale.set(.5,.08,.66);token.position.set(st[0].x,1.05,st[0].z+.9);g.add(token);
+  const check=new THREE.Group(),checkM=[new THREE.MeshBasicMaterial({color:GOLD,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:false}),new THREE.MeshBasicMaterial({color:INK,transparent:true,opacity:0,depthWrite:false})];
+  check.add(new THREE.Mesh(new THREE.CircleGeometry(.38,32),checkM[0]));const t1=new THREE.Mesh(BOX,checkM[1]);t1.scale.set(.2,.07,.02);t1.position.set(-.09,-.04,.01);t1.rotation.z=-Math.PI/4;const t2=new THREE.Mesh(BOX,checkM[1]);t2.scale.set(.38,.07,.02);t2.position.set(.08,.04,.01);t2.rotation.z=Math.PI/3.6;check.add(t1,t2);check.position.set(3.05,2.2,.4);g.add(check);
+  DIOS.push({node:ni,pivot,g,a,labels,token,check,checkM,screen,st})});TG=prevTG}
+/** The gallery frames: centre, the point each exhibit faces, and whether it hangs on a side wall. */
+const GALLERY:{at:P3;face:P3;ry?:number}[]=[{at:[19.8,2.1,11.06],face:[19.8,2.1,24]},{at:[25.2,2.1,11.06],face:[25.2,2.1,24]},{at:[17.06,2.1,15.5],face:[30,2.1,15.5],ry:1},{at:[27.94,2.1,15.5],face:[15,2.1,15.5],ry:1}];
+// Evidence & Impact: a small glass pavilion on the plaza beside the entrance, open toward the plaza.
+// The exhibits themselves are HTML boards the controller hangs in the frames (GALLERY in the bridge).
+{const prevTG=TG;TG=factoryG;const gal=area('gallery',{at:.45});
+ const X0=17,X1=28,Z0=11,Z1=20,H=4.2,cx=(X0+X1)/2,cz=(Z0+Z1)/2;
+ box(gal,cx,0,cz,X1-X0,.12,Z1-Z0);
+ box(gal,cx,H,cz,X1-X0+.4,.3,Z1-Z0+.4);
+ plane(gal,cx,H/2,Z0,X1-X0,H,{fill:true,tone:'ink'});
+ plane(gal,X0,H/2,cz,Z1-Z0,H,{ry:Math.PI/2,fill:true,tone:'ink'});
+ plane(gal,X1,H/2,cz,Z1-Z0,H,{ry:Math.PI/2,fill:true,tone:'ink'});
+ // The front: glass either side of a 4 m opening.
+ ([[X0,cx-2],[cx+2,X1]] as [number,number][]).forEach(([a,b])=>{plane(gal,(a+b)/2,H/2,Z1,b-a,H,{tone:'fine'});[a,(a+b)/2,b].forEach(x=>line(gal,'fine',[x,0,Z1],[x,H,Z1]))});
+ line(gal,'gold',[X0-.2,H+.32,Z1+.2],[X1+.2,H+.32,Z1+.2]);
+ const sT=ctex(1024,160,(x,w,h)=>{x.fillStyle='#0F2B22';x.fillRect(0,0,w,h);x.fillStyle='#F2EFE2';x.font='800 62px Manrope, sans-serif';x.textAlign='center';x.textBaseline='middle';sp(x,'10px');x.fillText('EVIDENCE & IMPACT',w/2,h/2+2)});
+ const sg=new THREE.Mesh(PL,new THREE.MeshBasicMaterial({map:sT,side:THREE.DoubleSide}));sg.scale.set(5.6,.88,1);sg.position.set(cx,H+.95,Z1+.25);sg.userData.noRay=true;factoryG.add(sg);
+ // Frames for the four exhibits, and a plinth in the middle.
+ GALLERY.forEach(f=>{if(f.ry)plane(gal,f.at[0],f.at[1],f.at[2],3.1,2.3,{ry:Math.PI/2,tone:'gold'});else plane(gal,f.at[0],f.at[1],f.at[2],3.1,2.3,{tone:'gold'})});
+ box(gal,cx,0,16.6,1,1,1);box(gal,cx,1,16.6,.62,.1,.82,{solid:'gold'});
+ TG=prevTG}
+const DTMP=new THREE.Vector3();
+/** Zoom the globe camera onto the chosen diorama and play its three steps (sample input, AI draft, you check). */
+function dioTick(now:number,dt:number){
+  G.zoomE+=((G.zoom>=0&&G.done?1:0)-G.zoomE)*(reduce?1:Math.min(1,dt*1.7));if(G.zoomE<.002&&G.zoom<0)G.zoomE=0;
+  const D=DIOS.find(x=>x.node===G.zoomL);
+  DIOS.forEach(x=>{x.g.visible=x===D&&G.zoomE>.01&&G.done});
+  if(!D||!D.g.visible)return;
+  globeG.updateMatrixWorld();
+  const cl=D.pivot.worldToLocal(DTMP.copy(GPOS)),yaw=Math.atan2(cl.x,cl.z);D.g.rotation.y=yaw;D.g.position.set(Math.sin(yaw)*2.7,0,Math.cos(yaw)*2.7);D.g.updateMatrixWorld();
+  const up=NODES[D.node].n.clone().applyQuaternion(Rcur),cen=D.g.getWorldPosition(new THREE.Vector3()),t2=GPOS.clone().sub(cen),fwd=t2.sub(up.clone().multiplyScalar(t2.dot(up))).normalize(),rt=up.clone().cross(fwd).normalize();
+  const narrow=innerWidth<=760,pan=rt.clone().multiplyScalar(narrow?0:.95*G.panelE).addScaledVector(up,narrow?-1.7*G.panelE:0),zp=cen.clone().addScaledVector(fwd,narrow?7.6:4.3).addScaledVector(up,narrow?3.3:1.9).add(pan),zl=cen.clone().addScaledVector(up,.55).add(pan);
+  const e=sm(0,1,G.zoomE);C.position.lerp(zp,e);lt.lerp(zl,e);
+  const r=sm(.5,1,G.zoomE);
+  let cur=G.dioStep;if(cur<0){const t=((now-G.dioT0)/1000)%11.5;cur=reduce?2:Math.min(2,Math.floor(t/3.4))}G.dioCur=cur;
+  D.labels.forEach((m,i)=>{m.material.opacity=r*(i===cur?1:.42);const sc=i===cur?1.1:.92;m.scale.set(1.6*sc,.35*sc,1)});
+  D.screen.opacity=r*(cur>=1?1:.35);
+  const tg=D.st[cur];D.token.material.opacity=r;D.token.position.x+=(tg.x-D.token.position.x)*Math.min(1,dt*3.5);D.token.position.z+=((tg.z+.3)-D.token.position.z)*Math.min(1,dt*3.5);D.token.position.y=2.3+Math.sin(Math.PI*Math.min(1,Math.abs(tg.x-D.token.position.x)/2.3))*.5;
+  const ck=cur===2?1:0;D.checkM.forEach(m=>{m.opacity+=(ck*r-m.opacity)*Math.min(1,dt*5)});D.check.scale.setScalar(.6+.4*D.checkM[0].opacity);D.check.lookAt(C.position);
+  D.labels.forEach(m=>m.lookAt(C.position));
+}
 gArc.LU=[];NODES.forEach(nd=>{const N=48;let prev:THREE.Vector3|null=null;for(let i=0;i<=N;i++){const t=i/N,p=NF.clone().lerp(nd.n,t).normalize().multiplyScalar(GR+.25+2.4*Math.sin(Math.PI*t));if(prev){gArc.L!.gold.push(prev.x,prev.y,prev.z,p.x,p.y,p.z);gArc.LU!.push((i-1)/N,i/N)}prev=p}});
 const GPOS=V(0,5,44),GLOOK=GC.clone().add(V(-9,1.5,0));
 const selM=new THREE.MeshBasicMaterial({color:GOLD,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide}),selR=new THREE.Mesh(new THREE.RingGeometry(1.5,1.95,48),selM);selR.visible=false;globeG.add(selR);
@@ -536,7 +608,7 @@ const reduce=matchMedia('(prefers-reduced-motion: reduce)').matches;
 let mx=0,my=0;addEventListener('pointermove',e=>{mx=e.clientX/innerWidth-.5;my=e.clientY/innerHeight-.5});
 const look=V(0,0,0),tmp=V(0,0,0),lt=V(0,0,0),snapP=V(0,0,0),snapL=V(0,0,0);let lastT=performance.now();
 const Rcur=R0.clone(),ONE=V(1,1,1),TMPM=new THREE.Matrix4(),T30=new THREE.Matrix4().makeTranslation(0,0,30);
-const G:SceneState={fogB:0,actor:0,hlA:[0,0,0,0],gsel:-1,gdE:0,dist:0,wf:false,bayHv:-1,baySel:[],stop:-1,cam:{t0:-1},cc:{t0:-1},act:[0,1,4],con:-1,net:{sec:0,act:{c:1,i:1,g:1},mode:0,links:[]},netA:0,bayDim:[],units:[],pod:{on:false,t0:0},podGv:-1,podLead:[],crate:null,ticks:[],walk:false,et:{on:false,t0:0},gl:null,car:0,sample:false,sh:0,shE:0,hover:null,spine:false,spT0:0,fs:1,gV:0,arcs:0,done:false,dir:null,focus:null,panel:0,panelE:0,A:null,B:null,podK:0,podI:0,podTA:0,podAE:0};
+const G:SceneState={fogB:0,actor:0,hlA:[0,0,0,0],gsel:-1,gdE:0,dist:0,wf:false,bayHv:-1,baySel:[],stop:-1,cam:{t0:-1},cc:{t0:-1},act:[0,1,4],con:-1,net:{sec:0,act:{c:1,i:1,g:1},mode:0,links:[]},netA:0,bayDim:[],units:[],pod:{on:false,t0:0},podGv:-1,podLead:[],zoom:-1,zoomL:-1,zoomE:0,dioStep:-1,dioT0:0,dioCur:0,crate:null,ticks:[],walk:false,et:{on:false,t0:0},gl:null,car:0,sample:false,sh:0,shE:0,hover:null,spine:false,spT0:0,fs:1,gV:0,arcs:0,done:false,dir:null,focus:null,panel:0,panelE:0,A:null,B:null,podK:0,podI:0,podTA:0,podAE:0};
 const PODS3=[['For students','Build real products. Leave with proof.'],['For universities','Industry PODs on your campus.'],['For startups','Get a product built. Meet the people who built it.']];
 const PIV=V(0,0,-10),PA=[-.5,0,.5],PRAD=31,PCAM=52;
 const PPOS=[[-15,19],[0,21],[15,19]];
@@ -567,7 +639,7 @@ window.FACTORY={
   poseFly(r,e){const w=ROUTES[r].wp[0];C.position.lerpVectors(EXTP,V(...w[0]),e);look.lerpVectors(EXTL,V(...w[1]),e)},
   setHover(k){G.hover=k},poseAt(p,l){C.position.set(p[0],p[1],p[2]);look.set(l[0],l[1],l[2])},
   setWf(on){G.wf=on},setBays(hv,sel,dim){G.bayHv=hv;G.baySel=sel;G.bayDim=dim},setUnits(u){G.units=u},setTeam(n){if(teamName.v!==n){teamName.v=n;teamTex.redraw()}},wfStop(i){G.stop=i},campusIn(r){if(G.cam.t0<0||r){G.cam.t0=performance.now();G.cc.t0=-1}},podCross(){G.cc.t0=Math.max(performance.now(),G.cam.t0+2700)},setCampus(a,c){G.act=a;G.con=c},setActor(i){G.actor=i},setNet(o){G.net=o},
-  pod(on){if(on&&!G.pod.on)G.pod.t0=performance.now();G.pod.on=on},setPodLead(l){G.podLead=l},podJump(i){G.pod.on=true;G.pod.t0=performance.now()-(4200+i*2600)},podG(){return G.pod.on?G.podGv:-1},podTime(){return G.pod.on?(performance.now()-G.pod.t0)/1000:0},setCrate(g){G.crate=g},setTicks(a){G.ticks=a},setWalk(on){G.walk=on},
+  pod(on){if(on&&!G.pod.on)G.pod.t0=performance.now();G.pod.on=on},setPodLead(l){G.podLead=l},globeZoom(i){if(i>=0&&!DIOS.some(D=>D.node===i))i=-1;if(i>=0&&i!==G.zoom){G.dioStep=-1;G.dioT0=performance.now()}G.zoom=i;if(i>=0){G.zoomL=i;/* Profession on top, the company (NF) behind it, away from the camera. */const n=NODES[i].n,fb=NF.clone().sub(n.clone().multiplyScalar(NF.dot(n))).normalize(),r=fb.clone().cross(n).normalize(),L=new THREE.Matrix4().makeBasis(r,n,fb),W=new THREE.Matrix4().makeBasis(V(1,0,0),V(0,1,0),V(0,0,-1));G.focus={q0:Rcur.clone(),q1:new THREE.Quaternion().setFromRotationMatrix(W.multiply(L.transpose())),t0:performance.now()}}},dioStep(k){G.dioStep=k;if(k<0)G.dioT0=performance.now()},dioAt(){return G.dioCur},gallery(){return GALLERY.map(g=>({at:g.at,face:g.face}))},dioDebug(){const D=DIOS.find(x=>x.node===G.zoomL);if(!D)return null;return{yaw:D.g.rotation.y,cam:C.position.toArray().map(v=>+v.toFixed(2)),labels:D.labels.map(m=>{const p=m.getWorldPosition(new THREE.Vector3());const q=p.clone().project(C);return [p.toArray().map(v=>+v.toFixed(2)),[Math.round((q.x+1)/2*innerWidth),Math.round((1-q.y)/2*innerHeight)]]})}},hasDio(i){return DIOS.some(D=>D.node===i)},podJump(i){G.pod.on=true;G.pod.t0=performance.now()-(4200+i*2600)},podG(){return G.pod.on?G.podGv:-1},podTime(){return G.pod.on?(performance.now()-G.pod.t0)/1000:0},setCrate(g){G.crate=g},setTicks(a){G.ticks=a},setWalk(on){G.walk=on},
   rayWhat(a,b){const A=V(...a),dir=V(...b).sub(A),len=dir.length();dir.normalize();factoryG.updateMatrixWorld(true);const rc=new THREE.Raycaster(A,dir,0,len);const nm=new THREE.Vector3();return rc.intersectObject(factoryG,true).filter(h=>(h.object as THREE.Mesh).isMesh&&h.face).slice(0,4).map(h=>{const m=h.object as THREE.Mesh;let vis=true;for(let o:THREE.Object3D|null=m;o;o=o.parent)if(!o.visible)vis=false;nm.copy(h.face!.normal).transformDirection(m.matrixWorld);const mat=m.material as THREE.MeshBasicMaterial;return {p:[h.point.x,h.point.y,h.point.z].map(v=>+v.toFixed(2)),vis,ny:+nm.y.toFixed(2),geo:(m.geometry as THREE.BufferGeometry).type,op:mat.opacity,tr:mat.transparent,cw:mat.colorWrite,dw:mat.depthWrite,size:(()=>{(m.geometry as THREE.BufferGeometry).computeBoundingBox();const b=(m.geometry as THREE.BufferGeometry).boundingBox!;return [b.max.x-b.min.x,b.max.y-b.min.y,b.max.z-b.min.z].map(v=>+v.toFixed(1))})()}})},
   rayHits(a,b){const A=V(...a),dir=V(...b).sub(A),len=dir.length();if(len<1e-4)return [];dir.normalize();factoryG.updateMatrixWorld(true);const rc=new THREE.Raycaster(A,dir,0,len);const skip=(o:THREE.Object3D|null):boolean=>{for(;o;o=o.parent)if(o.userData.noRay)return true;return false};const nm=new THREE.Vector3();return rc.intersectObject(factoryG,true).filter(h=>{const m=h.object as THREE.Mesh;if(!m.isMesh||!h.face||skip(m))return false;nm.copy(h.face.normal).transformDirection(m.matrixWorld);return Math.abs(nm.y)<.6}).map(h=>({p:[+h.point.x.toFixed(2),+h.point.y.toFixed(2),+h.point.z.toFixed(2)] as P3,d:+h.distance.toFixed(2)}))},
   obstacles(y0,y1){factoryG.updateMatrixWorld(true);const walls:number[]=[],floor:number[]=[],low:number[]=[],high:number[]=[],highY:number[]=[];const a=V(),b=V(),c=V(),e1=V(),e2=V(),n=V();const skip=(o:THREE.Object3D|null):boolean=>{for(;o;o=o.parent)if(o.userData.noRay)return true;return false};
@@ -597,7 +669,7 @@ window.FACTORY={
     factoryG.matrix.compose(GC,Rcur,ONE).multiply(TMPM.compose(NF.clone().multiplyScalar(GR),QF,V(G.fs,G.fs,G.fs))).multiply(T30);factoryG.matrixWorldNeedsUpdate=true;
     gSphere.visible=G.gV>.001;
     const hf=Math.max(0,C.position.y-18);G.fogB+=((G.wf&&G.stop===4?1:0)-G.fogB)*Math.min(1,dt*2);const fog=S.fog as THREE.Fog;fog.near=45+G.gV*70+hf*2+G.fogB*80;fog.far=190+G.gV*220+hf*5+G.fogB*160;FOGU.value.set(fog.near,fog.far);
-    G.shE+=(G.sh-G.shE)*Math.min(1,dt*3);lt.copy(look);if(G.shE>.001){tmp.copy(lt).sub(C.position);const dd=tmp.length(),tx=Math.tan(C.fov*Math.PI/360)*Math.min(1.9,Math.max(1.3,C.aspect));tmp.normalize().cross(C.up).normalize();lt.addScaledVector(tmp,G.shE*dd*tx/3)}if(G.done)lt.x+=G.panelE*6;if(!reduce){lt.x+=mx*(G.done?.3:1.2);lt.y-=my*(G.done?.15:.6)}if(!reduce&&mode==='intro'){lt.x+=Math.sin(now/5200)*.5;lt.y+=Math.sin(now/7400)*.2}if(G.gl){const t=(performance.now()-G.gl.t0)/3400,w=sm(0,.28,t)*(1-sm(.72,1,t));lt.lerp(G.gl.p,w);if(t>=1)G.gl=null}C.lookAt(lt);
+    G.shE+=(G.sh-G.shE)*Math.min(1,dt*3);lt.copy(look);if(G.shE>.001){tmp.copy(lt).sub(C.position);const dd=tmp.length(),tx=Math.tan(C.fov*Math.PI/360)*Math.min(1.9,Math.max(1.3,C.aspect));tmp.normalize().cross(C.up).normalize();lt.addScaledVector(tmp,G.shE*dd*tx/3)}if(G.done)lt.x+=G.panelE*6;if(!reduce){lt.x+=mx*(G.done?.3:1.2);lt.y-=my*(G.done?.15:.6)}if(!reduce&&mode==='intro'){lt.x+=Math.sin(now/5200)*.5;lt.y+=Math.sin(now/7400)*.2}if(G.gl){const t=(performance.now()-G.gl.t0)/3400,w=sm(0,.28,t)*(1-sm(.72,1,t));lt.lerp(G.gl.p,w);if(t>=1)G.gl=null}dioTick(now,dt);C.lookAt(lt);
     if(G.pod.on){const te=(now-G.pod.t0)/1000;if(te<2.2)G.podGv=-1+sm(0,2.2,te);else if(te<4.2)G.podGv=0;else{const x=(te-4.2)/2.6,i=Math.floor(x);G.podGv=Math.min(5,i+sm(.35,.75,x-i))}}
     BAYFX.forEach((b,i)=>{const on=G.wf;b.lp.visible=b.fp.visible=on;if(!on)return;const lit=G.bayHv===i||G.baySel.includes(i);b.lm.opacity+=((lit?.38:0)-b.lm.opacity)*Math.min(1,dt*6);b.fm.opacity+=((G.bayDim.includes(i)?.72:0)-b.fm.opacity)*Math.min(1,dt*5);b.fp.lookAt(C.position)});
     UNITS.forEach((u,i)=>{u.visible=G.wf;const d=G.units[i];if(!d||!G.wf)return;u.material.color.set(d.state==='Available'?GOLD:d.state==='Deployed'?INK:PAPER);const op=d.off?.12:1;u.material.opacity=op;u.position.x+=((19.6+(d.grp?.55:0))-u.position.x)*Math.min(1,dt*6);(u.children[0] as THREE.LineSegments<THREE.EdgesGeometry,THREE.LineBasicMaterial>).material.opacity=op});
@@ -622,10 +694,11 @@ window.FACTORY={
      const inR=mode==='route';scanR.visible=inR;if(inR){scanR.position.y=6.4+(Math.sin(now/650)*.5+.5)*2.2}}
     SPM.forEach((m,i)=>{const t=G.spine&&now-G.spT0>i*380?m.userData.lit:m.userData.dark;if(m.map!==t)m.map=t});
     spMk.position.set(-19+((now/5200)%1)*38,SPY-.95,SPZ);
-    G.gdE+=((G.gsel>=0&&G.gV>.5?1:0)-G.gdE)*Math.min(1,dt*4);[gA,gRim,gArc].forEach(a=>{if(a.dimU)a.dimU.value=.8*G.gdE});selR.visible=G.gsel>=0&&G.gV>.5;if(selR.visible){const n=NODES[G.gsel].n;selR.position.copy(n).multiplyScalar(GR+.12);selR.quaternion.setFromUnitVectors(V(0,0,1),n);selM.opacity=.95*G.gdE}
+    G.gdE+=((G.gsel>=0&&G.gV>.5?1:0)-G.gdE)*Math.min(1,dt*4);[gA,gRim,gArc].forEach(a=>{if(a.dimU)a.dimU.value=.8*G.gdE});selR.visible=G.gsel>=0&&G.gV>.5&&G.zoomE<.05;if(selR.visible){const n=NODES[G.gsel].n;selR.position.copy(n).multiplyScalar(GR+.12);selR.quaternion.setFromUnitVectors(V(0,0,1),n);selM.opacity=.95*G.gdE}
     const im=mode==='intro'||mode==='globe';
     AREAS.forEach(a=>{
-      if(a===grd)a.r=1-sm(0,.5,G.gV);
+      if(a.name.startsWith('dio'))a.r=G.done&&a===DIOS.find(D=>D.node===G.zoomL)?.a?sm(.5,1,G.zoomE):0;
+      else if(a===grd)a.r=1-sm(0,.5,G.gV);
       else if(a===brand.skyline)a.r=1-sm(.75,1,G.gV);
       else if(a===gA)a.r=G.gV;
       else if(a===gRim)a.r=G.done?sm(0,.35,G.arcs):Math.min(a.r,G.gV);
@@ -649,7 +722,7 @@ window.FACTORY={
   globeStep(t){const A=G.A!,B=G.B!;if(G.dir==='in'){const e=sm(0,1,t),e2=sm(.3,.92,t);G.cp!.getPoint(e,C.position);G.cl!.getPoint(e,look);G.fs=Math.exp(Math.log(A.s)+(Math.log(B.s)-Math.log(A.s))*e2);Rcur.slerpQuaternions(A.q,B.q,sm(.42,.95,t));G.gV=sm(.42,.88,t);G.dist=sm(.1,.3,t)*(1-sm(.6,.8,t));return}G.dist=0;const e=sm(0,1,t),e2=sm(.1,.9,t);C.position.lerpVectors(A.p,B.p,e);C.position.y+=Math.sin(Math.PI*e)*(G.dir==='in'?14:8);look.lerpVectors(A.l,B.l,e);G.fs=Math.exp(Math.log(A.s)+(Math.log(B.s)-Math.log(A.s))*e2);Rcur.slerpQuaternions(A.q,B.q,e2);G.gV=G.dir==='in'?sm(.3,.9,t):Math.min(G.gV,1-sm(.05,.55,t))},
   globeArrive(){G.done=true;C.position.copy(GPOS);look.copy(GLOOK)},
   globeHold(){C.position.copy(GPOS);look.copy(GLOOK)},
-  globeReset(){G.dist=0;G.fs=1;Rcur.copy(R0);G.gV=0;G.arcs=0;G.done=false;G.dir=null;G.panel=0;G.panelE=0},
+  globeReset(){G.zoom=-1;G.zoomE=0;G.dist=0;G.fs=1;Rcur.copy(R0);G.gV=0;G.arcs=0;G.done=false;G.dir=null;G.panel=0;G.panelE=0},
   setPanel(v){G.panel=v},setSel(i){G.gsel=i},
   css(el,par){const o=new CSS3DObject(el);el.style.userSelect='text';el.style.display='none';CAMEL.appendChild(el);(par==='campus'?campus.g:par==='net'?NET:par==='world'?S:factoryG).add(o);return o},
   cam(){return C},routeWP(r,s){const Q=ROUTES[r];return Q.wp[Q.stops[s]]},brandIcons(){return brand.icons},addWorld(o){factoryG.add(o)},routePose(r,k){const Q=ROUTES[r],u=Math.min(1,Math.max(0,k/(Q.wp.length-1))),p=Q.pc!.getPoint(u),l=Q.lc!.getPoint(u);return[[p.x,p.y,p.z],[l.x,l.y,l.z]]},
@@ -660,7 +733,7 @@ c?w.distanceTo(c)*.001036*(z||1):.02)},
   gNode(i){globeG.updateMatrixWorld();return NODES[i].tip.clone().applyMatrix4(globeG.matrixWorld)},gFront(){return GC.clone().addScaledVector(C.position.clone().sub(GC).normalize(),GR*1.02)},
   setFlow(p){if(p!==flowP)drawFlow(p)},
   focusNode(i){const w=NODES[i].n.clone().applyQuaternion(Rcur),tg=CAMDIR.clone().add(V(0,.1,0)).normalize();G.focus={q0:Rcur.clone(),q1:new THREE.Quaternion().setFromUnitVectors(w,tg).multiply(Rcur),t0:performance.now()}},
-  drag(dx,dy){G.focus=null;Rcur.premultiply(new THREE.Quaternion().setFromAxisAngle(V(0,1,0),dx*.006)).premultiply(new THREE.Quaternion().setFromAxisAngle(V(1,0,0),dy*.006))},
+  drag(dx,dy){if(G.zoom>=0)return;G.focus=null;Rcur.premultiply(new THREE.Quaternion().setFromAxisAngle(V(0,1,0),dx*.006)).premultiply(new THREE.Quaternion().setFromAxisAngle(V(1,0,0),dy*.006))},
   nodes(){globeG.updateMatrixWorld();const cam=C.position.clone().sub(GC).normalize();return NODES.map(nd=>{const w=nd.tip.clone().applyMatrix4(globeG.matrixWorld),n=nd.n.clone().applyQuaternion(Rcur),p=this.project(w.x,w.y,w.z);p.face=n.dot(cam);return p})},
   project(x,y,z){tmp.set(x,y,z).project(C);return{x:(tmp.x*.5+.5)*innerWidth,y:(-tmp.y*.5+.5)*innerHeight,vis:tmp.z>-1&&tmp.z<1&&Math.abs(tmp.x)<1.1&&Math.abs(tmp.y)<1.1}},
 };

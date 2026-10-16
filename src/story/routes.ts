@@ -8,7 +8,7 @@ import type { Ask, Profession, StoryCtx, StoryPath } from './guide';
 import { board, chips, flow, note, rows, STAGES, table } from './exhibits';
 
 /** Worked examples for each profession with finished copy (illustrative; owner to approve). */
-interface ProfessionDemo {
+export interface ProfessionDemo {
   /** A task people in the profession already do. */
   task: string;
   /** What AI can help with in that task, and what stays with the person. */
@@ -19,7 +19,7 @@ interface ProfessionDemo {
   /** Task-specific answers for each of the profession's uses (same order as INDS uses). */
   uses: string[];
 }
-const DEMOS: Record<string, ProfessionDemo> = {
+export const DEMOS: Record<string, ProfessionDemo> = {
   'Business & Finance': {
     task: 'Preparing the monthly management report',
     helps: 'Drafting variance commentary and pulling figures into the template.',
@@ -318,6 +318,7 @@ export function makeRoutes(x: RouteActions): Record<'student' | 'founder' | 'hr'
           concern: 'How does it work in practice?',
           guide: 'Follow the task from a sample input to a draft, then to your review. You check whether the result is suitable before you use it.',
           exhibit: (c) => board('Input, draft, review', flow([['Sample input', demo(c).demo[0]], ['AI draft', demo(c).demo[1]], ['Your review', demo(c).demo[2]]])),
+          show: { label: 'See it at work in 3D', open: 'globe:work' },
           bridge: 'Next, where to begin learning.' },
         { room: 'pPath', title: 'Learning path', nextLabel: 'See your learning path',
           concern: 'What should I learn first?',

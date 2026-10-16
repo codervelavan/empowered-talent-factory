@@ -9,7 +9,7 @@ import { currentPath, currentRoute, legacyHashPath, onPathChange, setPath } from
 import { routeFor, type Dest } from '../app/routes';
 import { Passport } from '../app/passport';
 import { SelectionTray } from '../app/selection';
-import { makeRoutes, PROFESSIONS } from '../story/routes';
+import { makeRoutes, PROFESSIONS, PROFESSION_NODE, DEMOS } from '../story/routes';
 import type { StoryIntroIntent } from '../story/intro';
 import type { Object3D } from 'three';
 import type * as THREE from 'three';
@@ -92,7 +92,17 @@ export function initController(replayStory: () => void): ControllerApi {
   gQ.addEventListener('input',()=>{const q=gQ.value.trim().toLowerCase();gItems.forEach(b=>{(b.parentNode as El).hidden=!!q&&!INDS[+b.dataset.gi!].name.toLowerCase().includes(q)});gList.querySelector<El>('.none')!.hidden=visItems().length>0});
   gQ.addEventListener('keydown',e=>{const v=visItems();if(e.key==='ArrowDown'&&v.length){e.preventDefault();v[0].focus()}else if(e.key==='Enter'&&v.length){e.preventDefault();v[0].click()}});
   gList.addEventListener('keydown',e=>{const v=visItems(),k=v.indexOf(document.activeElement as El);if(k<0)return;if(e.key==='ArrowDown'){e.preventDefault();(v[k+1]||v[k]).focus()}else if(e.key==='ArrowUp'){e.preventDefault();(k?v[k-1]:gQ).focus()}});
-  function openSide(i:number){if(whoOpen)closeWho(true);sel=i;lastSel=i;lvl=0;const d=INDS[i];$('gName').textContent=d.name;$('gLine').textContent=d.ph?'Details for this profession are coming soon.':d.line;$<HTMLInputElement>('gOrg').checked=false;paintLv();side.classList.add('open');nodeEls.forEach((n,k)=>n.classList.toggle('on',k===i));paintList();window.FACTORY!.focusNode(i);window.FACTORY!.setPanel(1);window.FACTORY!.setSel(i)}
+  function openSide(i:number,view?:'work'|'path'){if(whoOpen)closeWho(true);sel=i;lastSel=i;lvl=0;const d=INDS[i];$('gName').textContent=d.name;$('gLine').textContent=d.ph?'Details for this profession are coming soon.':d.line;$<HTMLInputElement>('gOrg').checked=false;paintLv();side.classList.add('open');nodeEls.forEach((n,k)=>n.classList.toggle('on',k===i));paintList();window.FACTORY!.focusNode(i);window.FACTORY!.setPanel(1);window.FACTORY!.setSel(i);
+    const has=!!window.FACTORY?.hasDio(i);$('gTabs').hidden=!has;paintWork();setView(has?(view??'work'):'path')}
+  /** The profession panel's two views: the workflow diorama on the globe, or the five-level learning path (with its ring). */
+  let gView:'work'|'path'='path',stepSync=0;
+  function setView(v:'work'|'path'){gView=v;const work=v==='work'&&sel>=0;$('gWork').hidden=!work;$('gLvD').hidden=work;document.querySelectorAll<El>('[data-gv]').forEach(b=>{const on=b.dataset.gv===v;b.classList.toggle('on',on);b.setAttribute('aria-selected',String(on))});window.FACTORY?.globeZoom(work?sel:-1);if(!work&&sel>=0)window.FACTORY?.focusNode(sel);clearInterval(stepSync);if(work)stepSync=window.setInterval(paintStep,250)}
+  document.querySelectorAll<El>('[data-gv]').forEach(b=>b.onclick=()=>setView(b.dataset.gv as 'work'|'path'));
+  function paintWork(){const d=sel>=0?DEMOS[INDS[sel].name]:undefined;if(!d){$('gWork').innerHTML='';return}
+    const ST=['Sample input','AI draft','You check'];
+    $('gWork').innerHTML='<small>A task you already do</small><b class="gTask">'+escG(d.task)+'</b><ol class="gSteps">'+d.demo.map((t,k)=>'<li><button type="button" data-dst="'+k+'"><i>'+(k+1)+'</i><span><b>'+ST[k]+'</b>'+escG(t)+'</span></button></li>').join('')+'</ol><button type="button" class="opt" id="gReplay">▶ Play the steps</button><div class="gSplit"><div><small>AI helps with</small><p>'+escG(d.helps)+'</p></div><div><small>Stays with you</small><p>'+escG(d.decides)+'</p></div></div><p class="note"><span class="ill">ILLUSTRATIVE</span> A sample workflow. It doesn’t show a real product or a measured result.</p>';
+    $('gWork').querySelectorAll<El>('[data-dst]').forEach(b=>b.onclick=()=>{window.FACTORY?.dioStep(+b.dataset.dst!);paintStep()});$('gReplay').onclick=()=>window.FACTORY?.dioStep(-1)}
+  function paintStep(){const k=window.FACTORY?.dioAt()??0;$('gWork').querySelectorAll<El>('[data-dst]').forEach(b=>{const on=+b.dataset.dst! ===k;b.classList.toggle('on',on);b.setAttribute('aria-current',on?'step':'false')})}
   const PW:[string,string,string,number][]=[['Everyone','Anyone starting with AI, at any stage of their career.','Self-paced modules with live sessions, open to all.',0],['Professionals','Working professionals applying AI in the role they hold.','Profession tracks through the five levels, ending in applied projects.',0],['Engineers','Engineers and graduates who build AI systems.','The Career route: Entry Assessment, Career Pro pods and ETAF™ verification.',-1],['Leaders','Executives and managers leading AI adoption.','Leadership cohorts and strategy workshops.',0],['Enterprises','Organisations building AI capability across their teams.','Corporate academy, L&D as a service or Product Engineering PODs.',1],['Government & Education','Ministries, agencies, universities and schools.','Sector programmes and Campus Talent Factories.',2]];
   const WB=['Explore Programme','Bring AI to My Team','Discuss Enterprise Delivery'];
   $('radial').insertAdjacentHTML('beforeend',PW.map((p,i)=>{const k=(-90+i*60)*Math.PI/180;return'<button type="button" data-pw="'+i+'" style="left:'+Math.round(150+Math.cos(k)*102)+'px;top:'+Math.round(150+Math.sin(k)*102)+'px">'+escG(p[0])+'</button>'}).join(''));
@@ -106,7 +116,7 @@ export function initController(replayStory: () => void): ControllerApi {
   function closeWho(keep?:boolean){whoOpen=false;$('gWho').classList.remove('open');if(!keep&&window.FACTORY)window.FACTORY.setPanel(0)}
   function globeRail(i:number){if(i===0){closeWho();closeSide()}else if(i===1)openSide(sel>=0?sel:lastSel);else openWho()}
   $('whoBtn').onclick=openWho;$('whoClose').onclick=()=>closeWho();
-  function closeSide(){sel=-1;side.classList.remove('open');nodeEls.forEach(n=>n.classList.remove('on'));paintList();if(window.FACTORY){window.FACTORY.setPanel(whoOpen?1:0);window.FACTORY.setSel(-1)}}
+  function closeSide(){clearInterval(stepSync);window.FACTORY?.globeZoom(-1);sel=-1;side.classList.remove('open');nodeEls.forEach(n=>n.classList.remove('on'));paintList();if(window.FACTORY){window.FACTORY.setPanel(whoOpen?1:0);window.FACTORY.setSel(-1)}}
   side.querySelector<El>('.gClose')!.onclick=closeSide;
   const GIN=6200,xf=$('xf'),lift=$('lift');const skipLift=()=>{if(mode==='gIn'&&!reduce)gT0=performance.now()-GIN};
   addEventListener('pointerdown',e=>{if(mode==='gIn'&&!(e.target as Element).closest('header'))skipLift()},true);addEventListener('keydown',e=>{if(mode==='gIn'&&e.key!=='Escape'&&e.key!=='Tab')skipLift()});
@@ -323,7 +333,7 @@ export function initController(replayStory: () => void): ControllerApi {
       if(intro){if(!window.__storyShowing&&!entered)beginEntry()}
       else if(mode==='opening'){while(pendWorld.length)F.addWorld(pendWorld.shift()!);const tNow=performance.now(),dt=openLast?Math.min(.1,Math.max(0,(tNow-openLast)/1000)):0;openLast=tNow;const o=opening.frame(tNow,tour.reduce);F.poseAt(o.pos,o.look);story.openingPose(o,o.pos,dt);F.render('route',0);if(o.done)opening.finish()}
       else if(mode==='gIn'||mode==='gOut'){const gi=mode==='gIn',raw=Math.min(1,(now-gT0)/(gi?(reduce?1400:GIN):2600)),t=reduce&&!gi?1:raw;if(gi&&reduce){liftO=1-Math.abs(raw*2-1);xfO=liftO;F.globeStep(raw<.5?0:1)}else{if(gi)liftO=sm(.04,.16,raw)*(1-sm(.8,.94,raw));F.globeStep(t)}F.render('globe',0);
-        if(t>=1){if(mode==='gIn'){F.globeArrive();mode='globe';document.body.style.cursor='grab';if(pendSide>=0){const k=pendSide;pendSide=-1;openSide(k);lvl=2;paintLv()}}else{F.globeReset();document.body.style.cursor='';finishBack();if(gNext){const n=gNext;gNext=null;choose(n)}}}}
+        if(t>=1){if(mode==='gIn'){F.globeArrive();mode='globe';document.body.style.cursor='grab';if(pendSide>=0){const k=pendSide,v=pendView;pendSide=-1;pendView='path';openSide(k,v);if(v==='path'){lvl=2;paintLv()}}}else{F.globeReset();document.body.style.cursor='';finishBack();if(gNext){const n=gNext;gNext=null;choose(n)}}}}
       else if(mode==='globe'){F.globeHold();F.render('globe',0)}
       else if(mode==='tour'){const dt=Math.max(0,Math.min(.1,(now-(tourLast||now))/1000));if(now>tourLast||now<tourLast-5e3)tourLast=now;const fr=tour.update(dt);F.poseAt(fr.pos,fr.look);route=tour.route;
         s=tourCar>=0?tourCar:tourWf>=0?tourWf:-9;floorX=tourCar===5&&tourSettled?curStage:-1;F.render('route',0)}
@@ -373,15 +383,16 @@ export function initController(replayStory: () => void): ControllerApi {
     stopFrame(now,s);
     BLOCKS.forEach(b=>{const o=((mode==='route'||mode==='hub')&&route===b.r)?1-sm(.2,.45,Math.abs(s-b.s)):0;vis(b.el,o)});
     hdrLogo.style.opacity=String(1-oReg);hdrLogo.style.pointerEvents=oReg>.5?'none':'auto';
+    if(window.FACTORY)placeGallery(window.FACTORY);{const on=mode==='tour'&&tour.route==='evidence';galO.forEach(o=>o.visible=on)}
     tray.visible(!flatOpen&&!cd.classList.contains('open')&&mode!=='opening'&&mode!=='globe'&&mode!=='gIn'&&mode!=='gOut'&&(tourWf>=0||mode==='hub'||currentPath().startsWith('workforce/')));
-    hdrBack.style.display=(((mode!=='intro'&&mode!=='gIn'&&mode!=='opening')&&!(mode==='tour'&&tour.index===0))||(flatOpen&&!flatAuto))?'inline-flex':'none';const cr=flatOpen?'EMPOWERED · TEXT VIEW':(mode==='globe'||mode==='gIn'||mode==='gOut')?'AI FOR EVERYONE':mode==='tour'?(tour.route==='career'?'CAREER':tour.route==='story'?'STORY':'WORKFORCE')+' · '+(TOURS[tour.route][tour.index]?.label||'').toUpperCase():'EMPOWERED';if(crumb.textContent!==cr)crumb.textContent=cr;
+    hdrBack.style.display=(((mode!=='intro'&&mode!=='gIn'&&mode!=='opening')&&!(mode==='tour'&&tour.index===0))||(flatOpen&&!flatAuto))?'inline-flex':'none';const cr=flatOpen?'EMPOWERED · TEXT VIEW':(mode==='globe'||mode==='gIn'||mode==='gOut')?'AI FOR EVERYONE':mode==='tour'?(tour.route==='career'?'CAREER':tour.route==='story'?'STORY':tour.route==='evidence'?'EVIDENCE':'WORKFORCE')+' · '+(TOURS[tour.route][tour.index]?.label||'').toUpperCase():'EMPOWERED';if(crumb.textContent!==cr)crumb.textContent=cr;
     vis(rail,(mode==='route'||mode==='fly'||mode==='globe'||mode==='hub')?1:0);
     const gl=mode==='globe',act=gl?(whoOpen?2:sel>=0?1:0):Math.round(Math.max(0,s));dots.forEach((d,i)=>{d.classList.toggle('on',i===act);d.classList.toggle('done',!gl&&i<act);if(i===act)d.setAttribute('aria-current','step');else d.removeAttribute('aria-current')});
     vis(lift,liftO);xf.style.opacity=String(xfO);
     const inG=mode==='globe';vis(gTitle,inG?((side.classList.contains('open')||whoOpen)?0:1):0);gHint.style.opacity=String(inG&&!side.classList.contains('open')&&!whoOpen?1:0);
     if(inG&&F){const rs=[gTitle.getBoundingClientRect()];if(side.classList.contains('open'))rs.push(side.getBoundingClientRect());if(whoOpen)rs.push($('gWho').getBoundingClientRect());
-      const placed:number[][]=[];F.nodes().map((p,i):[ScreenPoint,number]=>[p,i]).sort((a,b)=>+(b[1]===sel)-+(a[1]===sel)||b[0].face!-a[0].face!).forEach(([p,i])=>{const el=nodeEls[i],w=el.offsetWidth,h=el.offsetHeight,x=p.x+w+22>W-10?p.x-w-12:p.x+12,y=p.y-h/2;let o=p.vis&&p.face!>.12?Math.min(1,(p.face!-.12)*5):0;if(x<10||x+w>W-10||y<64||y+h>H-64)o=0;if(i!==sel)rs.forEach(r=>{if(x<r.right+8&&x+w>r.left-8&&y<r.bottom+8&&y+h>r.top-8)o=0});else o=0;if(sel>=0&&i!==sel)o*=.2;if(o>0){if(placed.some(r=>x<r[2]+6&&x+w>r[0]-6&&y<r[3]+6&&y+h>r[1]-6))o=0;else placed.push([x,y,x+w,y+h])}el.style.transform='translate('+x+'px,'+y+'px)';vis(el,o)});
-      if(sel>=0&&ringO){const p=F.nodes()[sel];placeW(F,ringO,F.gNode(sel),0);vis(ring,p.face!>0?1:0)}else vis(ring,0);if(radO){if(whoOpen){placeW(F,radO,F.gFront(),1);vis(rad,1)}else vis(rad,0)}}
+      const placed:number[][]=[];F.nodes().map((p,i):[ScreenPoint,number]=>[p,i]).sort((a,b)=>+(b[1]===sel)-+(a[1]===sel)||b[0].face!-a[0].face!).forEach(([p,i])=>{const el=nodeEls[i],w=el.offsetWidth,h=el.offsetHeight,x=p.x+w+22>W-10?p.x-w-12:p.x+12,y=p.y-h/2;let o=p.vis&&p.face!>.12?Math.min(1,(p.face!-.12)*5):0;if(x<10||x+w>W-10||y<64||y+h>H-64)o=0;if(i!==sel)rs.forEach(r=>{if(x<r.right+8&&x+w>r.left-8&&y<r.bottom+8&&y+h>r.top-8)o=0});else o=0;if(sel>=0&&i!==sel)o*=.2;if(sel>=0&&gView==='work')o=0;if(o>0){if(placed.some(r=>x<r[2]+6&&x+w>r[0]-6&&y<r[3]+6&&y+h>r[1]-6))o=0;else placed.push([x,y,x+w,y+h])}el.style.transform='translate('+x+'px,'+y+'px)';vis(el,o)});
+      if(sel>=0&&ringO&&gView==='path'){const p=F.nodes()[sel];placeW(F,ringO,F.gNode(sel),0);vis(ring,p.face!>0?1:0)}else vis(ring,0);if(radO){if(whoOpen){placeW(F,radO,F.gFront(),1);vis(rad,1)}else vis(rad,0)}}
     else{nodeEls.forEach(e=>vis(e,0));vis(ring,0);vis(rad,0)}
   }
   let b3=false,BDS:PlacedBoard[]=[],PHS:Ctl[]=[],ringO:CSS3DObject|null=null,radO:CSS3DObject|null=null,ctlKey:string|null=null,curCtl:Ctl[]=[],sheetB:PlacedBoard|null=null,b3Act:PlacedBoard|null=null;
@@ -499,7 +510,7 @@ export function initController(replayStory: () => void): ControllerApi {
         if(Math.abs(dx)>.5||Math.abs(dy)>.5){e.o!.getWorldPosition(wp);const k=wp.distanceTo(cp)*kk;e.o!.position.addScaledVector(rt,dx*k).addScaledVector(up,-dy*k)}})}
     const sb=null as PlacedBoard|null;if(sb!==sheetB){if(sheetB)sheetB.w.appendChild(sheetB.bd!);if(sb)sheet.appendChild(sb.bd!);sheetB=sb}
     if(sb){const rt=rail.getBoundingClientRect().top,ct=ctl.childElementCount?ctl.getBoundingClientRect().top:rt;sheet.style.bottom=Math.round(H-Math.min(rt,ct)+8)+'px'}vis(sheet,sb?1:0);
-    const key=mode==='globe'?(whoOpen?'gpw':sel>=0?'glv':''):act?act.r+act.s:'';if(key!==ctlKey){ctlKey=key;buildCtl(key)}
+    const key=mode==='globe'?(whoOpen?'gpw':sel>=0&&gView==='path'?'glv':''):act?act.r+act.s:'';if(key!==ctlKey){ctlKey=key;buildCtl(key)}
     vis(ctl,curCtl.length&&mode==='globe'?1:0);
     if(act!==b3Act){if(act)act.tw=undefined;b3Act=act;if(act)$('srNow').textContent=act.h}}
   const mirror=(b:El,x:El|null|undefined)=>{if(!x)return;b.classList.toggle('sug',x.classList.contains('sug'));b.style.order=x.style.order;if(x.dataset.pick&&b.textContent!==x.textContent)b.textContent=x.textContent};
@@ -526,7 +537,27 @@ export function initController(replayStory: () => void): ControllerApi {
     hotspots:[{at:icon(0),label:'Build Career',run:()=>{startTour('career',0);tour.travel(1)}},{at:icon(1),label:'Build Workforce',run:()=>{startTour('workforce',0);tour.travel(1)}},{at:icon(2),label:'AI for Everyone',run:()=>toGlobe()}]};
   const showroom:TourStop={id:'showroom',label:'Showroom',eyebrow:'SHOWROOM',title:'The right capability for you.',copy:'Verified talent, product PODs, workforce academies, campus talent factories and regional programmes, side by side.',pose:()=>wfP(1),
     action:{label:'Open the talent shelf',run:open('workforce',1)},hotspots:[{at:[19.5,2.2,-5.6],label:'Verified talent shelf',run:open('workforce',1)},{at:[30.5,4.5,-13.5],label:'Compare models',run:open('workforce',6)}]};
+  // ---- Evidence & Impact: the gallery tour (four exhibit groups, all illustrative until evidence is approved) ----
+  const GX:[string,string,[string,string][]][]=[
+    ['Career evidence','From work to proof',[['Evidence Passport · sample','Built the booking API. Reviewed by a mentor, linked to the Build stage.'],['Entry Assessment · sample result','Recommended path, strengths and the gaps worth closing.'],['Readiness Passport · sample','Role fit, flags and eligibility, shown after ETAF™ review.']]],
+    ['Product POD work','A problem, taken through six stages',[['Problem brief · sample','Users, goals and constraints, agreed before work starts.'],['Delivery board','Discover → Design → Build → Test & Secure → Deploy & Operate → Demo & Validate.'],['Demo','A working product shown to the client at Demo & Validate.']]],
+    ['Workforce & campus','How programmes are shaped',[['Capability lens · report outline','Function, desired outcome, module heat map and the lens reading.'],['Campus partnership map','University, industry, EmpowerED and government, with responsibilities to agree.'],['Regional hub model','From one pilot POD to a hub around a sector priority.']]],
+    ['Case studies','Approved evidence coming soon',[['Malaysia · Ecosystem at Scale','Being prepared. Shared once it is approved.'],['Your organisation','A slot for the next case study.'],['How evidence is approved','Real outcomes appear only after the organisation involved approves them. Until then, examples are labelled illustrative.']]],
+  ];
+  const galEls=GX.map(([h,s,rows],i)=>{const el=document.createElement('div');el.className='evx'+(i===3?' evCase':'');el.style.width='620px';el.innerHTML='<span class="ill">'+(i===3?'COMING SOON':'ILLUSTRATIVE')+'</span><h3>'+escG(h)+'</h3><p class="evS">'+escG(s)+'</p><ol>'+rows.map(([t,d])=>'<li><b>'+escG(t)+'</b><span>'+escG(d)+'</span></li>').join('')+'</ol>';return el});
+  let galO:CSS3DObject[]=[];
+  function placeGallery(F:FactoryApi){if(galO.length)return;const fr=F.gallery();galO=galEls.map((el,i)=>{const o=F.css(el);const f=fr[i];F.aim(o,f.at,f.face,1,0,2.9,620);o.visible=false;return o})}
+  // Each exhibit sits right of centre, clear of the tour card on the left.
+  const GPOSE:[P3,P3][]=[[[22.5,3.4,31],[22.5,2.1,14]],[[18.8,2.25,15.4],[18.8,2.05,11]],[[24.2,2.25,15.4],[24.2,2.05,11]],[[21.3,2.25,16.5],[17,2.05,16.5]],[[23.7,2.25,14.5],[28,2.05,14.5]]];
+  const evidenceStops:TourStop[]=[
+    {id:'gallery',label:'Gallery',eyebrow:'EVIDENCE & IMPACT',title:'What we can show, and how.',copy:'A small gallery of how EmpowerED work becomes evidence. Everything inside is a labelled illustration until approved evidence is published.',pose:()=>GPOSE[0],action:{label:'View as a page',run:()=>openFlat(false,'fEvidence')}},
+    {id:'g-career',label:'Career',eyebrow:'EVIDENCE · CAREER',title:'From work to proof.',copy:'What you make collects in your Evidence Passport. After ETAF™ review it becomes your Readiness Passport.',pose:()=>GPOSE[1],action:{label:'See an example passport',run:open('career',6)}},
+    {id:'g-pods',label:'PODs',eyebrow:'EVIDENCE · PRODUCT PODS',title:'A problem, taken through six stages.',copy:'A brief, a delivery board and a demo: the kind of evidence a POD engagement produces.',pose:()=>GPOSE[2],action:{label:'Explore Product Engineering PODs',run:open('workforce',2)}},
+    {id:'g-work',label:'Workforce',eyebrow:'EVIDENCE · WORKFORCE & CAMPUS',title:'How programmes are shaped.',copy:'Outlines of a capability lens report, a campus partnership map and the regional hub model.',pose:()=>GPOSE[3],action:{label:'Open the capability lens',run:()=>openDrawer('lens')}},
+    {id:'g-cases',label:'Case studies',eyebrow:'EVIDENCE · CASE STUDIES',title:'Approved evidence, coming soon.',copy:'Case studies appear here once the organisations involved approve them. Malaysia is being prepared.',pose:()=>GPOSE[4],action:{label:'Case study: Malaysia',run:()=>openDrawer('case')}},
+  ];
   const TOURS:Record<TourRoute,TourStop[]>={
+    evidence:evidenceStops,
     story:[],
     career:[company,
       {id:'intake',label:'Intake',eyebrow:'INTAKE',title:'Start where you are.',copy:'Your Entry Assessment maps baseline capability, gaps, role direction and readiness. Your starting point determines your recommended path.',pose:()=>FX().routePose('career',CK[1]),
@@ -572,7 +603,7 @@ export function initController(replayStory: () => void): ControllerApi {
     preview:{label:'Your route'},pTask:{label:'A familiar task'},pDemo:{label:'Practical example'},pPath:{label:'Learning path'},pNext:{label:'Next step'}};
   const STORYANCH:Record<PathId,string>={student:'fCareer',founder:'fWork',hr:'fWork',university:'fWork',professional:'fGlobe'};
   const CATS:Record<PathId,string>={student:'For students',founder:'For startups',hr:'For organisations',university:'For universities',professional:'For professionals'};
-  let pendSide=-1;
+  let pendSide=-1,pendView:'work'|'path'='path';
   // A labelled example of an ETAF review: gates light one by one as evidence is reviewed, then go dark again.
   let etafDemoUntil=0;
   const etafNote=document.createElement('p');etafNote.id='etafNote';etafNote.hidden=true;etafNote.setAttribute('role','status');etafNote.innerHTML='<b>Example review</b> Gates light as each piece of evidence is reviewed. This is an illustration, not a real result.';document.body.appendChild(etafNote);
@@ -584,12 +615,12 @@ export function initController(replayStory: () => void): ControllerApi {
     setStops:(stops,goTo)=>{tour.setStops('story',stops);if(mode==='tour'&&tour.route==='story')tour.jump(goTo);else startTour('story',goTo)},
     travel:(i)=>tour.travel(i),
     board:(el)=>{const F=window.FACTORY;if(!F)return null;const o=F.css(el);o.visible=false;return{place:(at,face,w)=>F.aim(o,at,face,1,0,w,440),show:(on)=>{o.visible=on}}},
-    open:(key)=>{if(key==='etaf:demo'){playEtafDemo();return}const [r,i]=key.split(':');openStop(r,+i)},
+    open:(key,c)=>{if(key==='etaf:demo'){playEtafDemo();return}if(key==='globe:work'){story.hide();pendSide=PROFESSION_NODE[Math.max(0,c.profession)]??0;pendView='work';toGlobe();return}const [r,i]=key.split(':');openStop(r,+i)},
     detailOpen:()=>cd.classList.contains('open')||flatOpen,
     explore:()=>{story.hide();startTour('career',0)},
     onAudience:(a)=>{stCat=a?CATS[a]:'For students';const au=a?({hr:'ent',university:'uni',founder:'st'} as Record<string,string>)[a]:undefined;if(au){applyFil(au);tray.setAudience(au)}},
     journey:(j)=>{if(mode==='tour'&&tour.route==='story')syncPath(j==='workforce'?'workforce/':'')},
-    region:()=>{applyFil('gov');tray.setAudience('gov');setPath('workforce/ecosystem/',true);go({k:'bay',stop:'region'})},
+    gallery:()=>{setPath('evidence-impact/',true);go({k:'evidence'})},region:()=>{applyFil('gov');tray.setAudience('gov');setPath('workforce/ecosystem/',true);go({k:'bay',stop:'region'})},
     fov:()=>window.FACTORY?.cam().fov??50,
     reduced:()=>tour.reduce,
     setReduced:(on)=>tour.setReduce(on),
@@ -616,7 +647,7 @@ export function initController(replayStory: () => void): ControllerApi {
     onRoute:(r)=>{closeDrawer();route=r},
     onStop:(r,i,settled)=>{const F=window.FACTORY;if(!F)return;
       if(!settled&&cd.classList.contains('open'))closeDrawer();
-      tourSettled=settled;const sroom=r==='story'?story.roomAt(i):undefined;tourCar=r==='career'?CEQ[i]:r==='story'?(sroom?ROOMEQ[sroom]??-1:-1):-1;tourWf=r==='story'?(sroom?ROOMWF[sroom]??-1:-1):r==='career'?(TOURS.career[i]?.id==='showroom'?1:-1):(i>=1?i-1:-1);
+      tourSettled=settled;const sroom=r==='story'?story.roomAt(i):undefined;tourCar=r==='career'?CEQ[i]:r==='story'?(sroom?ROOMEQ[sroom]??-1:-1):-1;tourWf=r==='story'?(sroom?ROOMWF[sroom]??-1:-1):r==='career'?(TOURS.career[i]?.id==='showroom'?1:-1):r==='evidence'?-1:(i>=1?i-1:-1);
       if(tourWf>=0&&tourWf!==wfAt){wfAt=tourWf;setBayHv(-1);F.pod(wfAt===2);if(wfAt===2)F.podJump(-1.62);F.wfStop(wfAt);if(wfAt===3||wfAt===4)F.campusIn()}
       if(tourWf<0&&wfAt!==0){wfAt=0;F.pod(false)}
       wfArr=settled;
@@ -626,6 +657,7 @@ export function initController(replayStory: () => void): ControllerApi {
   /** Site path for a tour stop (guided story or free tour). */
   function pathOfStop(r:TourRoute,i:number):string{
     if(r==='story')return story.pathAt(i);
+    if(r==='evidence')return 'evidence-impact/';
     const id=TOURS[r][i]?.id??'';
     if(r==='career')return ({intake:'career/assessment/',develop:'career/launch/',engineer:'career/accelerate/',verify:'career/assurance/',deploy:'career/opportunities/',showroom:'workforce/verified-talent/',world:'ai-for-everyone/'} as Record<string,string>)[id]??'';
     return ({dock:'workforce/',talent:'workforce/verified-talent/',pods:'workforce/product-engineering/',teams:'workforce/capability/',campus:'workforce/campus/',region:'workforce/ecosystem/',showroom:'workforce/'} as Record<string,string>)[id]??'';
@@ -652,6 +684,7 @@ export function initController(replayStory: () => void): ControllerApi {
       case 'bay':{const i=TOURS.workforce.findIndex(x=>x.id===d.stop);resetToIntro('workforce',Math.max(1,i));break}
       case 'globe':resetToIntro('career',0);toGlobe();break;
       case 'page':enterLobby();openFlat(false,d.anchor);break;
+      case 'evidence':resetToIntro('evidence',0);break;
     }}
   /** First frame with the 3D ready: open the place in the address, resume this tab's tour, or play the opening. */
   function beginEntry(){entered=true;
@@ -732,7 +765,7 @@ export function initController(replayStory: () => void): ControllerApi {
   const webglOK=(()=>{try{const c=document.createElement('canvas');return !!(window.WebGLRenderingContext&&(c.getContext('webgl2')||c.getContext('webgl')))}catch(e){return false}})();
   if(!webglOK)openFlat(true,routeAnchor());else setTimeout(()=>{if(!window.FACTORY)openFlat(true,routeAnchor())},10000);
   /** Without 3D, the standard page opens at the section for the address. */
-  function routeAnchor():string{const d=currentRoute().dest;return d.k==='page'?d.anchor:d.k==='career'||(d.k==='journey'&&d.j==='career')?'fCareer':d.k==='bay'||(d.k==='journey'&&d.j==='workforce')?'fWork':d.k==='globe'||(d.k==='journey'&&d.j==='ai')?'fGlobe':'fTop'}
+  function routeAnchor():string{const d=currentRoute().dest;return d.k==='page'?d.anchor:d.k==='evidence'?'fEvidence':d.k==='career'||(d.k==='journey'&&d.j==='career')?'fCareer':d.k==='bay'||(d.k==='journey'&&d.j==='workforce')?'fWork':d.k==='globe'||(d.k==='journey'&&d.j==='ai')?'fGlobe':'fTop'}
   return {
     enterFromStory(intent='welcome'){
       if(!window.FACTORY)return;
