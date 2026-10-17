@@ -1,6 +1,8 @@
 // "Your journey": a browsing record of the career stages a visitor has looked at, and which tracks
 // they explored. It lives only in this browser and says nothing about programme progress.
 
+import { i18n, translateDom } from './i18n';
+
 const KEY = 'ee-journey';
 
 /** Career stages in route order, keyed by their site path. */
@@ -65,6 +67,7 @@ export class Passport {
     });
     addEventListener('pointerdown', (e) => { if (this.open && !(e.target as Element).closest('#jPop,#jBtn,.jItem')) this.close(); });
     addEventListener('keydown', (e) => { if (this.open && e.key === 'Escape') { e.stopPropagation(); this.close(); } }, true);
+    i18n.on(() => this.paint());
     this.paint();
   }
 
@@ -134,5 +137,8 @@ export class Passport {
       + `<small>Tracks you looked at</small><div class="jTracks">${tracks}</div>`
       + `<div class="jActs">${last ? `<button type="button" class="cta" data-j="continue">Continue: ${esc(last.name)} <span>→</span></button>` : ''}`
       + `<button type="button" class="jClear" data-j="clear">Clear</button></div>`;
+    translateDom(this.pop);
+    translateDom(this.btn);
+    translateDom(this.item);
   }
 }

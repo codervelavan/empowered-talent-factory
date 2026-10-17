@@ -6,6 +6,7 @@
 // same story plays as four still frames with short fades.
 import * as THREE from 'three';
 import type { P3 } from '../bridge';
+import { tr } from '../app/i18n';
 
 export interface OpeningFrame {
   pos: P3;
@@ -122,7 +123,7 @@ export class Opening {
     this.shownCap = i;
     const [text, size] = CAPTIONS[i] ?? ['', ''];
     this.cap.className = 'opCap ' + size;
-    this.cap.textContent = text;
+    this.cap.textContent = tr(text);
     this.cap.classList.remove('in');
     void this.cap.offsetWidth;
     if (text) this.cap.classList.add('in');

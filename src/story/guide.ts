@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import type { P3, ScreenPoint } from '../bridge';
 import type { TourHotspot, TourStop } from '../company/tour';
 import { board, flow } from './exhibits';
+import { i18n, translateDom } from '../app/i18n';
 
 export type RoomId = 'entrance' | 'preview' | 'intake' | 'develop' | 'pro' | 'engineer' | 'delivery' | 'verify' | 'deploy' | 'dock' | 'talent' | 'teams' | 'apply' | 'campus' | 'scope' | 'plaza' | 'pTask' | 'pDemo' | 'pPath' | 'pNext';
 export type Audience = 'student' | 'founder' | 'hr' | 'university' | 'professional' | 'explore';
@@ -637,10 +638,11 @@ export class Story {
     if (on && !this.board) this.board = this.host.board(this.boardEl);
     if (!this.board) return;
     if (!on) { if (this.boardKey) { this.board.show(false); this.boardKey = ''; } return; }
-    const key = idx + '|' + this.ctx.profession + '|' + (this.audience ?? '');
+    const key = idx + '|' + this.ctx.profession + '|' + (this.audience ?? '') + '|' + i18n.lang;
     if (key === this.boardKey) return;
     this.boardKey = key;
     this.boardEl.innerHTML = s.exhibit!(this.ctx);
+    translateDom(this.boardEl);
     // Place the board by where it sits on screen (right of the characters, about 30% of the width),
     // at a depth in front of them, square to the view. The same framing works in every room.
     const sp = SPOTS[s.room], [c, l] = camOf(s.room);
@@ -671,7 +673,7 @@ export class Story {
     const moving = !arrived && Math.abs(v - idx) > 0.04;
     const changedStop = !moving && this.at !== idx;
     if (!moving && this.at !== idx) { this.at = idx; this.save(idx); }
-    const key = moving ? 'walk' + Math.floor(v) + '>' + (Math.floor(v) + 1) : 'stop' + idx + '|' + (this.ask?.stop === idx ? this.ask.k : -1) + '|' + this.mapOpen + '|' + this.wfAsk + '|' + this.ctx.profession + '|' + (this.audience ?? '') + '|' + this.host.reduced() + '|' + compact() + '|' + (this.all()[idx]?.activity ? this.host.activity?.(this.all()[idx].activity!)?.key() ?? '' : '');
+    const key = i18n.lang + (moving ? 'walk' + Math.floor(v) + '>' + (Math.floor(v) + 1) : 'stop' + idx + '|' + (this.ask?.stop === idx ? this.ask.k : -1) + '|' + this.mapOpen + '|' + this.wfAsk + '|' + this.ctx.profession + '|' + (this.audience ?? '') + '|' + this.host.reduced() + '|' + compact() + '|' + (this.all()[idx]?.activity ? this.host.activity?.(this.all()[idx].activity!)?.key() ?? '' : ''));
     this.panel.classList.toggle('moving', moving);
     if (key === this.shownKey) return;
     this.shownKey = key;
@@ -688,6 +690,7 @@ export class Story {
         `<p class="spGuide"><small>Your EmpowerED guide</small>${esc(line || 'Follow me.')}</p>` +
         `<div class="spNav"><button type="button" class="spLink" data-go="${back}">Back to ${esc(all[back].title)}</button><button type="button" class="spNext" data-go="${forward}">Continue to ${esc(all[forward].title)} →</button></div>`;
       this.pinNav(keep);
+      translateDom(this.panel);
       this.panel.tabIndex = -1;
       if (this.keepFocus) this.panel.focus({ preventScroll: true });
       return;
@@ -696,6 +699,8 @@ export class Story {
     const keep = changedStop ? 0 : this.panel.querySelector('.spBody')?.scrollTop ?? 0;
     this.panel.innerHTML = idx === 0 ? this.welcomeHtml() : idx === 1 ? this.previewHtml() : this.stopHtml(idx);
     this.pinNav(keep);
+    translateDom(this.panel);
+    if (this.actScroll && changedStop) { this.actScroll = false; const pm = this.panel.querySelector<HTMLElement>('.pm'), body = this.panel.querySelector<HTMLElement>('.spBody'); if (pm && body) body.scrollTop = pm.offsetTop - body.offsetTop - 8; }
     if (all[idx]?.pick === 'profession') this.paintProfessions();
     if (this.keepFocus) {
       this.keepFocus = false;
@@ -704,6 +709,10 @@ export class Story {
       this.focusSel = '';
     }
   }
+
+  private actScroll = false;
+  /** After the next arrival, open the panel scrolled to the stop's activity (a mission action led here). */
+  scrollToActivity() { this.actScroll = true; }
 
   /** Everything but the Back/Next row scrolls; the row stays pinned at the bottom of the panel. */
   private pinNav(scrollTop: number) {

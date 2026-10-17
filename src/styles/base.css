@@ -483,3 +483,10 @@ a,a:hover{text-decoration:none}
 @media (max-height:760px){#stopL .sTop{top:64px;gap:6px}#stopL .sCat{font-size:11.5px}#stopL .sTtl{font-size:clamp(24px,2.8vw,38px)}#stopL .sBot{bottom:88px;gap:10px}#stopL .sPar{height:3em;font-size:15px;-webkit-line-clamp:2;max-width:760px}#stopL .sRow{display:flex;align-items:center;justify-content:center;gap:12px}#stopL .sAct{padding:9px 14px;font-size:13px}#stopL .sChips li{padding:6px 11px;font-size:12px}}
 @media (max-width:767px){#stopL .sTop{top:66px}#stopL .sTtl{font-size:24px;white-space:normal}#stopL .sBot{bottom:84px;gap:10px}#stopL .sPar{font-size:14.5px}#stopL .sChips{flex-wrap:wrap}#stopL .sChips li{font-size:11.5px;padding:5px 10px}}
 .pp .tbc{font-size:14px}
+
+/* Language: header switch on wide screens, menu item on phones; Tamil text uses Noto Sans Tamil. */
+#menu li.langItem{display:none}
+@media (max-width:560px){#langBtn{display:none}#menu li.langItem{display:block}}
+#langBtn{font-family:"Noto Sans Tamil",Inter,sans-serif}
+html[lang="ta"] body{--ta:1}
+html[lang="ta"] #storyPanel,html[lang="ta"] #storyPanel *,html[lang="ta"] .sx,html[lang="ta"] .sx *,html[lang="ta"] #jPop,html[lang="ta"] #jPop *,html[lang="ta"] #menu button,html[lang="ta"] .hBtn,html[lang="ta"] .opCap{font-family:"Noto Sans Tamil",Manrope,Inter,sans-serif!important}

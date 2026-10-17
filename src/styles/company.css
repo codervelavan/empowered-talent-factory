@@ -334,3 +334,28 @@ html.opening #hud>*:not(#opening),html.opening #resumeTour{visibility:hidden}
 #storyPanel .pmFind b{font:800 17px/1.3 Manrope,sans-serif;color:#0F2B22}
 #storyPanel .pmFind button{min-height:44px;padding:9px 16px;border:0;border-radius:999px;background:#0F2B22;color:#F6DB2D;font:700 16px/1.2 Manrope,sans-serif}
 #storyPanel .pmGoal{margin:0;font:600 15px/1.45 Inter,sans-serif;color:#6B5310}
+/* Mission: records table, sample report, employer view */
+#storyPanel .pmTable{max-width:100%;overflow-x:auto;border:1px solid rgba(15,43,34,.18);border-radius:10px;background:#fff}
+#storyPanel .pmTable table{width:100%;border-collapse:collapse;font:500 15px/1.35 Inter,sans-serif;color:#0F2B22}
+#storyPanel .pmTable th{padding:8px 10px;text-align:left;font:800 12px/1.2 Manrope,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#4F6655;background:rgba(15,43,34,.05)}
+#storyPanel .pmTable td{padding:8px 10px;border-top:1px solid rgba(15,43,34,.1);font-variant-numeric:tabular-nums}
+#storyPanel .pmTable tr.pmGap td{background:rgba(180,71,44,.1)}
+#storyPanel .pmTable tr.pmFixed td{background:rgba(53,220,120,.12)}
+#storyPanel .pmMissing{padding:1px 8px;border:1.5px dashed #B4472C;border-radius:6px;color:#8E3520;font-weight:700}
+#storyPanel .pmAct{align-self:flex-start;min-height:44px;padding:10px 18px;border:0;border-radius:999px;background:#0F2B22;color:#F6DB2D;font:700 16px/1.2 Manrope,sans-serif}
+#storyPanel .pmAct.pmAlt{background:#fff;color:#0F2B22;border:1.5px solid #0F2B22}
+#storyPanel .pmLink{align-self:flex-start;min-height:44px;padding:4px 0;border:0;background:none;color:#1E4632;font:700 16px/1.3 Manrope,sans-serif;text-decoration:underline;text-underline-offset:3px}
+#storyPanel .pmReport{margin:0;display:flex;flex-direction:column;border:1px solid rgba(15,43,34,.16);border-radius:12px;background:#fff;overflow:hidden}
+#storyPanel .pmRow{display:grid;grid-template-columns:minmax(0,9.5em) minmax(0,1fr);gap:10px;padding:10px 12px;border-top:1px solid rgba(15,43,34,.08)}
+#storyPanel .pmRow:first-child{border-top:0}
+#storyPanel .pmRow dt{font:800 13px/1.35 Manrope,sans-serif;color:#4F6655}
+#storyPanel .pmRow dd{margin:0;font:500 16px/1.45 Inter,sans-serif;color:#0F2B22;min-width:0}
+#storyPanel .pmRow.pmNone dd{color:#6B5310;font-style:italic}
+#storyPanel .pmSub{display:inline-block;margin-top:4px;color:#1E4632;font-weight:700}
+#storyPanel .pmList{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+#storyPanel .pmList li{display:flex;flex-direction:column;gap:3px;padding:10px 12px;border-radius:10px;background:rgba(30,70,50,.06);font:500 16px/1.45 Inter,sans-serif}
+#storyPanel .pmList b{font:800 15px/1.3 Manrope,sans-serif}
+#storyPanel .pmChips{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+#storyPanel .pmChip{min-height:44px;padding:8px 14px;border:1.5px solid rgba(15,43,34,.3);border-radius:999px;background:#fff;color:#0F2B22;font:700 16px/1.2 Manrope,sans-serif}
+#storyPanel .pmEnd{display:flex;flex-wrap:wrap;gap:8px}
+@media (max-width:420px){#storyPanel .pmRow{grid-template-columns:1fr;gap:2px}}

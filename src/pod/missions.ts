@@ -76,3 +76,42 @@ export const MAINTENANCE: Mission = {
 
 /** Proposed validation goal (not a result). */
 export const MAINTENANCE_GOAL = 'Proposed validation goal: useful warnings about six hours before a defined bearing-failure event, measured with false alerts and missed events.';
+
+/** Develop: a week of machine records. Tuesday's job is missing, so its high vibration looks unexplained. */
+export const RECORDS = {
+  head: ['Day', 'Job', 'Tool', 'Spindle hours', 'Vibration'],
+  rows: [
+    ['Mon', 'Routine finishing', 'T12', '6.0', 'Normal'],
+    ['Tue', '', 'T04', '7.5', 'High'],
+    ['Wed', 'Routine finishing', 'T12', '5.5', 'Normal'],
+    ['Thu', 'Routine finishing', 'T07', '6.5', 'Normal'],
+    ['Fri', 'Heavy roughing cut (scheduled)', 'T04', '7.0', 'High'],
+  ],
+  missingRow: 1,
+  fix: 'Heavy roughing cut (scheduled)',
+};
+
+/** Verify: what each person's sample ETAF report shows. Illustrative; no scores, tiers or decisions. */
+export interface SampleReport { version: string; performance: string; observed: string; gaps: string }
+export const REPORTS: Record<string, SampleReport> = {
+  data: { version: 'Source table v1 → v2: job schedule added after review',
+    performance: 'Validation notes: the false alert on scheduled heavy cuts is gone in v2 (example)',
+    observed: 'Asked the machinist about Tuesday’s missing entry, then revised the table after review',
+    gaps: 'Evaluating the model on more machines is still to do' },
+  mech: { version: 'Wear-event definition v1 → v2: tool changes separated from bearing events',
+    performance: 'Labelled events checked against maintenance logs (example)',
+    observed: 'Reworked the labels when the team questioned two events',
+    gaps: 'Needs a longer history of real bearing failures' },
+  instr: { version: 'Sensor mounting v1 → v2: vibration sensor moved closer to the bearing',
+    performance: 'Measurement-quality record: noise before and after remounting (example)',
+    observed: 'Remounted the sensor after teammates flagged noisy readings',
+    gaps: 'Temperature sensor calibration still to confirm' },
+  soft: { version: 'Alert screen v1 → v2: operating context added beside each alert',
+    performance: 'Technician walkthrough notes (example)',
+    observed: 'Changed the screen after technicians asked “why now?”',
+    gaps: 'Usability check with more technicians' },
+  ops: { version: 'Deployment configuration v1 → v2: shared-account access closed',
+    performance: 'Monitoring record and access-test results (example)',
+    observed: 'Reported and fixed an access path found in testing',
+    gaps: 'Load test at full shift volume still to run' },
+};

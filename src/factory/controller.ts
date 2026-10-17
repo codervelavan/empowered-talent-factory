@@ -4,7 +4,8 @@
 import { INDS, ECO, CAREER_CFG } from '../data/content';
 import { Tour, type TourRoute, type TourStop } from '../company/tour';
 import { Story, lobbyPose, setRoomFocus, type PathId, type RoomDef, type RoomId } from '../story/guide';
-import { PodMission } from '../pod/mission';
+import { PodMission, podLabels } from '../pod/mission';
+import { i18n, translateDom } from '../app/i18n';
 import { MAINTENANCE } from '../pod/missions';
 import { Opening } from '../story/opening';
 import { currentPath, currentRoute, legacyHashPath, onPathChange, setPath } from '../app/router';
@@ -586,7 +587,7 @@ export function initController(replayStory: () => void): ControllerApi {
     workforce:[company,
       {id:'dock',label:'Dock',eyebrow:'WORKFORCE · DOCK',title:'What do you need EmpowerED to produce?',copy:'Five bays, one company. Filters change emphasis only; every bay stays open.',pose:()=>wfP(0),action:{label:'Choose a bay',run:open('workforce',0)},hotspots:[{at:[32,3,-4],label:'Choose a bay',run:open('workforce',0)}]},
       {id:'talent',label:'Talent',eyebrow:'VERIFIED TALENT · TAAS',title:'Verified capability, on demand.',copy:'Talent is built before demand and verified before deployment. Reserve, activate, scale and release.',pose:()=>wfP(1),action:{label:'Explore verified talent',run:open('workforce',1)},hotspots:[{at:[19.5,2.2,-5.6],label:'Talent shelf',run:open('workforce',1)}]},
-      {id:'pods',label:'PODs',eyebrow:'PRODUCT ENGINEERING PODS',title:'Bring us a problem.',copy:'A cross-functional POD assembles around your problem and takes it through six stages.',pose:()=>wfP(2),action:{label:'Design my POD',run:open('workforce',2)}},
+      {id:'pods',label:'PODs',eyebrow:'PRODUCT ENGINEERING PODS',title:'Bring us a problem.',copy:'A cross-functional POD assembles around your problem and takes it through six stages.',pose:()=>wfP(2),action:{label:'Design my POD',run:open('workforce',2)},hotspots:[{at:[14.5,4.6,-33],label:'See a POD at work: predictive maintenance',run:()=>{enterLobby();story.chooseAt('founder',story.indexOfRoom('founder','engineer'))}}]},
       {id:'teams',label:'Teams',eyebrow:'WORKFORCE CAPABILITY',title:'Upgrade the team you already have.',copy:'Teams enter in the roles they hold today and leave with AI capability built into them.',pose:()=>wfP(3),action:{label:'Explore the capability lens',run:open('workforce',3)},hotspots:[{at:[-21.9,2.6,-14],label:'Reskilling line',run:open('workforce',3)}]},
       {id:'campus',label:'Campus',eyebrow:'CAMPUS TALENT FACTORY',title:'Build the future talent supply.',copy:'A campus plugs into EmpowerED as an extension. Choose an actor to see what it brings.',pose:()=>wfP(4),action:{label:'Explore the campus',run:open('workforce',4)},hotspots:[{at:[-50,3.5,-23],label:'Campus actors',run:open('workforce',4)}]},
       {id:'region',label:'Region',eyebrow:'ECOSYSTEM AT SCALE',title:'Regional and sector capability.',copy:'One pilot POD or regional hub links campuses, industry and government around a sector priority.',pose:()=>wfP(5),action:{label:'Explore the ecosystem',run:open('workforce',5)}},
@@ -600,7 +601,7 @@ export function initController(replayStory: () => void): ControllerApi {
     intake:{label:'Intake',hotspots:[{at:[9.5,2.2,-11],label:'Entry Assessment',run:open('career',1)}]},
     pro:{label:'Specialise',hotspots:[{at:[7,9,-40.5],label:'Specialisation pods',run:open('career',4)}]},
     develop:{label:'Develop',hotspots:[{at:[-11.4,9,-40.5],label:'Evidence Passport',run:open('career',3)}]},
-    engineer:{label:'Engineer',hotspots:[{at:[14.5,3.2,-32.4],label:'The machine',run:()=>mission.act('view:machine')},...MAINTENANCE.people.map((p,i)=>({at:[p.at[0],2.25,p.at[2]] as P3,label:['Records & model','Failure definition','Sensors','Alert screen','Deploy & access'][i],run:()=>mission.act('p:'+i)}))]},
+    engineer:{label:'Engineer',hotspots:[{at:[14.5,3.2,-32.4],label:'The machine',run:()=>mission.act('pod','view:machine')},...MAINTENANCE.people.map((p,i)=>({at:[p.at[0],2.25,p.at[2]] as P3,label:['Records & model','Failure definition','Sensors','Alert screen','Deploy & access'][i],run:()=>mission.act('pod','p:'+i)}))]},
     delivery:{label:'Delivery',hotspots:[{at:[2.8,4.1,-35],label:'Stage boards',run:open('career',5)}]},
     verify:{label:'Verify',hotspots:[{at:[21,9.2,-43.8],label:'ETAF™ assurance core',run:open('career',6)}]},
     deploy:{label:'Deploy',hotspots:[{at:[0,6.4,-72],label:'ETAF™ gate',run:open('career',7)}]},
@@ -616,7 +617,11 @@ export function initController(replayStory: () => void): ControllerApi {
   const CATS:Record<PathId,string>={student:'For students',founder:'For startups',hr:'For organisations',university:'For universities',professional:'For professionals'};
   let pendSide=-1,pendView:'work'|'path'='path';
   /** The POD mission at the Engineer stop (src/pod). */
-  const mission=new PodMission({factory:()=>window.FACTORY,focus:p=>setRoomFocus('engineer',p),changed:()=>{}});let podAt=-1;
+  const mission=new PodMission({factory:()=>window.FACTORY,focus:p=>setRoomFocus('engineer',p),
+    goRoom:room=>{if(mode!=='tour'||tour.route!=='story'||!story.audience)return;const i=story.indexOfRoom(story.audience,room as RoomId);if(i>=0){story.scrollToActivity();tour.travel(i)}},
+    enquire:label=>openDrawer('ph',label,'Product Engineering PODs')});let podAt=-1;
+  // Text on the 3D trace panel and alert screen follows the language.
+  const paintPodLabels=()=>window.FACTORY?.podLabels(podLabels());i18n.on(paintPodLabels);
   // A labelled example of an ETAF review: gates light one by one as evidence is reviewed, then go dark again.
   let etafDemoUntil=0;
   const etafNote=document.createElement('p');etafNote.id='etafNote';etafNote.hidden=true;etafNote.setAttribute('role','status');etafNote.innerHTML='<b>Example review</b> Gates light as each piece of evidence is reviewed. This is an illustration, not a real result.';document.body.appendChild(etafNote);
@@ -633,7 +638,7 @@ export function initController(replayStory: () => void): ControllerApi {
     explore:()=>{story.hide();startTour('career',0)},
     onAudience:(a)=>{stCat=a?CATS[a]:'For students';const au=a?({hr:'ent',university:'uni',founder:'st'} as Record<string,string>)[a]:undefined;if(au){applyFil(au);tray.setAudience(au)}},
     journey:(j)=>{if(mode==='tour'&&tour.route==='story')syncPath(j==='workforce'?'workforce/':'')},
-    gallery:()=>{setPath('evidence-impact/',true);go({k:'evidence'})},activity:(id)=>id==='pod'?mission:null,region:()=>{applyFil('gov');tray.setAudience('gov');setPath('workforce/ecosystem/',true);go({k:'bay',stop:'region'})},
+    gallery:()=>{setPath('evidence-impact/',true);go({k:'evidence'})},activity:(id)=>mission.activity(id),region:()=>{applyFil('gov');tray.setAudience('gov');setPath('workforce/ecosystem/',true);go({k:'bay',stop:'region'})},
     fov:()=>window.FACTORY?.cam().fov??50,
     reduced:()=>motion.reduced,
     setReduced:(on)=>motion.set(on),
@@ -660,7 +665,7 @@ export function initController(replayStory: () => void): ControllerApi {
     onRoute:(r)=>{closeDrawer();route=r},
     onStop:(r,i,settled)=>{const F=window.FACTORY;if(!F)return;
       if(!settled&&cd.classList.contains('open'))closeDrawer();
-      tourSettled=settled;const sroom=r==='story'?story.roomAt(i):undefined;if(settled&&sroom==='engineer'&&podAt!==i){podAt=i;mission.enter()}else if(sroom!=='engineer')podAt=-1;tourCar=r==='career'?CEQ[i]:r==='story'?(sroom?ROOMEQ[sroom]??-1:-1):-1;tourWf=r==='story'?(sroom?ROOMWF[sroom]??-1:-1):r==='career'?(TOURS.career[i]?.id==='showroom'?1:-1):r==='evidence'?-1:(i>=1?i-1:-1);
+      tourSettled=settled;const sroom=r==='story'?story.roomAt(i):undefined;if(settled&&sroom==='engineer'&&podAt!==i){podAt=i;paintPodLabels();mission.enter()}else if(sroom!=='engineer')podAt=-1;tourCar=r==='career'?CEQ[i]:r==='story'?(sroom?ROOMEQ[sroom]??-1:-1):-1;tourWf=r==='story'?(sroom?ROOMWF[sroom]??-1:-1):r==='career'?(TOURS.career[i]?.id==='showroom'?1:-1):r==='evidence'?-1:(i>=1?i-1:-1);
       if(tourWf>=0&&tourWf!==wfAt){wfAt=tourWf;setBayHv(-1);F.pod(wfAt===2);if(wfAt===2)F.podJump(-1.62);F.wfStop(wfAt);if(wfAt===3||wfAt===4)F.campusIn()}
       if(tourWf<0&&wfAt!==0){wfAt=0;F.pod(false)}
       wfArr=settled;
@@ -750,7 +755,11 @@ export function initController(replayStory: () => void): ControllerApi {
   }
   function paintLight(){const b=menu.querySelector<El>('[data-go="light"]');if(b){b.setAttribute('aria-pressed',String(quality.light));b.innerHTML='Lighter 3D <span>'+(quality.light?'On':'Off')+'</span>'}}
   paintLight();quality.on(paintLight);
-  function nav(k:string){if(k==='light'){quality.set(!quality.light);return}closeMenu();if(k==='story'){replayStory();return}if(k==='opening'){setPath('',true);playOpening();return}
+  // Language: English or Tamil (draft). The switch shows the other language's name in its own script.
+  function paintLang(){const ta=i18n.lang==='ta',b=$('langBtn'),m=menu.querySelector<El>('[data-go="lang"]');b.textContent=ta?'English':'தமிழ்';b.lang=ta?'en':'ta';b.setAttribute('aria-label',ta?'Switch to English':'தமிழுக்கு மாறவும்');if(m)m.innerHTML=(ta?'<span lang="en">English</span>':'<span lang="ta">தமிழ்</span>')+' <span>→</span>';
+    ['menu','hdrBack','menuBtn'].forEach(id=>translateDom($(id)))}
+  $('langBtn').onclick=()=>i18n.set(i18n.lang==='ta'?'en':'ta');paintLang();i18n.on(paintLang);
+  function nav(k:string){if(k==='lang'){i18n.set(i18n.lang==='ta'?'en':'ta');return}if(k==='light'){quality.set(!quality.light);return}closeMenu();if(k==='story'){replayStory();return}if(k==='opening'){setPath('',true);playOpening();return}
     if(k==='skip'||flatAuto||!window.FACTORY){history.replaceState(history.state,'',location.pathname+location.search+'#skip-3d');const inStory=mode==='tour'&&tour.route==='story'&&!!story.audience;$('fBack').textContent=inStory?'← Back to your guided tour':'← Back to the 3D company';openFlat(false,inStory&&k==='skip'?STORYANCH[story.audience!]:ANCH[k]);return}
     const p=({career:'career/',workforce:'workforce/',globe:'ai-for-everyone/',evidence:'evidence-impact/'} as Record<string,string>)[k];if(p===undefined)return;setPath(p,true);go(routeFor(p)!.dest)}
   menu.querySelectorAll<El>('[data-go]').forEach(b=>b.onclick=()=>nav(b.dataset.go!));
