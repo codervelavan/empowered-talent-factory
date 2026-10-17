@@ -87,6 +87,8 @@ export interface FactoryApi {
   dioStep(k: number): void;
   /** The diorama step currently shown. */
   dioAt(): number;
+  /** Development: render cost (CPU ms to submit a frame, draw calls, triangles, pixel ratio). */
+  stats(): { ms: number; calls: number; tris: number; dpr: number };
   /** POD mission (src/pod): highlight a team member (-1 none). */
   podSelect(i: number): void;
   /** Run one prepared machine cycle: condition index, and whether the team's reviewed version is used. */

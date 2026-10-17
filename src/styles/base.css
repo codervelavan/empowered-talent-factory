@@ -170,6 +170,8 @@ a,a:hover{text-decoration:none}
 .chip{background:var(--head);color:#fff}
 .wp .enq{text-decoration:none;font-weight:700;color:var(--head)}
 .logo img{display:block;height:38px;width:auto}.logo.big img{height:62px}
+/* On the dark green globe the logo sits on a paper chip so the wordmark stays readable. */
+.logo img{transition:background .4s,padding .4s}.darkWorld .logo img{background:var(--paper);border-radius:10px;padding:4px 8px}
 .hdrR{display:flex;align-items:center;gap:10px}
 .crumb{padding:9px 12px;border-radius:999px;background:rgba(242,239,226,.86);font:700 12px/1 Manrope,sans-serif;letter-spacing:.16em;color:var(--head);white-space:nowrap}
 .hBtn{padding:9px 14px;border-radius:999px;border:1px solid rgba(30,70,50,.4);background:rgba(242,239,226,.92);color:var(--head);font:600 13px/1 Inter,sans-serif;cursor:pointer;transition:border-color .3s}

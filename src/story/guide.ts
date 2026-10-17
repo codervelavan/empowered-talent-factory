@@ -235,15 +235,28 @@ const pathFor = (a: RoomId, b: RoomId): Path | null => {
 };
 
 // ---- Blocky characters --------------------------------------------------------------
+const RIG_SHADOW = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const x = c.getContext('2d')!, g = x.createRadialGradient(32, 32, 2, 32, 32, 31);
+  g.addColorStop(0, 'rgba(15,43,34,.34)'); g.addColorStop(0.55, 'rgba(15,43,34,.16)'); g.addColorStop(1, 'rgba(15,43,34,0)');
+  x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  return new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+})();
 interface Rig { root: THREE.Group; legs: THREE.Group[]; arms: THREE.Group[]; head: THREE.Group; body: THREE.Group }
 type BoxFn = (c: number, w: number, h: number, d: number, x: number, y: number, z: number, parent?: THREE.Object3D) => THREE.Mesh;
 function blocky(o: { top: number; legs: number; skin: number; hair: number; extra?: (body: THREE.Group, box: BoxFn) => void }): Rig {
   const root = new THREE.Group(), body = new THREE.Group();
   root.add(body);
+  // Soft contact shadow under the character (same look as the scene's people).
+  const shadow = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.9).rotateX(-Math.PI / 2), RIG_SHADOW);
+  shadow.position.y = 0.02;
+  shadow.renderOrder = -1;
+  root.add(shadow);
   const edgeM = new THREE.LineBasicMaterial({ color: 0x0f2b22, transparent: true, opacity: 0.55 });
   const box: BoxFn = (c, w, h, d, x, y, z, parent = body) => {
     const g = new THREE.BoxGeometry(w, h, d);
-    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: c }));
+    const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ color: c }));
     m.position.set(x, y, z);
     m.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), edgeM));
     parent.add(m);

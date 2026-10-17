@@ -21,7 +21,7 @@ interface Area {
   fixed?: number; manual?: number; parent?: THREE.Object3D; grow?: number;
   LU?: number[]; dimU?: THREE.IUniform<number>;
   _g?: THREE.MeshBasicMaterial; _y?: THREE.MeshBasicMaterial; _gl?: THREE.MeshBasicMaterial;
-  /** per-colour materials for blocky people */ _vx?: Record<number, THREE.MeshBasicMaterial>;
+  /** per-colour materials for blocky people */ _vx?: Record<number, THREE.MeshLambertMaterial>;
 }
 interface BoxOpts { p?: THREE.Matrix4; rx?: number; ry?: number; rz?: number; solid?: 'none' | 'green' | 'gold'; tone?: Tone | null }
 interface PlaneOpts { rx?: number; ry?: number; mat?: THREE.Material; fill?: boolean; tone?: Tone }
@@ -48,6 +48,8 @@ const cv=document.getElementById('c') as HTMLCanvasElement;
 const R=new THREE.WebGLRenderer({canvas:cv,antialias:true,preserveDrawingBuffer:true});
 R.setPixelRatio(quality.pixelRatio());R.setSize(innerWidth,innerHeight,false);R.setClearColor(PAPER,1);
 const S=new THREE.Scene();S.fog=new THREE.Fog(PAPER,45,190);
+/** Soft contact shadow (radial falloff), shared by every shadow patch. */
+const SHADOW_MAT=(()=>{const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d')!;const g=x.createRadialGradient(32,32,2,32,32,31);g.addColorStop(0,'rgba(15,43,34,.34)');g.addColorStop(.55,'rgba(15,43,34,.16)');g.addColorStop(1,'rgba(15,43,34,0)');x.fillStyle=g;x.fillRect(0,0,64,64);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return new THREE.MeshBasicMaterial({map:t,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1})})();
 const C=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,.1,600);
 const CR=new CSS3DRenderer();CR.setSize(innerWidth,innerHeight);CR.domElement.id='c3d';CR.domElement.style.overflow='clip';document.body.insertBefore(CR.domElement,document.getElementById('hud'));const CAMEL=CR.domElement.firstChild!.firstChild as HTMLElement;
 const V=(x?:number,y?:number,z?:number)=>new THREE.Vector3(x,y,z);
@@ -56,7 +58,10 @@ function area(name:string,o:Partial<Area>={}):Area{const a=Object.assign({name,u
 function seg(a:Area,t:Tone,p:THREE.Vector3,q:THREE.Vector3){a.L![t].push(p.x,p.y,p.z,q.x,q.y,q.z)}
 function M(x:number,y:number,z:number,rx=0,ry=0,rz=0){return new THREE.Matrix4().compose(V(x,y,z),new THREE.Quaternion().setFromEuler(new THREE.Euler(rx,ry,rz)),V(1,1,1))}
 const SC=(x:number,y:number,z:number)=>new THREE.Matrix4().makeScale(x,y,z);
-const fillMat=new THREE.MeshBasicMaterial({color:PAPER,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:2});
+const fillMat=new THREE.MeshLambertMaterial({color:PAPER,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:2});
+// Light for the paper surfaces and people: a sky/ground fill keeps tops at paper brightness and lets sides
+// fall about 10-15% darker with a warm bounce; a soft sun from the front left separates the faces.
+{S.add(new THREE.HemisphereLight(0xFFFFFF,0xF0E9D8,Math.PI*.88));const sun=new THREE.DirectionalLight(0xFFF3DC,Math.PI*.15);sun.position.set(-.45,1,.55);S.add(sun)}
 function amat(a:Area,color:THREE.ColorRepresentation,base=1,map:THREE.Texture|null=null){const m=new THREE.MeshBasicMaterial({color,map,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:base>=1,polygonOffset:true,polygonOffsetFactor:.5,polygonOffsetUnits:1});m.userData.base=base;a.mats.push(m);return m}
 const Gm=(a:Area)=>a._g||(a._g=amat(a,INK)),Ym=(a:Area)=>a._y||(a._y=amat(a,GOLD)),GLm=(a:Area)=>a._gl||(a._gl=amat(a,GOLD,.14));
 const factoryG=new THREE.Group();factoryG.matrixAutoUpdate=false;S.add(factoryG);let TG=factoryG;
@@ -81,12 +86,17 @@ function cyl(a:Area,x:number,y:number,z:number,r:number,h:number,o:BoxOpts={}){c
 function plane(a:Area,x:number,y:number,z:number,w:number,h:number,o:PlaneOpts={}){const m=M(x,y,z,o.rx||0,o.ry||0);const mat=o.mat||(o.fill?fillMat:null);if(mat)addS(PL,mat,m.clone().multiply(SC(w,h,1)));if(o.tone)poly(a,o.tone,[[-w/2,-h/2,0],[w/2,-h/2,0],[w/2,h/2,0],[-w/2,h/2,0]],true,m);return m}
 /** Blocky people (art board): suits or casual learners, coloured per figure from its position. */
 const VXC={suit:[0x1E4632,0x0F2B22],tops:[0xE9E2CC,0x8FBF9A,0xD9C27A,0xB9CBB8,0xF2EFE2],legs:[0x3E4A44,0x5B6B62,0x2E3A35],skin:[0xC89B7B,0xA87B5C,0xE0B898,0x7A5238],hair:[0x2B2018,0x1A1410,0x4A3424]};
-const vmat=(a:Area,c:number)=>{const m=a._vx||(a._vx={});return m[c]||(m[c]=amat(a,c))};
+/** Lit version of amat, for people (so their blocky volumes read). */
+function amatLit(a:Area,color:THREE.ColorRepresentation){const m=new THREE.MeshLambertMaterial({color,transparent:true,opacity:0,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:.5,polygonOffsetUnits:1});m.userData.base=1;a.mats.push(m);return m}
+const vmat=(a:Area,c:number)=>{const m=a._vx||(a._vx={});return m[c]||(m[c]=amatLit(a,c))};
 /** Person boxes are queued per (target group, area, colour) and merged into one mesh each, so crowds stay cheap. */
+/** Contact shadows queued per target group: [x, y, z, width, depth]. */
+const SHQ=new Map<THREE.Object3D,number[]>();
+function contact(x:number,y:number,z:number,w:number,d:number){let q=SHQ.get(TG);if(!q)SHQ.set(TG,q=[]);q.push(x,y+.015,z,w,d)}
 const VXQ=new Map<string,{tg:THREE.Object3D;a:Area;c:number;ms:THREE.Matrix4[]}>();let vxId=0;const vxKey=new WeakMap<object,number>();
 const vxq=(a:Area,c:number,m:THREE.Matrix4)=>{const id=(o:object)=>{let v=vxKey.get(o);if(v===undefined){v=++vxId;vxKey.set(o,v)}return v};const k=id(TG)+'/'+id(a)+'/'+c;let e=VXQ.get(k);if(!e){e={tg:TG,a,c,ms:[]};VXQ.set(k,e)}e.ms.push(m)};
 function figure(a:Area,pose:Pose,x:number,y:number,z:number,ry=0,flip=1,h=1.75,t:Tone='ink'){
-  const s=h/1.75;let hv=Math.sin(x*12.9898+z*78.233+y*3.71)*43758.5453;hv-=Math.floor(hv);
+  const s=h/1.75;contact(x,y,z,.95*s,.75*s);let hv=Math.sin(x*12.9898+z*78.233+y*3.71)*43758.5453;hv-=Math.floor(hv);
   const pick=(arr:number[],k:number)=>arr[Math.floor((hv*(k+1)*7.31)%1*arr.length)];
   const suit=hv<.5,top=suit?VXC.suit[0]:pick(VXC.tops,1),leg=suit?VXC.suit[1]:pick(VXC.legs,2),skin=pick(VXC.skin,3),hair=pick(VXC.hair,4);
   const base=M(x,y,z,0,ry+(pose==='sit'?(flip>0?Math.PI/2:-Math.PI/2):0)).multiply(SC(s,s,s));
@@ -254,11 +264,16 @@ const brand=buildBrand({
 // GLOBE (AI for Everyone)
 TG=globeG;
 const llv=(la:number,lo:number)=>{la*=Math.PI/180;lo*=Math.PI/180;return V(Math.cos(la)*Math.cos(lo),Math.sin(la),-Math.cos(la)*Math.sin(lo))};
-const gSphere=new THREE.Mesh(new THREE.SphereGeometry(GR*.992,64,40),fillMat);gSphere.visible=false;globeG.add(gSphere);
+/** AI for Everyone: the world view is dark green with luminous lines (lerped in by the globe's visibility). */
+const DARK=new THREE.Color(0x0D231A),SPHERE_DARK=new THREE.Color(0x15382A),GLOW_T:Record<Tone,THREE.Color>={ink:new THREE.Color(0x7BE3A6),fine:new THREE.Color(0x46A878),faint:new THREE.Color(0x2A5E45),gold:new THREE.Color(0xE9C96A)};
+const GLC:Record<Tone,THREE.Color>={ink:INK.clone(),fine:TONES.fine.clone(),faint:TONES.faint.clone(),gold:GOLD.clone()},GLP=PAPER.clone(),BG=PAPER.clone();
+let LAND_PM:THREE.PointsMaterial|null=null;
+const sphereMat=new THREE.MeshBasicMaterial({color:PAPER,side:THREE.FrontSide,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:2});
+const gSphere=new THREE.Mesh(new THREE.SphereGeometry(GR*.992,64,40),sphereMat);gSphere.visible=false;globeG.add(gSphere);
 for(let lat=-75;lat<=75;lat+=15){const k=lat*Math.PI/180;ring(gA,'ink',M(0,GR*Math.sin(k),0,-Math.PI/2),GR*Math.cos(k),96)}
 for(let lon=0;lon<180;lon+=15)ring(gA,'ink',M(0,0,0,0,lon*Math.PI/180),GR,96);
 {const b=atob(LANDMASK),pts:number[]=[];let idx=0;for(let lat=-84;lat<=84.01;lat+=2.4){const n=Math.max(1,Math.round(150*Math.cos(lat*Math.PI/180)));for(let i=0;i<n;i++){const lon=-180+(i+.5)*360/n;if((b.charCodeAt(idx>>3)>>(idx&7))&1){const v=llv(lat,lon).multiplyScalar(GR*1.004);pts.push(v.x,v.y,v.z)}idx++}}
- const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));const pm=new THREE.PointsMaterial({color:TONES.ink,size:2.6,sizeAttenuation:false,transparent:true,opacity:0});pm.userData.base=.7;gA.mats.push(pm);globeG.add(new THREE.Points(g,pm))}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));const pm=LAND_PM=new THREE.PointsMaterial({color:INK.clone(),size:2.6,sizeAttenuation:false,transparent:true,opacity:0});pm.userData.base=.7;gA.mats.push(pm);globeG.add(new THREE.Points(g,pm))}
 const BUILD:Record<string,(a:Area,P:THREE.Matrix4)=>void>={
  hospital(a,P){box(a,0,0,0,2,1.3,1.3,{p:P});box(a,1.4,0,0,.8,.8,1.1,{p:P,tone:'fine'});box(a,0,1.3,0,.7,.35,.7,{p:P,tone:'fine'});box(a,0,.66,.66,.52,.14,.03,{p:P,solid:'gold'});box(a,0,.48,.66,.14,.5,.03,{p:P,solid:'gold'})},
  factory(a,P){box(a,0,0,0,2.2,.9,1.3,{p:P});[.65,-.65].forEach(z=>poly(a,'ink',[[-1.1,.9,z],[-.7,1.3,z],[-.7,.9,z],[-.3,1.3,z],[-.3,.9,z],[.1,1.3,z],[.1,.9,z]],false,P));cyl(a,.75,1.1,0,.16,2.2,{p:P});ring(a,'gold',P.clone().multiply(M(.75,2.25,0,-Math.PI/2)),.22,16)},
@@ -289,7 +304,7 @@ const DIO_LT=[dioLabel(1,'SAMPLE INPUT'),dioLabel(2,'AI DRAFT'),dioLabel(3,'YOU 
   const pivot=new THREE.Group();pivot.position.copy(NODES[ni].n).multiplyScalar(GR);pivot.quaternion.setFromUnitVectors(V(0,1,0),NODES[ni].n);globeG.add(pivot);
   const g=new THREE.Group();g.scale.setScalar(.42);g.visible=false;pivot.add(g);TG=g;
   const a=area('dio'+ni,{manual:1,parent:g});
-  hring(a,'fine',0,.02,0,3.5,72);hring(a,'gold',0,.02,0,3.65,72);
+  cyl(a,0,-.03,0,3.95,.06,{tone:'fine'});contact(0,0,0,7.6,7.6);hring(a,'fine',0,.02,0,3.5,72);hring(a,'gold',0,.02,0,3.65,72);
   const st=[V(-2.3,0,.3),V(0,0,-.5),V(2.3,0,.3)];
   poly(a,'gold',[[-2.3,.03,1.4],[0,.03,.75],[2.3,.03,1.4]]);
   k.props(a);
@@ -346,7 +361,7 @@ function msnAlertAt(cond:number,revised:boolean,u:number):boolean{const [v]=msnS
  const ma=area('msnMachine',{manual:1,parent:MS.g});
  const mach=MS.mach;MS.g.add(mach);TG=mach;const mm=area('msnMach',{manual:1,parent:mach});
  // Base, enclosure with a window, control panel and chip tray.
- box(mm,mx,0,mz,3.1,.9,1.9);box(mm,mx,.9,mz,3.1,2,1.9,{tone:'ink'});box(mm,mx,2.9,mz,3.1,.18,1.9);
+ box(mm,mx,0,mz,3.1,.9,1.9);contact(mx,0,mz,4.2,2.8);box(mm,mx,.9,mz,3.1,2,1.9,{tone:'ink'});box(mm,mx,2.9,mz,3.1,.18,1.9);
  plane(mm,mx-.25,1.9,mz+.96,2,1.3,{tone:'fine'});line(mm,'fine',[mx-1.25,1.25,mz+.97],[mx+.75,1.25,mz+.97]);
  box(mm,mx+1.85,.4,mz+.35,.5,1.6,.4);plane(mm,mx+1.85,1.75,mz+.56,.36,.42,{tone:'ink'});box(mm,mx+1.85,1.65,mz+.57,.26,.3,.02,{solid:'gold'});
  box(mm,mx-.25,.9,mz+.2,1.9,.12,1);
@@ -368,7 +383,7 @@ function msnAlertAt(cond:number,revised:boolean,u:number):boolean{const [v]=msnS
  MS.alertT=ctex(560,360,(x,w,h)=>msnDrawAlert(x,w,h));
  const ap=new THREE.Mesh(PL,new THREE.MeshBasicMaterial({map:MS.alertT,side:THREE.DoubleSide}));ap.scale.set(1.75,1.12,1);ap.position.set(so[0],so[1]+.15,so[2]);ap.rotation.y=-.15;MS.g.add(ap);
  // The records bench (data), with the cream source notebook: clipped corner, three green rows.
- const da=POD_PLACE.art[0];box(ma,da[0],0,da[2],1.7,.78,.85);
+ const da=POD_PLACE.art[0];box(ma,da[0],0,da[2],1.7,.78,.85);contact(da[0],0,da[2],2.3,1.4);
  const nb=ctex(256,180,(x,w,h)=>{x.fillStyle='#F2EFE2';x.beginPath();x.moveTo(0,0);x.lineTo(w-46,0);x.lineTo(w,46);x.lineTo(w,h);x.lineTo(0,h);x.closePath();x.fill();x.strokeStyle='#0F2B22';x.lineWidth=6;x.stroke();x.fillStyle='#1E4632';[54,96,138].forEach(y=>x.fillRect(26,y,w-60,16));x.fillStyle='#C9A33A';x.fillRect(w-40,8,24,24)});
  const nbm=new THREE.Mesh(PL,new THREE.MeshBasicMaterial({map:nb,transparent:true,side:THREE.DoubleSide}));nbm.scale.set(.62,.44,1);nbm.rotation.x=-Math.PI/2;nbm.rotation.z=.3;nbm.position.set(da[0]-.25,.8,da[2]);MS.g.add(nbm);
  box(ma,da[0]+.45,.78,da[2]-.15,.5,.32,.04,{tone:'ink'});
@@ -390,7 +405,7 @@ const AS={g:new THREE.Group(),links:[] as THREE.Line<THREE.BufferGeometry,THREE.
 {const prevTG=TG;const [cx,,cz]=POD_PLACE.centre;
  // Inspection cell: conveyor, camera gantry with a ring light, edge device, sorting arm, review lane and reject bin.
  TG=IC.g;MS.g.add(IC.g);IC.g.visible=false;const ia=area('msnIC',{manual:1,parent:IC.g});
- box(ia,cx,0,cz,3.6,.78,.9);box(ia,cx,.78,cz,3.6,.08,.75,{tone:'ink'});[-1.6,1.6].forEach(dx=>cyl(ia,cx+dx,.82,cz,.06,.75,{rx:Math.PI/2}));
+ box(ia,cx,0,cz,3.6,.78,.9);contact(cx,0,cz,4.6,1.9);box(ia,cx,.78,cz,3.6,.08,.75,{tone:'ink'});[-1.6,1.6].forEach(dx=>cyl(ia,cx+dx,.82,cz,.06,.75,{rx:Math.PI/2}));
  [-.65,.25].forEach(dx=>{box(ia,cx+dx,0,cz-.55,.1,2.7,.1,{solid:'green'})});box(ia,cx-.2,2.7,cz-.55,1.1,.1,.1,{solid:'green'});
  box(ia,cx-.2,1.95,cz-.2,.36,.36,.36,{tone:'ink'});cyl(ia,cx-.2,1.72,cz-.2,.08,.12);
  IC.ring=new THREE.Mesh(new THREE.RingGeometry(.22,.3,32),new THREE.MeshBasicMaterial({color:GOLD,transparent:true,opacity:.35,side:THREE.DoubleSide,depthWrite:false}));IC.ring.rotation.x=-Math.PI/2;IC.ring.position.set(cx-.2,1.62,cz-.2);IC.g.add(IC.ring);
@@ -404,7 +419,7 @@ const AS={g:new THREE.Group(),links:[] as THREE.Line<THREE.BufferGeometry,THREE.
  [[cx+1.8,.62,cz+.75],[cx+2.1,.62,cz+.7]].forEach(p=>{const c=new THREE.Mesh(BOX,new THREE.MeshBasicMaterial({color:0x1A2620}));c.scale.set(.26,.07,.26);c.position.set(p[0],p[1],p[2]);IC.g.add(c)});
  // Source table: labelled document stacks, a restricted contract with a padlock, a retrieval index and the links between them.
  TG=AS.g;MS.g.add(AS.g);AS.g.visible=false;const sa=area('msnAS',{manual:1,parent:AS.g});
- box(sa,cx,0,cz,3.4,.78,1.7);
+ box(sa,cx,0,cz,3.4,.78,1.7);contact(cx,0,cz,4.4,2.6);
  const DOCS:[string,number][]=[['CUSTOMS',-1.2],['BILL OF MATERIALS',-.4],['EXPORT RULES',.4],['CONTRACT',1.2]];
  const idx=V(POD_PLACE.art[2][0],2.05,POD_PLACE.art[2][2]);box(sa,idx.x,1.8,idx.z,.5,.5,.5,{tone:'ink'});box(sa,idx.x,0,idx.z-.25,.08,1.8,.08,{solid:'green'});
  DOCS.forEach(([n,dx],k)=>{const h=.12+(k%2)*.1;box(sa,cx+dx,.78,cz+.3,.5,h,.66,{tone:'ink'});
@@ -500,6 +515,8 @@ function msnTick(now:number,dt:number){
   const key=MSN.mi+'|'+Math.round(u*120)+'|'+MSN.cond+'|'+MSN.revised+'|'+MSN.t0;if(key!==MSN.last){MSN.last=key;MS.traceT?.redraw();MS.alertT?.redraw()}
   MS.people.forEach((p,i)=>{const on=MSN.sel===i,k=Math.min(1,dt*6);p.ring.material.opacity+=((MSN.sel<0?.3:on?.95:.12)-p.ring.material.opacity)*k;const sc=on?1.35:1;p.ring.scale.setScalar(p.ring.scale.x+(sc-p.ring.scale.x)*k);
     p.mark.material.opacity+=((on?1:0)-p.mark.material.opacity)*k;p.mark.rotation.y=now/600;p.link.material.opacity+=((on?.9:0)-p.link.material.opacity)*k})}
+/** Development: render cost of the last frames (CPU time to submit, draw calls, triangles). */
+const STATS={ms:0,calls:0,tris:0};
 const DTMP=new THREE.Vector3();
 /** Zoom the globe camera onto the chosen diorama and play its three steps (sample input, AI draft, you check). */
 function dioTick(now:number,dt:number){
@@ -760,6 +777,8 @@ void main(){float r=clamp((uReveal-vD)/0.55,0.0,1.0);if(r<=0.0||vU>r)discard;flo
 #include <colorspace_fragment>
 }`;
 VXQ.forEach(({tg,a,c,ms})=>{const g=mergeGeometries(ms.map(m=>BOX.clone().applyMatrix4(m)),false);if(!g)return;const o=new THREE.Mesh(g,vmat(a,c));tg.add(o)});VXQ.clear();
+{const geo=new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2),m4=new THREE.Matrix4(),q0=new THREE.Quaternion();
+ SHQ.forEach((q,tg)=>{const n=q.length/5,o=new THREE.InstancedMesh(geo,SHADOW_MAT,n);for(let i=0;i<n;i++){const k=i*5;m4.compose(V(q[k],q[k+1],q[k+2]),q0,V(q[k+3],1,q[k+4]));o.setMatrixAt(i,m4)}o.userData.noRay=true;o.renderOrder=-1;tg.add(o)});SHQ.clear()}
 // Batch static helper meshes per (parent, material): ~1000 draws become ~150.
 {const groups=new Map<string,THREE.Mesh[]>();const seen=new Set<THREE.Object3D>();S.traverse(o=>{if(!(o as THREE.Mesh).isMesh||!o.userData.b||!o.parent)return;seen.add(o.parent);const m=o as THREE.Mesh,k=o.parent.uuid+'/'+(m.material as THREE.Material).uuid;let g=groups.get(k);if(!g)groups.set(k,g=[]);g.push(m)});
  groups.forEach(ms=>{if(ms.length<2)return;const geo=mergeGeometries(ms.map(m=>m.geometry.clone().applyMatrix4(m.matrix)),false);if(!geo)return;const parent=ms[0].parent!,o=new THREE.Mesh(geo,ms[0].material);o.matrixAutoUpdate=false;ms.forEach(m=>parent.remove(m));parent.add(o)});void seen}
@@ -768,7 +787,8 @@ AREAS.forEach(a=>{
   Object.entries(a.L!).forEach(([t,arr])=>{if(!arr.length)return;const n=arr.length/6,u=new Float32Array(n*2),dl=new Float32Array(n*2);
     for(let i=0;i<n;i++){if(a.LU){u[i*2]=a.LU[i*2];u[i*2+1]=a.LU[i*2+1]}else u[i*2+1]=1;const d=(a.name==='grid'||a.grow)?0:((arr[i*6+1]+arr[i*6+4])/2-lo)/span*.3+Math.random()*.15;dl[i*2]=dl[i*2+1]=d}
     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(arr,3));g.setAttribute('lineU',new THREE.BufferAttribute(u,1));g.setAttribute('delay',new THREE.BufferAttribute(dl,1));
-    (a.parent||factoryG).add(new THREE.LineSegments(g,new THREE.ShaderMaterial({uniforms:{uColor:{value:TONES[t as Tone]},uPaper:{value:PAPER},uReveal:a.u,uFog:FOGU,uDim:(a.dimU||(a.dimU={value:0}))},vertexShader:VS,fragmentShader:FS})));
+    const glb=a===gA||a===gRim||a===gArc;
+    (a.parent||factoryG).add(new THREE.LineSegments(g,new THREE.ShaderMaterial({uniforms:{uColor:{value:glb?GLC[t as Tone]:TONES[t as Tone]},uPaper:{value:glb?GLP:PAPER},uReveal:a.u,uFog:FOGU,uDim:(a.dimU||(a.dimU={value:0}))},vertexShader:VS,fragmentShader:FS})));
   });a.L=null;
 });
 grd.u.value=1;grd.r=1;
@@ -820,8 +840,8 @@ window.FACTORY={
   poseFly(r,e){const w=ROUTES[r].wp[0];C.position.lerpVectors(EXTP,V(...w[0]),e);look.lerpVectors(EXTL,V(...w[1]),e)},
   setHover(k){G.hover=k},poseAt(p,l){C.position.set(p[0],p[1],p[2]);look.set(l[0],l[1],l[2])},
   setWf(on){G.wf=on},setBays(hv,sel,dim){G.bayHv=hv;G.baySel=sel;G.bayDim=dim},setUnits(u){G.units=u},setTeam(n){if(teamName.v!==n){teamName.v=n;teamTex.redraw()}},wfStop(i){G.stop=i},campusIn(r){if(G.cam.t0<0||r){G.cam.t0=performance.now();G.cc.t0=-1}},podCross(){G.cc.t0=Math.max(performance.now(),G.cam.t0+2700)},setCampus(a,c){G.act=a;G.con=c},setActor(i){G.actor=i},setNet(o){G.net=o},
-  pod(on){if(on&&!G.pod.on)G.pod.t0=performance.now();G.pod.on=on},setPodLead(l){G.podLead=l},globeZoom(i){if(i>=0&&!DIOS.some(D=>D.node===i))i=-1;if(i>=0&&i!==G.zoom){G.dioStep=-1;G.dioT0=performance.now()}G.zoom=i;if(i>=0){G.zoomL=i;/* Profession on top, the company (NF) behind it, away from the camera. */const n=NODES[i].n,fb=NF.clone().sub(n.clone().multiplyScalar(NF.dot(n))).normalize(),r=fb.clone().cross(n).normalize(),L=new THREE.Matrix4().makeBasis(r,n,fb),W=new THREE.Matrix4().makeBasis(V(1,0,0),V(0,1,0),V(0,0,-1));G.focus={q0:Rcur.clone(),q1:new THREE.Quaternion().setFromRotationMatrix(W.multiply(L.transpose())),t0:performance.now()}}},dioStep(k){G.dioStep=k;if(k<0)G.dioT0=performance.now()},dioAt(){return G.dioCur},podSelect(i){MSN.sel=i},podRun(c,revised){MSN.cond=c;MSN.revised=revised;MSN.t0=performance.now();MSN.u=0},podReset(){MSN.t0=-1;MSN.u=0;MSN.revised=false},podMission(i){if(i===MSN.mi)return;MSN.mi=i;MSN.t0=-1;MSN.u=0;MSN.revised=false;MS.mach.visible=i===0;IC.g.visible=i===1;AS.g.visible=i===2;MSN.last='';MS.traceT?.redraw();MS.alertT?.redraw()},podState(){const ran=MSN.t0>=0;return{ran,u:MSN.u,done:ran&&MSN.u>=1,alert:msnFlag(),cond:MSN.cond,revised:MSN.revised,mi:MSN.mi}},podLabels(l){MSN.labels=l;MS.traceT?.redraw();MS.alertT?.redraw();MSN_DOCTEX.forEach(t=>t.redraw())},gallery(){return GALLERY.map(g=>({at:g.at,face:g.face}))},dioDebug(){const D=DIOS.find(x=>x.node===G.zoomL);if(!D)return null;return{yaw:D.g.rotation.y,cam:C.position.toArray().map(v=>+v.toFixed(2)),labels:D.labels.map(m=>{const p=m.getWorldPosition(new THREE.Vector3());const q=p.clone().project(C);return [p.toArray().map(v=>+v.toFixed(2)),[Math.round((q.x+1)/2*innerWidth),Math.round((1-q.y)/2*innerHeight)]]})}},hasDio(i){return DIOS.some(D=>D.node===i)},podJump(i){G.pod.on=true;G.pod.t0=performance.now()-(4200+i*2600)},podG(){return G.pod.on?G.podGv:-1},podTime(){return G.pod.on?(performance.now()-G.pod.t0)/1000:0},setCrate(g){G.crate=g},setTicks(a){G.ticks=a},setWalk(on){G.walk=on},
-  rayWhat(a,b){const A=V(...a),dir=V(...b).sub(A),len=dir.length();dir.normalize();factoryG.updateMatrixWorld(true);const rc=new THREE.Raycaster(A,dir,0,len);const nm=new THREE.Vector3();return rc.intersectObject(factoryG,true).filter(h=>(h.object as THREE.Mesh).isMesh&&h.face).slice(0,4).map(h=>{const m=h.object as THREE.Mesh;let vis=true;for(let o:THREE.Object3D|null=m;o;o=o.parent)if(!o.visible)vis=false;nm.copy(h.face!.normal).transformDirection(m.matrixWorld);const mat=m.material as THREE.MeshBasicMaterial;return {p:[h.point.x,h.point.y,h.point.z].map(v=>+v.toFixed(2)),vis,ny:+nm.y.toFixed(2),geo:(m.geometry as THREE.BufferGeometry).type,op:mat.opacity,tr:mat.transparent,cw:mat.colorWrite,dw:mat.depthWrite,size:(()=>{(m.geometry as THREE.BufferGeometry).computeBoundingBox();const b=(m.geometry as THREE.BufferGeometry).boundingBox!;return [b.max.x-b.min.x,b.max.y-b.min.y,b.max.z-b.min.z].map(v=>+v.toFixed(1))})()}})},
+  pod(on){if(on&&!G.pod.on)G.pod.t0=performance.now();G.pod.on=on},setPodLead(l){G.podLead=l},globeZoom(i){if(i>=0&&!DIOS.some(D=>D.node===i))i=-1;if(i>=0&&i!==G.zoom){G.dioStep=-1;G.dioT0=performance.now()}G.zoom=i;if(i>=0){G.zoomL=i;/* Profession on top, the company (NF) behind it, away from the camera. */const n=NODES[i].n,fb=NF.clone().sub(n.clone().multiplyScalar(NF.dot(n))).normalize(),r=fb.clone().cross(n).normalize(),L=new THREE.Matrix4().makeBasis(r,n,fb),W=new THREE.Matrix4().makeBasis(V(1,0,0),V(0,1,0),V(0,0,-1));G.focus={q0:Rcur.clone(),q1:new THREE.Quaternion().setFromRotationMatrix(W.multiply(L.transpose())),t0:performance.now()}}},dioStep(k){G.dioStep=k;if(k<0)G.dioT0=performance.now()},dioAt(){return G.dioCur},stats(){return {ms:+STATS.ms.toFixed(2),calls:STATS.calls,tris:STATS.tris,dpr:R.getPixelRatio()}},podSelect(i){MSN.sel=i},podRun(c,revised){MSN.cond=c;MSN.revised=revised;MSN.t0=performance.now();MSN.u=0},podReset(){MSN.t0=-1;MSN.u=0;MSN.revised=false},podMission(i){if(i===MSN.mi)return;MSN.mi=i;MSN.t0=-1;MSN.u=0;MSN.revised=false;MS.mach.visible=i===0;IC.g.visible=i===1;AS.g.visible=i===2;MSN.last='';MS.traceT?.redraw();MS.alertT?.redraw()},podState(){const ran=MSN.t0>=0;return{ran,u:MSN.u,done:ran&&MSN.u>=1,alert:msnFlag(),cond:MSN.cond,revised:MSN.revised,mi:MSN.mi}},podLabels(l){MSN.labels=l;MS.traceT?.redraw();MS.alertT?.redraw();MSN_DOCTEX.forEach(t=>t.redraw())},gallery(){return GALLERY.map(g=>({at:g.at,face:g.face}))},dioDebug(){const D=DIOS.find(x=>x.node===G.zoomL);if(!D)return null;return{yaw:D.g.rotation.y,cam:C.position.toArray().map(v=>+v.toFixed(2)),labels:D.labels.map(m=>{const p=m.getWorldPosition(new THREE.Vector3());const q=p.clone().project(C);return [p.toArray().map(v=>+v.toFixed(2)),[Math.round((q.x+1)/2*innerWidth),Math.round((1-q.y)/2*innerHeight)]]})}},hasDio(i){return DIOS.some(D=>D.node===i)},podJump(i){G.pod.on=true;G.pod.t0=performance.now()-(4200+i*2600)},podG(){return G.pod.on?G.podGv:-1},podTime(){return G.pod.on?(performance.now()-G.pod.t0)/1000:0},setCrate(g){G.crate=g},setTicks(a){G.ticks=a},setWalk(on){G.walk=on},
+  rayWhat(a,b){const A=V(...a),dir=V(...b).sub(A),len=dir.length();dir.normalize();factoryG.updateMatrixWorld(true);const rc=new THREE.Raycaster(A,dir,0,len);rc.camera=C;const nm=new THREE.Vector3();return rc.intersectObject(factoryG,true).filter(h=>(h.object as THREE.Mesh).isMesh&&h.face).slice(0,4).map(h=>{const m=h.object as THREE.Mesh;let vis=true;for(let o:THREE.Object3D|null=m;o;o=o.parent)if(!o.visible)vis=false;nm.copy(h.face!.normal).transformDirection(m.matrixWorld);const mat=m.material as THREE.MeshBasicMaterial;return {name:(()=>{let o:THREE.Object3D|null=m,n='';for(;o&&!n;o=o.parent)n=o.name;return n})(),parentKids:m.parent?.children.length,p:[h.point.x,h.point.y,h.point.z].map(v=>+v.toFixed(2)),vis,ny:+nm.y.toFixed(2),geo:(m.geometry as THREE.BufferGeometry).type,op:mat.opacity,tr:mat.transparent,cw:mat.colorWrite,dw:mat.depthWrite,size:(()=>{(m.geometry as THREE.BufferGeometry).computeBoundingBox();const b=(m.geometry as THREE.BufferGeometry).boundingBox!;return [b.max.x-b.min.x,b.max.y-b.min.y,b.max.z-b.min.z].map(v=>+v.toFixed(1))})()}})},
   rayHits(a,b){const A=V(...a),dir=V(...b).sub(A),len=dir.length();if(len<1e-4)return [];dir.normalize();factoryG.updateMatrixWorld(true);const rc=new THREE.Raycaster(A,dir,0,len);const skip=(o:THREE.Object3D|null):boolean=>{for(;o;o=o.parent)if(o.userData.noRay)return true;return false};const nm=new THREE.Vector3();return rc.intersectObject(factoryG,true).filter(h=>{const m=h.object as THREE.Mesh;if(!m.isMesh||!h.face||skip(m))return false;nm.copy(h.face.normal).transformDirection(m.matrixWorld);return Math.abs(nm.y)<.6}).map(h=>({p:[+h.point.x.toFixed(2),+h.point.y.toFixed(2),+h.point.z.toFixed(2)] as P3,d:+h.distance.toFixed(2)}))},
   obstacles(y0,y1){factoryG.updateMatrixWorld(true);const walls:number[]=[],floor:number[]=[],low:number[]=[],high:number[]=[],highY:number[]=[];const a=V(),b=V(),c=V(),e1=V(),e2=V(),n=V();const skip=(o:THREE.Object3D|null):boolean=>{for(;o;o=o.parent)if(o.userData.noRay)return true;return false};
     factoryG.traverse(o=>{const m=o as THREE.Mesh;if(!m.isMesh||!m.visible||skip(m))return;const g=m.geometry as THREE.BufferGeometry,pos=g.getAttribute('position');if(!pos)return;const idx=g.getIndex(),cnt=idx?idx.count:pos.count,M=m.matrixWorld;
@@ -849,6 +869,8 @@ window.FACTORY={
     globeG.quaternion.copy(Rcur);
     factoryG.matrix.compose(GC,Rcur,ONE).multiply(TMPM.compose(NF.clone().multiplyScalar(GR),QF,V(G.fs,G.fs,G.fs))).multiply(T30);factoryG.matrixWorldNeedsUpdate=true;
     gSphere.visible=G.gV>.001;
+    {const k=sm(.2,.85,G.gV);BG.copy(PAPER).lerp(DARK,k);R.setClearColor(BG,1);(S.fog as THREE.Fog).color.copy(BG);GLP.copy(BG);
+     (Object.keys(GLC) as Tone[]).forEach(t=>GLC[t].copy(TONES[t]).lerp(GLOW_T[t],k));sphereMat.color.copy(PAPER).lerp(SPHERE_DARK,k);LAND_PM?.color.copy(INK).lerp(GLOW_T.fine,k)}
     const hf=Math.max(0,C.position.y-18);G.fogB+=((G.wf&&G.stop===4?1:0)-G.fogB)*Math.min(1,dt*2);const fog=S.fog as THREE.Fog;fog.near=45+G.gV*70+hf*2+G.fogB*80;fog.far=190+G.gV*220+hf*5+G.fogB*160;FOGU.value.set(fog.near,fog.far);
     G.shE+=(G.sh-G.shE)*Math.min(1,dt*3);lt.copy(look);if(G.shE>.001){tmp.copy(lt).sub(C.position);const dd=tmp.length(),tx=Math.tan(C.fov*Math.PI/360)*Math.min(1.9,Math.max(1.3,C.aspect));tmp.normalize().cross(C.up).normalize();lt.addScaledVector(tmp,G.shE*dd*tx/3)}if(G.done)lt.x+=G.panelE*6;if(!reduce){lt.x+=mx*(G.done?.3:1.2);lt.y-=my*(G.done?.15:.6)}if(!reduce&&mode==='intro'){lt.x+=Math.sin(now/5200)*.5;lt.y+=Math.sin(now/7400)*.2}if(G.gl){const t=(performance.now()-G.gl.t0)/3400,w=sm(0,.28,t)*(1-sm(.72,1,t));lt.lerp(G.gl.p,w);if(t>=1)G.gl=null}dioTick(now,dt);C.lookAt(lt);
     if(G.pod.on){const te=(now-G.pod.t0)/1000;if(te<2.2)G.podGv=-1+sm(0,2.2,te);else if(te<4.2)G.podGv=0;else{const x=(te-4.2)/2.6,i=Math.floor(x);G.podGv=Math.min(5,i+sm(.35,.75,x-i))}}
@@ -898,7 +920,7 @@ window.FACTORY={
         // Fully revealed solids draw in the opaque pass (hundreds of sorted transparent draws were the frame-rate cost).
         const tr=op<.999||m.blending!==THREE.NormalBlending||m.depthWrite===false;if(m.transparent!==tr){m.transparent=tr;m.needsUpdate=true}})});
     brand.tick(reduce||quality.light?0:now,dt);msnTick(now,dt);
-    R.render(S,C);CR.render(S,C);
+    {const t0=performance.now();R.render(S,C);STATS.ms=STATS.ms*.9+(performance.now()-t0)*.1;STATS.calls=R.info.render.calls;STATS.tris=R.info.render.triangles}CR.render(S,C);
   },
   globeBegin(dir){G.dir=dir;G.done=false;G.focus=null;G.panel=0;G.A={p:C.position.clone(),l:lt.clone(),s:G.fs,q:Rcur.clone()};G.B=dir==='in'?{p:GPOS,l:GLOOK,s:SF,q:Rg}:{p:EXTP,l:EXTL,s:1,q:R0};if(dir==='in'){const a=G.A;G.cp=new THREE.CatmullRomCurve3([a.p.clone(),V(2,31,-4),V(0,62,-18),GPOS.clone()],false,'centripetal');G.cl=new THREE.CatmullRomCurve3([a.l.clone(),V(0,26.4,-10),V(0,4,-30),GLOOK.clone()],false,'centripetal')}},
   globeStep(t){const A=G.A!,B=G.B!;if(G.dir==='in'){const e=sm(0,1,t),e2=sm(.3,.92,t);G.cp!.getPoint(e,C.position);G.cl!.getPoint(e,look);G.fs=Math.exp(Math.log(A.s)+(Math.log(B.s)-Math.log(A.s))*e2);Rcur.slerpQuaternions(A.q,B.q,sm(.42,.95,t));G.gV=sm(.42,.88,t);G.dist=sm(.1,.3,t)*(1-sm(.6,.8,t));return}G.dist=0;const e=sm(0,1,t),e2=sm(.1,.9,t);C.position.lerpVectors(A.p,B.p,e);C.position.y+=Math.sin(Math.PI*e)*(G.dir==='in'?14:8);look.lerpVectors(A.l,B.l,e);G.fs=Math.exp(Math.log(A.s)+(Math.log(B.s)-Math.log(A.s))*e2);Rcur.slerpQuaternions(A.q,B.q,e2);G.gV=G.dir==='in'?sm(.3,.9,t):Math.min(G.gV,1-sm(.05,.55,t))},
