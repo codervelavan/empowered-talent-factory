@@ -92,7 +92,9 @@ export interface FactoryApi {
   /** Run one prepared machine cycle: condition index, and whether the team's reviewed version is used. */
   podRun(cond: number, revised: boolean): void;
   podReset(): void;
-  podState(): { ran: boolean; u: number; done: boolean; alert: boolean; cond: number; revised: boolean };
+  /** Show one mission's centrepiece: 0 CNC machine, 1 inspection cell, 2 source table. */
+  podMission(i: number): void;
+  podState(): { ran: boolean; u: number; done: boolean; alert: boolean; cond: number; revised: boolean; mi: number };
   /** Text drawn on the trace panel and alert screen (for the language switch). */
   podLabels(l: Record<string, string>): void;
   /** Evidence & Impact gallery frames (centre and the point each exhibit faces). */

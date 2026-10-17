@@ -359,3 +359,4 @@ html.opening #hud>*:not(#opening),html.opening #resumeTour{visibility:hidden}
 #storyPanel .pmChip{min-height:44px;padding:8px 14px;border:1.5px solid rgba(15,43,34,.3);border-radius:999px;background:#fff;color:#0F2B22;font:700 16px/1.2 Manrope,sans-serif}
 #storyPanel .pmEnd{display:flex;flex-wrap:wrap;gap:8px}
 @media (max-width:420px){#storyPanel .pmRow{grid-template-columns:1fr;gap:2px}}
+#storyPanel .pmPick{display:flex;flex-direction:column;gap:6px;padding-bottom:10px;border-bottom:1px solid rgba(15,43,34,.14)}

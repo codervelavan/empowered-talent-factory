@@ -6,7 +6,7 @@ import { Tour, type TourRoute, type TourStop } from '../company/tour';
 import { Story, lobbyPose, setRoomFocus, type PathId, type RoomDef, type RoomId } from '../story/guide';
 import { PodMission, podLabels } from '../pod/mission';
 import { i18n, translateDom } from '../app/i18n';
-import { MAINTENANCE } from '../pod/missions';
+import { POD_PLACE } from '../pod/missions';
 import { Opening } from '../story/opening';
 import { currentPath, currentRoute, legacyHashPath, onPathChange, setPath } from '../app/router';
 import { routeFor, type Dest } from '../app/routes';
@@ -587,7 +587,7 @@ export function initController(replayStory: () => void): ControllerApi {
     workforce:[company,
       {id:'dock',label:'Dock',eyebrow:'WORKFORCE · DOCK',title:'What do you need EmpowerED to produce?',copy:'Five bays, one company. Filters change emphasis only; every bay stays open.',pose:()=>wfP(0),action:{label:'Choose a bay',run:open('workforce',0)},hotspots:[{at:[32,3,-4],label:'Choose a bay',run:open('workforce',0)}]},
       {id:'talent',label:'Talent',eyebrow:'VERIFIED TALENT · TAAS',title:'Verified capability, on demand.',copy:'Talent is built before demand and verified before deployment. Reserve, activate, scale and release.',pose:()=>wfP(1),action:{label:'Explore verified talent',run:open('workforce',1)},hotspots:[{at:[19.5,2.2,-5.6],label:'Talent shelf',run:open('workforce',1)}]},
-      {id:'pods',label:'PODs',eyebrow:'PRODUCT ENGINEERING PODS',title:'Bring us a problem.',copy:'A cross-functional POD assembles around your problem and takes it through six stages.',pose:()=>wfP(2),action:{label:'Design my POD',run:open('workforce',2)},hotspots:[{at:[14.5,4.6,-33],label:'See a POD at work: predictive maintenance',run:()=>{enterLobby();story.chooseAt('founder',story.indexOfRoom('founder','engineer'))}}]},
+      {id:'pods',label:'PODs',eyebrow:'PRODUCT ENGINEERING PODS',title:'Bring us a problem.',copy:'A cross-functional POD assembles around your problem and takes it through six stages.',pose:()=>wfP(2),action:{label:'Design my POD',run:open('workforce',2)},hotspots:[{at:[14.5,4.6,-33],label:'See a POD at work',run:()=>{enterLobby();story.chooseAt('founder',story.indexOfRoom('founder','engineer'));mission.defaultFor('workforce')}}]},
       {id:'teams',label:'Teams',eyebrow:'WORKFORCE CAPABILITY',title:'Upgrade the team you already have.',copy:'Teams enter in the roles they hold today and leave with AI capability built into them.',pose:()=>wfP(3),action:{label:'Explore the capability lens',run:open('workforce',3)},hotspots:[{at:[-21.9,2.6,-14],label:'Reskilling line',run:open('workforce',3)}]},
       {id:'campus',label:'Campus',eyebrow:'CAMPUS TALENT FACTORY',title:'Build the future talent supply.',copy:'A campus plugs into EmpowerED as an extension. Choose an actor to see what it brings.',pose:()=>wfP(4),action:{label:'Explore the campus',run:open('workforce',4)},hotspots:[{at:[-50,3.5,-23],label:'Campus actors',run:open('workforce',4)}]},
       {id:'region',label:'Region',eyebrow:'ECOSYSTEM AT SCALE',title:'Regional and sector capability.',copy:'One pilot POD or regional hub links campuses, industry and government around a sector priority.',pose:()=>wfP(5),action:{label:'Explore the ecosystem',run:open('workforce',5)}},
@@ -601,7 +601,7 @@ export function initController(replayStory: () => void): ControllerApi {
     intake:{label:'Intake',hotspots:[{at:[9.5,2.2,-11],label:'Entry Assessment',run:open('career',1)}]},
     pro:{label:'Specialise',hotspots:[{at:[7,9,-40.5],label:'Specialisation pods',run:open('career',4)}]},
     develop:{label:'Develop',hotspots:[{at:[-11.4,9,-40.5],label:'Evidence Passport',run:open('career',3)}]},
-    engineer:{label:'Engineer',hotspots:[{at:[14.5,3.2,-32.4],label:'The machine',run:()=>mission.act('pod','view:machine')},...MAINTENANCE.people.map((p,i)=>({at:[p.at[0],2.25,p.at[2]] as P3,label:['Records & model','Failure definition','Sensors','Alert screen','Deploy & access'][i],run:()=>mission.act('pod','p:'+i)}))]},
+    engineer:{label:'Engineer',hotspots:[{at:[14.5,3.2,-32.4],label:'The project',run:()=>mission.act('pod','view:machine')},...POD_PLACE.at.map((p,i)=>({at:[p[0],2.25,p[2]] as P3,label:['Data work','Hands-on work','System build','User screen','Deploy & access'][i],run:()=>mission.act('pod','p:'+i)}))]},
     delivery:{label:'Delivery',hotspots:[{at:[2.8,4.1,-35],label:'Stage boards',run:open('career',5)}]},
     verify:{label:'Verify',hotspots:[{at:[21,9.2,-43.8],label:'ETAF™ assurance core',run:open('career',6)}]},
     deploy:{label:'Deploy',hotspots:[{at:[0,6.4,-72],label:'ETAF™ gate',run:open('career',7)}]},
@@ -636,9 +636,9 @@ export function initController(replayStory: () => void): ControllerApi {
     open:(key,c)=>{if(key==='etaf:demo'){playEtafDemo();return}if(key==='globe:work'){story.hide();pendSide=PROFESSION_NODE[Math.max(0,c.profession)]??0;pendView='work';toGlobe();return}const [r,i]=key.split(':');openStop(r,+i)},
     detailOpen:()=>cd.classList.contains('open')||flatOpen,
     explore:()=>{story.hide();startTour('career',0)},
-    onAudience:(a)=>{stCat=a?CATS[a]:'For students';const au=a?({hr:'ent',university:'uni',founder:'st'} as Record<string,string>)[a]:undefined;if(au){applyFil(au);tray.setAudience(au)}},
+    onAudience:(a)=>{stCat=a?CATS[a]:'For students';if(a)mission.defaultFor(a);const au=a?({hr:'ent',university:'uni',founder:'st'} as Record<string,string>)[a]:undefined;if(au){applyFil(au);tray.setAudience(au)}},
     journey:(j)=>{if(mode==='tour'&&tour.route==='story')syncPath(j==='workforce'?'workforce/':'')},
-    gallery:()=>{setPath('evidence-impact/',true);go({k:'evidence'})},activity:(id)=>mission.activity(id),region:()=>{applyFil('gov');tray.setAudience('gov');setPath('workforce/ecosystem/',true);go({k:'bay',stop:'region'})},
+    gallery:()=>{setPath('evidence-impact/',true);go({k:'evidence'})},activity:(id)=>mission.activity(id),region:()=>{mission.defaultFor('region');applyFil('gov');tray.setAudience('gov');setPath('workforce/ecosystem/',true);go({k:'bay',stop:'region'})},
     fov:()=>window.FACTORY?.cam().fov??50,
     reduced:()=>motion.reduced,
     setReduced:(on)=>motion.set(on),
@@ -705,7 +705,7 @@ export function initController(replayStory: () => void): ControllerApi {
       case 'evidence':resetToIntro('evidence',0);break;
     }}
   /** First frame with the 3D ready: open the place in the address, resume this tab's tour, or play the opening. */
-  function beginEntry(){entered=true;
+  function beginEntry(){entered=true;mission.sync();paintPodLabels();
     if(location.hash==='#skip-3d'||location.hash==='#skip'){enterLobby();openFlat(false,'fTop');return}
     const legacy=legacyHashPath();if(legacy!==null)setPath(legacy,false);
     const path=currentPath(),sv=story.savedState();
