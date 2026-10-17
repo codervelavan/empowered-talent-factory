@@ -312,3 +312,25 @@ html.opening #hud>*:not(#opening),html.opening #resumeTour{visibility:hidden}
 #tourMap [data-ts]{min-height:44px;justify-content:center}
 #tourMap .tPrev,#tourMap .tNext,#tourMap>button{min-height:44px;min-width:44px;font-size:16px}
 @media (max-width:760px){#tourHud p{font-size:18px}}
+/* POD mission activity inside the Engineer stop */
+#storyPanel .pm{display:flex;flex-direction:column;gap:10px;padding-top:4px}
+#storyPanel .pmTag{align-self:flex-start;padding:4px 10px;border-radius:999px;background:rgba(201,163,58,.16);color:#6B5310;font:700 13px/1.3 Inter,sans-serif}
+#storyPanel .pmH{margin:0;font:800 22px/1.2 Manrope,sans-serif;color:#0F2B22;text-wrap:balance}
+#storyPanel .pmP,#storyPanel .pmOut,#storyPanel .pmPerson p,#storyPanel .pmFind p{margin:0;font:500 18px/1.5 Inter,sans-serif;color:#1E3A2E}
+#storyPanel .pmL{margin:6px 0 0;color:#7A5E0E}
+#storyPanel .pmViews,#storyPanel .pmConds{display:flex;flex-wrap:wrap;gap:8px}
+#storyPanel .pmViews button,#storyPanel .pmConds button{min-height:44px;padding:9px 16px;border:1.5px solid rgba(15,43,34,.3);border-radius:999px;background:#fff;color:#0F2B22;font:700 16px/1.2 Manrope,sans-serif}
+#storyPanel .pmViews button[aria-pressed="true"],#storyPanel .pmConds button[aria-pressed="true"]{background:#0F2B22;border-color:#0F2B22;color:#F6DB2D}
+#storyPanel .pmPeople{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+#storyPanel .pmPeople button{width:100%;min-height:44px;font-size:16px;display:flex;flex-direction:column;align-items:flex-start;gap:3px;padding:10px 14px;border:1.5px solid rgba(15,43,34,.2);border-radius:12px;background:#fff;color:#0F2B22;text-align:left}
+#storyPanel .pmPeople button b{font:600 16px/1.35 Inter,sans-serif}
+#storyPanel .pmPeople button span{font:800 12px/1.2 Manrope,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7A5E0E}
+#storyPanel .pmPeople button[aria-pressed="true"]{border-color:#C9A33A;background:rgba(246,219,45,.14);box-shadow:inset 4px 0 0 #C9A33A}
+#storyPanel .pmPerson{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border-radius:12px;background:rgba(30,70,50,.06)}
+#storyPanel .pmPerson small{color:#7A5E0E}
+#storyPanel .pmOut{padding:10px 14px;border-left:3px solid #1FA85A;background:rgba(53,220,120,.08);border-radius:0 10px 10px 0}
+#storyPanel .pmFind{display:flex;flex-direction:column;align-items:flex-start;gap:6px;padding:12px 14px;border:1.5px solid #B4472C;border-radius:12px;background:rgba(180,71,44,.06)}
+#storyPanel .pmFind.pmOk{border-color:#1FA85A;background:rgba(53,220,120,.08)}
+#storyPanel .pmFind b{font:800 17px/1.3 Manrope,sans-serif;color:#0F2B22}
+#storyPanel .pmFind button{min-height:44px;padding:9px 16px;border:0;border-radius:999px;background:#0F2B22;color:#F6DB2D;font:700 16px/1.2 Manrope,sans-serif}
+#storyPanel .pmGoal{margin:0;font:600 15px/1.45 Inter,sans-serif;color:#6B5310}

@@ -18,6 +18,12 @@ export interface StoryCtx { profession: number }
 export type Txt = string | ((c: StoryCtx) => string);
 export interface Ask { q: Txt; a: Txt }
 export interface EndAction { label: string; run(c: StoryCtx): void }
+export interface StoryActivity {
+  html(): string;
+  key(): string;
+  act(action: string): void;
+}
+
 export interface StoryStop {
   room: RoomId;
   /** Stop name in the panel and on the map. */
@@ -36,6 +42,8 @@ export interface StoryStop {
   show?: { label: Txt; open: string };
   /** A second action at the stop (host.open), e.g. playing a labelled example. */
   extra?: { label: Txt; open: string };
+  /** An interactive activity the host renders inside this stop (e.g. 'pod', the POD mission). */
+  activity?: string;
   /** Optional questions under "Ask your guide". */
   asks?: Ask[] | ((c: StoryCtx) => Ask[]);
   /** Said on the way out, while walking to the next stop. */
@@ -79,6 +87,8 @@ export interface StoryHost {
   journey(j: Journey | null): void;
   /** Government and regional visitors go to the Ecosystem bay. */
   region(): void;
+  /** An activity shown inside a stop: its panel HTML, a key that changes when it must re-render, and its actions. */
+  activity?(id: string): StoryActivity | null;
   /** Visit the Evidence & Impact gallery on the plaza. */
   gallery(): void;
   /** Camera field of view in degrees (for placing boards on screen). */
@@ -135,7 +145,18 @@ let FOV = 50;
 /** Phones and short landscape screens show the example inside the guide panel, not on a board in the scene. */
 const compact = () => innerWidth <= 760 || innerHeight <= 500;
 
+/** A focus pose for one room: the camera eases from the room's own view to it and back. */
+const FOCUS = { room: null as RoomId | null, pose: null as [P3, P3] | null, cur: null as [P3, P3] | null, e: 0, want: 0 };
+/** Focus the camera at a stop on an authored pose (null returns to the room's own view). */
+export function setRoomFocus(room: RoomId, pose: [P3, P3] | null) {
+  if (pose) { if (FOCUS.room !== room || !FOCUS.cur || FOCUS.e < 0.01) FOCUS.cur = [[...pose[0]], [...pose[1]]]; FOCUS.room = room; FOCUS.pose = pose; FOCUS.want = 1; }
+  else FOCUS.want = 0;
+}
 const camOf = (room: RoomId): [P3, P3] => {
+  const base = camBase(room);
+  return FOCUS.room === room && FOCUS.cur && FOCUS.e > 0.001 ? mixPose(base, FOCUS.cur, sm(0, 1, FOCUS.e)) : base;
+};
+const camBase = (room: RoomId): [P3, P3] => {
   const { cam: [c, l], guide: g, you: y, aim } = SPOTS[room];
   if (innerWidth <= 760) {
     // Phones: the panel docks at the bottom, so face the pair and look a little below them;
@@ -516,6 +537,15 @@ export class Story {
   update(v: number, settled: boolean, dt: number) {
     FOV = this.host.fov();
     const all = this.all();
+    {
+      // Ease the camera focus; leaving the focused room drops it.
+      const here = all[Math.round(v)]?.room;
+      if (FOCUS.room && (here !== FOCUS.room || Math.abs(v - Math.round(v)) > 0.04)) FOCUS.want = 0;
+      const k = this.host.reduced() ? 1 : Math.min(1, dt * 2.4);
+      FOCUS.e += (FOCUS.want - FOCUS.e) * k;
+      if (FOCUS.cur && FOCUS.pose) FOCUS.cur = mixPose(FOCUS.cur, FOCUS.pose, k);
+      if (FOCUS.want === 0 && FOCUS.e < 0.002) { FOCUS.e = 0; FOCUS.room = null; FOCUS.cur = null; }
+    }
     this.visible = true;
     this.guide.root.visible = this.you.root.visible = true;
     const n = all.length;
@@ -641,7 +671,7 @@ export class Story {
     const moving = !arrived && Math.abs(v - idx) > 0.04;
     const changedStop = !moving && this.at !== idx;
     if (!moving && this.at !== idx) { this.at = idx; this.save(idx); }
-    const key = moving ? 'walk' + Math.floor(v) + '>' + (Math.floor(v) + 1) : 'stop' + idx + '|' + (this.ask?.stop === idx ? this.ask.k : -1) + '|' + this.mapOpen + '|' + this.wfAsk + '|' + this.ctx.profession + '|' + (this.audience ?? '') + '|' + this.host.reduced() + '|' + compact();
+    const key = moving ? 'walk' + Math.floor(v) + '>' + (Math.floor(v) + 1) : 'stop' + idx + '|' + (this.ask?.stop === idx ? this.ask.k : -1) + '|' + this.mapOpen + '|' + this.wfAsk + '|' + this.ctx.profession + '|' + (this.audience ?? '') + '|' + this.host.reduced() + '|' + compact() + '|' + (this.all()[idx]?.activity ? this.host.activity?.(this.all()[idx].activity!)?.key() ?? '' : '');
     this.panel.classList.toggle('moving', moving);
     if (key === this.shownKey) return;
     this.shownKey = key;
@@ -752,6 +782,7 @@ export class Story {
     let h = this.topHtml(`${s.title} · Stop ${num} of ${n}`);
     h += `<p class="spYou"><small>You</small>${esc(you)}</p><p class="spGuide"><small>Your EmpowerED guide</small>${esc(said)}</p>`;
     if (picked) h += `<button type="button" class="spLink" data-act="unask">Back to ${esc(s.title)}</button>`;
+    if (s.activity && !picked) { const A = this.host.activity?.(s.activity); if (A) h += A.html(); }
     if (s.pick === 'profession') h += `<div class="spPick"><label class="spSearch"><span>Find your profession</span><input type="search" data-search placeholder="Search professions" value="${esc(this.filter)}" autocomplete="off"></label><div class="spProfs" role="group" aria-label="Professions"></div></div>`;
     h += this.inlineBoard(s);
     if (s.show) h += `<button type="button" class="spShow" data-act="show">${esc(this.txt(s.show.label))} <span aria-hidden="true">↗</span></button>`;
@@ -790,6 +821,7 @@ export class Story {
     if (d.go !== undefined) { this.ask = null; this.mapOpen = false; this.shownKey = ''; this.host.travel(+d.go); return; }
     if (d.ask !== undefined) { this.ask = { stop: this.at, k: +d.ask }; this.shownKey = ''; this.keepFocus = true; this.focusSel = '.spAsk [aria-pressed="true"]'; return; }
     if (d.prof !== undefined) { this.ctx.profession = +d.prof; this.save(this.at); this.shownKey = ''; this.keepFocus = true; this.focusSel = '.spProfs [aria-pressed="true"]'; return; }
+    if (d.pod !== undefined) { const st = this.all()[this.at]; if (st?.activity) { this.host.activity?.(st.activity)?.act(d.pod); this.keepFocus = true; this.focusSel = `[data-pod="${d.pod}"]`; } return; }
     if (d.end !== undefined && this.path) { const a = +d.end < 0 ? this.path.primary : this.path.more?.[+d.end]; a?.run(this.ctx); return; }
     switch (d.act) {
       case 'continue': if (this.saved) this.pick(this.saved.a, this.saved); break;

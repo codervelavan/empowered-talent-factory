@@ -87,6 +87,14 @@ export interface FactoryApi {
   dioStep(k: number): void;
   /** The diorama step currently shown. */
   dioAt(): number;
+  /** POD mission (src/pod): highlight a team member (-1 none). */
+  podSelect(i: number): void;
+  /** Run one prepared machine cycle: condition index, and whether the team's reviewed version is used. */
+  podRun(cond: number, revised: boolean): void;
+  podReset(): void;
+  podState(): { ran: boolean; u: number; done: boolean; alert: boolean; cond: number; revised: boolean };
+  /** Text drawn on the trace panel and alert screen (for the language switch). */
+  podLabels(l: Record<string, string>): void;
   /** Evidence & Impact gallery frames (centre and the point each exhibit faces). */
   gallery(): { at: P3; face: P3 }[];
   /** Whether a profession (globe node) has a workflow diorama. */

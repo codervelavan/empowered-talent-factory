@@ -274,36 +274,7 @@ export function buildBrand(k: BrandKit, mobile: boolean): Brand {
     halo(pa, k.root, [-11.4, 9, -40.6], 5.5, 0.35);
   }
 
-  // ---- Engineer: POD hologram over a round table (frame 4) -------------------------
-  {
-    const ho = k.area('holo', { c: V(15, 3, -33), full: 18, start: 28 });
-    const cx = 14.5, cz = -33.6;
-    k.box(ho, cx, 0, cz, 2.8, 0.8, 2.8, { tone: 'ink' });
-    const pad = new THREE.Mesh(new THREE.CircleGeometry(1.7, 40), glow(ho, 0.4));
-    pad.rotation.x = -Math.PI / 2;
-    pad.position.set(cx, 0.83, cz);
-    k.root.add(pad);
-    const holo = new THREE.Group();
-    holo.position.set(cx, 0.86, cz);
-    k.root.add(holo);
-    const fill = glow(ho, 0.22), lineM = new THREE.LineBasicMaterial({ color: NEON, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
-    lineM.userData.base = 1;
-    ho.mats.push(lineM);
-    let s = 3;
-    const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
-    for (let i = 0; i < 9; i++) {
-      const w = 0.32 + rnd() * 0.3, hgt = 0.4 + rnd() * 1.3, x = (rnd() - 0.5) * 1.8, z = (rnd() - 0.5) * 1.8;
-      const geo = new THREE.BoxGeometry(w, hgt, w);
-      const m = new THREE.Mesh(geo, fill);
-      m.position.set(x, hgt / 2, z);
-      holo.add(m);
-      const e = new THREE.LineSegments(new THREE.EdgesGeometry(geo), lineM);
-      e.position.copy(m.position);
-      holo.add(e);
-    }
-    halo(ho, holo, [0, 1, 0], 4.5, 0.4);
-    ticks.push((now) => { holo.rotation.y = now / 4000; });
-  }
+  // (The engineering floor centrepiece is the POD mission machine, built in scene.ts.)
 
   // ---- Deploy: out the back, through the ETAF gate into the city (frame 5) ------------
   const dep = k.area('deploy', { c: V(0, 4, -76), full: 44, start: 70 });

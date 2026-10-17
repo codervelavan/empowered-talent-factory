@@ -3,7 +3,9 @@
 // flat (no-3D) fallback page.
 import { INDS, ECO, CAREER_CFG } from '../data/content';
 import { Tour, type TourRoute, type TourStop } from '../company/tour';
-import { Story, lobbyPose, type PathId, type RoomDef, type RoomId } from '../story/guide';
+import { Story, lobbyPose, setRoomFocus, type PathId, type RoomDef, type RoomId } from '../story/guide';
+import { PodMission } from '../pod/mission';
+import { MAINTENANCE } from '../pod/missions';
 import { Opening } from '../story/opening';
 import { currentPath, currentRoute, legacyHashPath, onPathChange, setPath } from '../app/router';
 import { routeFor, type Dest } from '../app/routes';
@@ -598,7 +600,7 @@ export function initController(replayStory: () => void): ControllerApi {
     intake:{label:'Intake',hotspots:[{at:[9.5,2.2,-11],label:'Entry Assessment',run:open('career',1)}]},
     pro:{label:'Specialise',hotspots:[{at:[7,9,-40.5],label:'Specialisation pods',run:open('career',4)}]},
     develop:{label:'Develop',hotspots:[{at:[-11.4,9,-40.5],label:'Evidence Passport',run:open('career',3)}]},
-    engineer:{label:'Engineer',hotspots:[{at:[14.5,2.8,-33.6],label:'Six POD stages',run:open('career',5)}]},
+    engineer:{label:'Engineer',hotspots:[{at:[14.5,3.2,-32.4],label:'The machine',run:()=>mission.act('view:machine')},...MAINTENANCE.people.map((p,i)=>({at:[p.at[0],2.25,p.at[2]] as P3,label:['Records & model','Failure definition','Sensors','Alert screen','Deploy & access'][i],run:()=>mission.act('p:'+i)}))]},
     delivery:{label:'Delivery',hotspots:[{at:[2.8,4.1,-35],label:'Stage boards',run:open('career',5)}]},
     verify:{label:'Verify',hotspots:[{at:[21,9.2,-43.8],label:'ETAF™ assurance core',run:open('career',6)}]},
     deploy:{label:'Deploy',hotspots:[{at:[0,6.4,-72],label:'ETAF™ gate',run:open('career',7)}]},
@@ -613,6 +615,8 @@ export function initController(replayStory: () => void): ControllerApi {
   const STORYANCH:Record<PathId,string>={student:'fCareer',founder:'fWork',hr:'fWork',university:'fWork',professional:'fGlobe'};
   const CATS:Record<PathId,string>={student:'For students',founder:'For startups',hr:'For organisations',university:'For universities',professional:'For professionals'};
   let pendSide=-1,pendView:'work'|'path'='path';
+  /** The POD mission at the Engineer stop (src/pod). */
+  const mission=new PodMission({factory:()=>window.FACTORY,focus:p=>setRoomFocus('engineer',p),changed:()=>{}});let podAt=-1;
   // A labelled example of an ETAF review: gates light one by one as evidence is reviewed, then go dark again.
   let etafDemoUntil=0;
   const etafNote=document.createElement('p');etafNote.id='etafNote';etafNote.hidden=true;etafNote.setAttribute('role','status');etafNote.innerHTML='<b>Example review</b> Gates light as each piece of evidence is reviewed. This is an illustration, not a real result.';document.body.appendChild(etafNote);
@@ -629,7 +633,7 @@ export function initController(replayStory: () => void): ControllerApi {
     explore:()=>{story.hide();startTour('career',0)},
     onAudience:(a)=>{stCat=a?CATS[a]:'For students';const au=a?({hr:'ent',university:'uni',founder:'st'} as Record<string,string>)[a]:undefined;if(au){applyFil(au);tray.setAudience(au)}},
     journey:(j)=>{if(mode==='tour'&&tour.route==='story')syncPath(j==='workforce'?'workforce/':'')},
-    gallery:()=>{setPath('evidence-impact/',true);go({k:'evidence'})},region:()=>{applyFil('gov');tray.setAudience('gov');setPath('workforce/ecosystem/',true);go({k:'bay',stop:'region'})},
+    gallery:()=>{setPath('evidence-impact/',true);go({k:'evidence'})},activity:(id)=>id==='pod'?mission:null,region:()=>{applyFil('gov');tray.setAudience('gov');setPath('workforce/ecosystem/',true);go({k:'bay',stop:'region'})},
     fov:()=>window.FACTORY?.cam().fov??50,
     reduced:()=>motion.reduced,
     setReduced:(on)=>motion.set(on),
@@ -656,7 +660,7 @@ export function initController(replayStory: () => void): ControllerApi {
     onRoute:(r)=>{closeDrawer();route=r},
     onStop:(r,i,settled)=>{const F=window.FACTORY;if(!F)return;
       if(!settled&&cd.classList.contains('open'))closeDrawer();
-      tourSettled=settled;const sroom=r==='story'?story.roomAt(i):undefined;tourCar=r==='career'?CEQ[i]:r==='story'?(sroom?ROOMEQ[sroom]??-1:-1):-1;tourWf=r==='story'?(sroom?ROOMWF[sroom]??-1:-1):r==='career'?(TOURS.career[i]?.id==='showroom'?1:-1):r==='evidence'?-1:(i>=1?i-1:-1);
+      tourSettled=settled;const sroom=r==='story'?story.roomAt(i):undefined;if(settled&&sroom==='engineer'&&podAt!==i){podAt=i;mission.enter()}else if(sroom!=='engineer')podAt=-1;tourCar=r==='career'?CEQ[i]:r==='story'?(sroom?ROOMEQ[sroom]??-1:-1):-1;tourWf=r==='story'?(sroom?ROOMWF[sroom]??-1:-1):r==='career'?(TOURS.career[i]?.id==='showroom'?1:-1):r==='evidence'?-1:(i>=1?i-1:-1);
       if(tourWf>=0&&tourWf!==wfAt){wfAt=tourWf;setBayHv(-1);F.pod(wfAt===2);if(wfAt===2)F.podJump(-1.62);F.wfStop(wfAt);if(wfAt===3||wfAt===4)F.campusIn()}
       if(tourWf<0&&wfAt!==0){wfAt=0;F.pod(false)}
       wfArr=settled;

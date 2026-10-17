@@ -138,8 +138,8 @@ export function makeRoutes(x: RouteActions): Record<'student' | 'founder' | 'hr'
           bridge: 'You’ve seen how to go deep in one role. Let’s see a full product team at work.' },
         { room: 'engineer', title: 'Engineer',
           concern: 'Could I really build something real, with a team?',
-          guide: 'On Career Accelerate, you join a product POD: a small cross-functional team taking on a real industry problem, with a mentor beside you and a role that’s yours.',
-          exhibit: () => board('What a POD discovers together', rows([['The problem', 'Help a clinic reduce missed appointments']]), chips(['Product', 'AI/ML', 'Data', 'Full stack', 'Cloud', 'Cyber', 'Mentor']), flow(STAGES, 2), note('You find out which part of building suits you best.')),
+          guide: 'On Career Accelerate, you join a product POD. Here, five people take on one industry problem together. Pick someone to see their work, or try the machine.',
+          activity: 'pod',
           show: { label: 'Team roles and the six stages', open: 'career:5' },
           asks: [
             { q: 'What’s a POD?', a: 'A small team where everyone has a real role: product, AI/ML, data, full stack, cloud or cyber. A mentor guides the team.' },

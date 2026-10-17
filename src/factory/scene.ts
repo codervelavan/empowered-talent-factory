@@ -6,6 +6,7 @@ import { POSES, HEAD, LANDMASK, INDS, ECO, type Pose } from '../data/content';
 import type { P3, TalentUnit, EcoNet } from '../bridge';
 import { buildBrand, drawLogo, whenLogo } from './brand';
 import { motion } from '../app/motion';
+import { MAINTENANCE } from '../pod/missions';
 import { quality } from '../app/quality';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
@@ -323,6 +324,88 @@ const GALLERY:{at:P3;face:P3;ry?:number}[]=[{at:[19.8,2.1,11.06],face:[19.8,2.1,
  GALLERY.forEach(f=>{if(f.ry)plane(gal,f.at[0],f.at[1],f.at[2],3.1,2.3,{ry:Math.PI/2,tone:'gold'});else plane(gal,f.at[0],f.at[1],f.at[2],3.1,2.3,{tone:'gold'})});
  box(gal,cx,0,16.6,1,1,1);box(gal,cx,1,16.6,.62,.1,.82,{solid:'gold'});
  TG=prevTG}
+// ---- POD mission: predictive maintenance on the engineering floor (src/pod/missions.ts) -----------
+// An instrumented CNC machine, its sensor traces, a technician alert screen and the five-person team.
+// Built as its own groups (not batched) so the spindle can move and each person can be highlighted.
+const MS={g:new THREE.Group(),people:[] as {g:THREE.Group;ring:THREE.Mesh<THREE.RingGeometry,THREE.MeshBasicMaterial>;mark:THREE.Mesh<THREE.OctahedronGeometry,THREE.MeshBasicMaterial>;link:THREE.Line<THREE.BufferGeometry,THREE.LineBasicMaterial>}[],
+  spindle:new THREE.Group(),traceT:null as RedrawTex|null,alertT:null as RedrawTex|null,sensors:[] as THREE.Mesh<THREE.BoxGeometry,THREE.MeshBasicMaterial>[]};
+interface MsnState{cond:number;revised:boolean;t0:number;sel:number;u:number;last:string;labels:Record<string,string>}
+const MSN:MsnState={cond:0,revised:false,t0:-1,sel:-1,u:0,last:'',labels:{}};
+const MSN_DUR=6500;
+/** Prepared example signals (0..1) for a condition at cycle position u. Deterministic, labelled as an example. */
+function msnSig(cond:number,u:number):[number,number]{const n=Math.sin(u*97)*.02+Math.sin(u*231)*.015;
+  if(cond===1){const b=sm(.32,.42,u)*(1-sm(.68,.78,u));return[.24+.46*b+n,.3+.28*sm(.35,.9,u)]}
+  if(cond===2)return[.27+.5*u*u+Math.sin(u*60)*.03*u+n,.3+.22*u];
+  return[.24+n,.3+.04*u]}
+/** The heavy cut is scheduled between these points; after review the team uses it as context. */
+const MSN_CUT:[number,number]=[.34,.76];
+function msnAlertAt(cond:number,revised:boolean,u:number):boolean{const [v]=msnSig(cond,u);if(v<.55)return false;if(revised&&cond===1&&u>=MSN_CUT[0]&&u<=MSN_CUT[1])return false;return true}
+{const prevTG=TG;TG=MS.g;factoryG.add(MS.g);const M0=MAINTENANCE.machine,mx=M0[0],mz=M0[2];
+ const ma=area('msnMachine',{manual:1,parent:MS.g});
+ // Base, enclosure with a window, control panel and chip tray.
+ box(ma,mx,0,mz,3.1,.9,1.9);box(ma,mx,.9,mz,3.1,2,1.9,{tone:'ink'});box(ma,mx,2.9,mz,3.1,.18,1.9);
+ plane(ma,mx-.25,1.9,mz+.96,2,1.3,{tone:'fine'});line(ma,'fine',[mx-1.25,1.25,mz+.97],[mx+.75,1.25,mz+.97]);
+ box(ma,mx+1.85,.4,mz+.35,.5,1.6,.4);plane(ma,mx+1.85,1.75,mz+.56,.36,.42,{tone:'ink'});box(ma,mx+1.85,1.65,mz+.57,.26,.3,.02,{solid:'gold'});
+ box(ma,mx-.25,.9,mz+.2,1.9,.12,1);
+ // Sensor hub on the side, with cables to the two sensors.
+ box(ma,mx+1.55,2.95,mz-.4,.5,.36,.4,{tone:'ink'});
+ // The moving spindle head: its own area so its lines move with it.
+ MS.spindle.position.set(mx-.25,0,mz);MS.g.add(MS.spindle);{const prev=TG;TG=MS.spindle;const sa=area('msnSpindle',{manual:1,parent:MS.spindle});
+   box(sa,0,1.85,0,.7,.95,.7,{tone:'ink'});cyl(sa,0,1.55,0,.12,.5);TG=prev}
+ // Sensors: vibration on the spindle bearing, temperature on the motor housing (gold, highlighted when in use).
+ const sm1=new THREE.MeshBasicMaterial({color:GOLD,transparent:true,opacity:.9}),sv=new THREE.Mesh(BOX,sm1);sv.scale.set(.2,.16,.2);sv.position.set(.42,2.15,.2);MS.spindle.add(sv);
+ const sm2=new THREE.MeshBasicMaterial({color:GOLD,transparent:true,opacity:.9}),st=new THREE.Mesh(BOX,sm2);st.scale.set(.22,.22,.12);st.position.set(mx+1.2,2.5,mz+.97);MS.g.add(st);MS.sensors=[sv,st];
+ line(ma,'gold',[mx+1.2,2.6,mz+.97],[mx+1.55,3.1,mz-.2]);line(ma,'gold',[mx+.2,2.8,mz+.2],[mx+1.4,3.1,mz-.3]);
+ // Trace panel above the machine, and the technician alert screen on a stand.
+ MS.traceT=ctex(640,300,(x,w,h)=>msnDrawTrace(x,w,h));
+ const tp=new THREE.Mesh(PL,new THREE.MeshBasicMaterial({map:MS.traceT,side:THREE.DoubleSide}));tp.scale.set(3,1.4,1);tp.position.set(mx+.3,3.95,mz+.3);tp.rotation.y=.4;MS.g.add(tp);
+ line(ma,'ink',[mx+.3,3.08,mz+.3],[mx+.3,3.25,mz+.3]);
+ const so=MAINTENANCE.people[3].art;box(ma,so[0],0,so[2]-.05,.1,1,.1,{solid:'green'});
+ MS.alertT=ctex(560,360,(x,w,h)=>msnDrawAlert(x,w,h));
+ const ap=new THREE.Mesh(PL,new THREE.MeshBasicMaterial({map:MS.alertT,side:THREE.DoubleSide}));ap.scale.set(1.75,1.12,1);ap.position.set(so[0],so[1]+.15,so[2]);ap.rotation.y=-.15;MS.g.add(ap);
+ // The records bench (data), with the cream source notebook: clipped corner, three green rows.
+ const da=MAINTENANCE.people[0].art;box(ma,da[0],0,da[2],1.7,.78,.85);
+ const nb=ctex(256,180,(x,w,h)=>{x.fillStyle='#F2EFE2';x.beginPath();x.moveTo(0,0);x.lineTo(w-46,0);x.lineTo(w,46);x.lineTo(w,h);x.lineTo(0,h);x.closePath();x.fill();x.strokeStyle='#0F2B22';x.lineWidth=6;x.stroke();x.fillStyle='#1E4632';[54,96,138].forEach(y=>x.fillRect(26,y,w-60,16));x.fillStyle='#C9A33A';x.fillRect(w-40,8,24,24)});
+ const nbm=new THREE.Mesh(PL,new THREE.MeshBasicMaterial({map:nb,transparent:true,side:THREE.DoubleSide}));nbm.scale.set(.62,.44,1);nbm.rotation.x=-Math.PI/2;nbm.rotation.z=.3;nbm.position.set(da[0]-.25,.8,da[2]);MS.g.add(nbm);
+ box(ma,da[0]+.45,.78,da[2]-.15,.5,.32,.04,{tone:'ink'});
+ // Ops console (cloud/MLOps & security): a small server box with a status light.
+ const oa=MAINTENANCE.people[4].art;box(ma,oa[0],0,oa[2],.6,1.1,.6);box(ma,oa[0],1.1,oa[2]+.31,.36,.08,.02,{solid:'gold'});
+ // The five people, each in their own group with a ring, a marker and a link to their work.
+ MAINTENANCE.people.forEach((p,i)=>{const g=new THREE.Group();MS.g.add(g);TG=g;const a=area('msnP'+i,{manual:1,parent:g});
+   const ry=Math.atan2(p.art[0]-p.at[0],p.art[2]-p.at[2]);figure(a,i===1?'point':'stand',p.at[0],0,p.at[2],ry,i%2?1:-1,1.75);
+   const ring=new THREE.Mesh(new THREE.RingGeometry(.42,.55,32),new THREE.MeshBasicMaterial({color:GOLD,transparent:true,opacity:.3,side:THREE.DoubleSide,depthWrite:false}));ring.rotation.x=-Math.PI/2;ring.position.set(p.at[0],.04,p.at[2]);g.add(ring);
+   const mark=new THREE.Mesh(new THREE.OctahedronGeometry(.14),new THREE.MeshBasicMaterial({color:GOLD,transparent:true,opacity:0}));mark.position.set(p.art[0],p.art[1]+.95,p.art[2]);g.add(mark);
+   const lg=new THREE.BufferGeometry().setFromPoints([V(p.at[0],1.2,p.at[2]),V(p.art[0],p.art[1]+.2,p.art[2])]);const link=new THREE.Line(lg,new THREE.LineBasicMaterial({color:GOLD,transparent:true,opacity:0}));g.add(link);
+   MS.people.push({g,ring,mark,link})});
+ MS.g.traverse(o=>{o.userData.noRay=true});
+ TG=prevTG}
+function msnLabel(k:string,d:string){return MSN.labels[k]??d}
+function msnDrawTrace(x:CanvasRenderingContext2D,w:number,h:number){
+  x.fillStyle='#0F2B22';x.fillRect(0,0,w,h);x.fillStyle='#E9C96A';x.font='800 22px Manrope, sans-serif';x.textBaseline='middle';sp(x,'3px');x.fillText(msnLabel('traceT','SENSOR READINGS · EXAMPLE DATA'),20,26);sp(x,'0px');
+  const L=24,R=w-20,T=58,B=h-34,u=MSN.u,N=140;
+  if(MSN.revised&&MSN.cond===1){x.fillStyle='rgba(233,201,106,.16)';x.fillRect(L+(R-L)*MSN_CUT[0],T,(R-L)*(MSN_CUT[1]-MSN_CUT[0]),B-T);x.fillStyle='#E9C96A';x.font='700 16px Inter, sans-serif';x.fillText(msnLabel('cut','Scheduled heavy cut'),L+(R-L)*MSN_CUT[0]+6,T+14)}
+  const thr=B-(B-T)*.55;x.strokeStyle='rgba(242,239,226,.4)';x.setLineDash([6,6]);x.lineWidth=2;x.beginPath();x.moveTo(L,thr);x.lineTo(R,thr);x.stroke();x.setLineDash([]);
+  const draw=(k:number,c:string)=>{x.strokeStyle=c;x.lineWidth=4;x.beginPath();for(let i=0;i<=N;i++){const uu=i/N;if(uu>u)break;const y=B-(B-T)*msnSig(MSN.cond,uu)[k];if(i)x.lineTo(L+(R-L)*uu,y);else x.moveTo(L,y)}x.stroke()};
+  draw(0,'#35DC78');draw(1,'#F2A65A');
+  x.font='700 17px Inter, sans-serif';x.fillStyle='#35DC78';x.fillText(msnLabel('vib','Vibration'),L,h-16);x.fillStyle='#F2A65A';x.fillText(msnLabel('temp','Temperature'),L+130,h-16);x.fillStyle='rgba(242,239,226,.6)';x.fillText(msnLabel('thr','Alert line'),R-110,thr-12)}
+function msnDrawAlert(x:CanvasRenderingContext2D,w:number,h:number){
+  const ran=MSN.t0>=0,done=MSN.u>=1,alert=ran&&[...Array(41)].some((_,i)=>i/40<=MSN.u&&msnAlertAt(MSN.cond,MSN.revised,i/40));
+  x.fillStyle='#F2EFE2';x.fillRect(0,0,w,h);x.fillStyle=alert?'#B4472C':'#0F2B22';x.fillRect(0,0,w,64);x.fillStyle='#F2EFE2';x.font='800 24px Manrope, sans-serif';x.textBaseline='middle';sp(x,'2px');
+  x.fillText(alert?msnLabel('alertH','ALERT · SPINDLE BEARING'):msnLabel('okH','SPINDLE BEARING · WATCHING'),22,33);sp(x,'0px');
+  x.fillStyle='#0F2B22';x.font='700 26px Manrope, sans-serif';
+  const msg=!ran?msnLabel('idle','No cycle running'):alert?(MSN.cond===2?msnLabel('wearMsg','Early wear signs. Inspect at the next planned stop.'):msnLabel('loadMsg','Vibration above the alert line.')):(MSN.revised&&MSN.cond===1&&done?msnLabel('ctxMsg','Heavy cut scheduled. Reading expected, no alert.'):done?msnLabel('okMsg','Cycle complete. No alert.'):msnLabel('runMsg','Reading the cycle…'));
+  const words=msg.split(' ');let line='',y=110;words.forEach(wd=>{const t=line?line+' '+wd:wd;if(x.measureText(t).width>w-44){x.fillText(line,22,y);y+=36;line=wd}else line=t});x.fillText(line,22,y);
+  x.fillStyle='#4C5A50';x.font='600 19px Inter, sans-serif';x.fillText(msnLabel('ctx','Context: job schedule, tool, operating hours'),22,h-56);x.fillText(msnLabel('ex','Example data · not a live machine'),22,h-26)}
+const MSN_X=MAINTENANCE.machine[0]-.25;
+function msnTick(now:number,dt:number){
+  if(!MS.g.visible)return;
+  if(MSN.t0>=0){MSN.u=reduce?1:Math.min(1,(now-MSN.t0)/MSN_DUR)}
+  const u=MSN.u,running=MSN.t0>=0&&u<1,[v]=MSN.t0>=0?msnSig(MSN.cond,u):[0];
+  MS.spindle.position.x=MSN_X+(running?Math.sin(u*Math.PI*6)*.6:0);MS.spindle.position.y=running?(Math.sin(now/22)*.02*v):0;
+  MS.sensors.forEach(s=>{s.material.opacity=running?.6+.4*Math.abs(Math.sin(now/180)):.9});
+  const key=Math.round(u*120)+'|'+MSN.cond+'|'+MSN.revised+'|'+MSN.t0;if(key!==MSN.last){MSN.last=key;MS.traceT?.redraw();MS.alertT?.redraw()}
+  MS.people.forEach((p,i)=>{const on=MSN.sel===i,k=Math.min(1,dt*6);p.ring.material.opacity+=((MSN.sel<0?.3:on?.95:.12)-p.ring.material.opacity)*k;const sc=on?1.35:1;p.ring.scale.setScalar(p.ring.scale.x+(sc-p.ring.scale.x)*k);
+    p.mark.material.opacity+=((on?1:0)-p.mark.material.opacity)*k;p.mark.rotation.y=now/600;p.link.material.opacity+=((on?.9:0)-p.link.material.opacity)*k})}
 const DTMP=new THREE.Vector3();
 /** Zoom the globe camera onto the chosen diorama and play its three steps (sample input, AI draft, you check). */
 function dioTick(now:number,dt:number){
@@ -643,7 +726,7 @@ window.FACTORY={
   poseFly(r,e){const w=ROUTES[r].wp[0];C.position.lerpVectors(EXTP,V(...w[0]),e);look.lerpVectors(EXTL,V(...w[1]),e)},
   setHover(k){G.hover=k},poseAt(p,l){C.position.set(p[0],p[1],p[2]);look.set(l[0],l[1],l[2])},
   setWf(on){G.wf=on},setBays(hv,sel,dim){G.bayHv=hv;G.baySel=sel;G.bayDim=dim},setUnits(u){G.units=u},setTeam(n){if(teamName.v!==n){teamName.v=n;teamTex.redraw()}},wfStop(i){G.stop=i},campusIn(r){if(G.cam.t0<0||r){G.cam.t0=performance.now();G.cc.t0=-1}},podCross(){G.cc.t0=Math.max(performance.now(),G.cam.t0+2700)},setCampus(a,c){G.act=a;G.con=c},setActor(i){G.actor=i},setNet(o){G.net=o},
-  pod(on){if(on&&!G.pod.on)G.pod.t0=performance.now();G.pod.on=on},setPodLead(l){G.podLead=l},globeZoom(i){if(i>=0&&!DIOS.some(D=>D.node===i))i=-1;if(i>=0&&i!==G.zoom){G.dioStep=-1;G.dioT0=performance.now()}G.zoom=i;if(i>=0){G.zoomL=i;/* Profession on top, the company (NF) behind it, away from the camera. */const n=NODES[i].n,fb=NF.clone().sub(n.clone().multiplyScalar(NF.dot(n))).normalize(),r=fb.clone().cross(n).normalize(),L=new THREE.Matrix4().makeBasis(r,n,fb),W=new THREE.Matrix4().makeBasis(V(1,0,0),V(0,1,0),V(0,0,-1));G.focus={q0:Rcur.clone(),q1:new THREE.Quaternion().setFromRotationMatrix(W.multiply(L.transpose())),t0:performance.now()}}},dioStep(k){G.dioStep=k;if(k<0)G.dioT0=performance.now()},dioAt(){return G.dioCur},gallery(){return GALLERY.map(g=>({at:g.at,face:g.face}))},dioDebug(){const D=DIOS.find(x=>x.node===G.zoomL);if(!D)return null;return{yaw:D.g.rotation.y,cam:C.position.toArray().map(v=>+v.toFixed(2)),labels:D.labels.map(m=>{const p=m.getWorldPosition(new THREE.Vector3());const q=p.clone().project(C);return [p.toArray().map(v=>+v.toFixed(2)),[Math.round((q.x+1)/2*innerWidth),Math.round((1-q.y)/2*innerHeight)]]})}},hasDio(i){return DIOS.some(D=>D.node===i)},podJump(i){G.pod.on=true;G.pod.t0=performance.now()-(4200+i*2600)},podG(){return G.pod.on?G.podGv:-1},podTime(){return G.pod.on?(performance.now()-G.pod.t0)/1000:0},setCrate(g){G.crate=g},setTicks(a){G.ticks=a},setWalk(on){G.walk=on},
+  pod(on){if(on&&!G.pod.on)G.pod.t0=performance.now();G.pod.on=on},setPodLead(l){G.podLead=l},globeZoom(i){if(i>=0&&!DIOS.some(D=>D.node===i))i=-1;if(i>=0&&i!==G.zoom){G.dioStep=-1;G.dioT0=performance.now()}G.zoom=i;if(i>=0){G.zoomL=i;/* Profession on top, the company (NF) behind it, away from the camera. */const n=NODES[i].n,fb=NF.clone().sub(n.clone().multiplyScalar(NF.dot(n))).normalize(),r=fb.clone().cross(n).normalize(),L=new THREE.Matrix4().makeBasis(r,n,fb),W=new THREE.Matrix4().makeBasis(V(1,0,0),V(0,1,0),V(0,0,-1));G.focus={q0:Rcur.clone(),q1:new THREE.Quaternion().setFromRotationMatrix(W.multiply(L.transpose())),t0:performance.now()}}},dioStep(k){G.dioStep=k;if(k<0)G.dioT0=performance.now()},dioAt(){return G.dioCur},podSelect(i){MSN.sel=i},podRun(c,revised){MSN.cond=c;MSN.revised=revised;MSN.t0=performance.now();MSN.u=0},podReset(){MSN.t0=-1;MSN.u=0;MSN.revised=false},podState(){const ran=MSN.t0>=0;let alert=false;if(ran)for(let i=0;i<=40;i++){if(i/40>MSN.u)break;if(msnAlertAt(MSN.cond,MSN.revised,i/40)){alert=true;break}}return{ran,u:MSN.u,done:ran&&MSN.u>=1,alert,cond:MSN.cond,revised:MSN.revised}},podLabels(l){MSN.labels=l;MS.traceT?.redraw();MS.alertT?.redraw()},gallery(){return GALLERY.map(g=>({at:g.at,face:g.face}))},dioDebug(){const D=DIOS.find(x=>x.node===G.zoomL);if(!D)return null;return{yaw:D.g.rotation.y,cam:C.position.toArray().map(v=>+v.toFixed(2)),labels:D.labels.map(m=>{const p=m.getWorldPosition(new THREE.Vector3());const q=p.clone().project(C);return [p.toArray().map(v=>+v.toFixed(2)),[Math.round((q.x+1)/2*innerWidth),Math.round((1-q.y)/2*innerHeight)]]})}},hasDio(i){return DIOS.some(D=>D.node===i)},podJump(i){G.pod.on=true;G.pod.t0=performance.now()-(4200+i*2600)},podG(){return G.pod.on?G.podGv:-1},podTime(){return G.pod.on?(performance.now()-G.pod.t0)/1000:0},setCrate(g){G.crate=g},setTicks(a){G.ticks=a},setWalk(on){G.walk=on},
   rayWhat(a,b){const A=V(...a),dir=V(...b).sub(A),len=dir.length();dir.normalize();factoryG.updateMatrixWorld(true);const rc=new THREE.Raycaster(A,dir,0,len);const nm=new THREE.Vector3();return rc.intersectObject(factoryG,true).filter(h=>(h.object as THREE.Mesh).isMesh&&h.face).slice(0,4).map(h=>{const m=h.object as THREE.Mesh;let vis=true;for(let o:THREE.Object3D|null=m;o;o=o.parent)if(!o.visible)vis=false;nm.copy(h.face!.normal).transformDirection(m.matrixWorld);const mat=m.material as THREE.MeshBasicMaterial;return {p:[h.point.x,h.point.y,h.point.z].map(v=>+v.toFixed(2)),vis,ny:+nm.y.toFixed(2),geo:(m.geometry as THREE.BufferGeometry).type,op:mat.opacity,tr:mat.transparent,cw:mat.colorWrite,dw:mat.depthWrite,size:(()=>{(m.geometry as THREE.BufferGeometry).computeBoundingBox();const b=(m.geometry as THREE.BufferGeometry).boundingBox!;return [b.max.x-b.min.x,b.max.y-b.min.y,b.max.z-b.min.z].map(v=>+v.toFixed(1))})()}})},
   rayHits(a,b){const A=V(...a),dir=V(...b).sub(A),len=dir.length();if(len<1e-4)return [];dir.normalize();factoryG.updateMatrixWorld(true);const rc=new THREE.Raycaster(A,dir,0,len);const skip=(o:THREE.Object3D|null):boolean=>{for(;o;o=o.parent)if(o.userData.noRay)return true;return false};const nm=new THREE.Vector3();return rc.intersectObject(factoryG,true).filter(h=>{const m=h.object as THREE.Mesh;if(!m.isMesh||!h.face||skip(m))return false;nm.copy(h.face.normal).transformDirection(m.matrixWorld);return Math.abs(nm.y)<.6}).map(h=>({p:[+h.point.x.toFixed(2),+h.point.y.toFixed(2),+h.point.z.toFixed(2)] as P3,d:+h.distance.toFixed(2)}))},
   obstacles(y0,y1){factoryG.updateMatrixWorld(true);const walls:number[]=[],floor:number[]=[],low:number[]=[],high:number[]=[],highY:number[]=[];const a=V(),b=V(),c=V(),e1=V(),e2=V(),n=V();const skip=(o:THREE.Object3D|null):boolean=>{for(;o;o=o.parent)if(o.userData.noRay)return true;return false};
@@ -701,7 +784,8 @@ window.FACTORY={
     G.gdE+=((G.gsel>=0&&G.gV>.5?1:0)-G.gdE)*Math.min(1,dt*4);[gA,gRim,gArc].forEach(a=>{if(a.dimU)a.dimU.value=.8*G.gdE});selR.visible=G.gsel>=0&&G.gV>.5&&G.zoomE<.05;if(selR.visible){const n=NODES[G.gsel].n;selR.position.copy(n).multiplyScalar(GR+.12);selR.quaternion.setFromUnitVectors(V(0,0,1),n);selM.opacity=.95*G.gdE}
     const im=mode==='intro'||mode==='globe';
     AREAS.forEach(a=>{
-      if(a.name.startsWith('dio'))a.r=G.done&&a===DIOS.find(D=>D.node===G.zoomL)?.a?sm(.5,1,G.zoomE):0;
+      if(a.name.startsWith('msn'))a.r=im?0:1;
+      else if(a.name.startsWith('dio'))a.r=G.done&&a===DIOS.find(D=>D.node===G.zoomL)?.a?sm(.5,1,G.zoomE):0;
       else if(a===grd)a.r=1-sm(0,.5,G.gV);
       else if(a===brand.skyline)a.r=1-sm(.75,1,G.gV);
       else if(a===gA)a.r=G.gV;
@@ -719,7 +803,7 @@ window.FACTORY={
       a.u.value=a.r;a.mats.forEach(m=>{const op=m.userData.base*a.r;m.opacity=op;m.visible=a.r>.002;
         // Fully revealed solids draw in the opaque pass (hundreds of sorted transparent draws were the frame-rate cost).
         const tr=op<.999||m.blending!==THREE.NormalBlending||m.depthWrite===false;if(m.transparent!==tr){m.transparent=tr;m.needsUpdate=true}})});
-    brand.tick(reduce||quality.light?0:now,dt);
+    brand.tick(reduce||quality.light?0:now,dt);msnTick(now,dt);
     R.render(S,C);CR.render(S,C);
   },
   globeBegin(dir){G.dir=dir;G.done=false;G.focus=null;G.panel=0;G.A={p:C.position.clone(),l:lt.clone(),s:G.fs,q:Rcur.clone()};G.B=dir==='in'?{p:GPOS,l:GLOOK,s:SF,q:Rg}:{p:EXTP,l:EXTL,s:1,q:R0};if(dir==='in'){const a=G.A;G.cp=new THREE.CatmullRomCurve3([a.p.clone(),V(2,31,-4),V(0,62,-18),GPOS.clone()],false,'centripetal');G.cl=new THREE.CatmullRomCurve3([a.l.clone(),V(0,26.4,-10),V(0,4,-30),GLOOK.clone()],false,'centripetal')}},
