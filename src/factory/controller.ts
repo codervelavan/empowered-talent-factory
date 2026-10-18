@@ -720,7 +720,8 @@ export function initController(replayStory: () => void): ControllerApi {
   // Scrolling back up while on the globe returns to the company.
   addEventListener('wheel',e=>{if(mode==='globe'&&e.deltaY<-30&&!(e.target as Element).closest?.('#gSide,#gWho,#gList,aside'))leaveGlobe(null)},{passive:true});
 
-  function loop(now:number){requestAnimationFrame(loop);step(now,false)}
+  // __hold (dev/review only) freezes the loop so a composed camera pose can be captured.
+  function loop(now:number){requestAnimationFrame(loop);if((window as {__hold?:boolean}).__hold)return;step(now,false)}
   requestAnimationFrame(loop);
   window.__step=()=>step(performance.now()+99999,true);
   addEventListener('scroll',()=>{if(document.hidden)window.__step!()},{passive:true});

@@ -32,6 +32,10 @@ export interface FactoryApi {
   poseIntro(d?: number): void;
   poseFly(r: string, e: number): void;
   poseAt(p: number[], l: number[]): void;
+  /** Company assembly progress for the opening (1 = complete). */
+  build(p: number): void;
+  /** Opening notebook state: 0 gap, 1 source shown, 2 reviewed. */
+  opNote(n: number): void;
   poseRoute(r: string, k: number): void;
   snapshot(): void;
   poseBack(t: number): void;

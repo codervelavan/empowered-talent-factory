@@ -23,7 +23,7 @@ interface Area {
   _g?: THREE.MeshBasicMaterial; _y?: THREE.MeshBasicMaterial; _gl?: THREE.MeshBasicMaterial;
   /** per-colour materials for blocky people */ _vx?: Record<number, THREE.MeshLambertMaterial>;
 }
-interface BoxOpts { p?: THREE.Matrix4; rx?: number; ry?: number; rz?: number; solid?: 'none' | 'green' | 'gold'; tone?: Tone | null }
+interface BoxOpts { p?: THREE.Matrix4; rx?: number; ry?: number; rz?: number; solid?: 'none' | 'green' | 'gold' | 'wood'; tone?: Tone | null }
 interface PlaneOpts { rx?: number; ry?: number; mat?: THREE.Material; fill?: boolean; tone?: Tone }
 type RedrawTex = THREE.CanvasTexture & { redraw(): void };
 interface Route { wp: [P3, P3][]; stops: number[]; pc?: THREE.CatmullRomCurve3; lc?: THREE.CatmullRomCurve3 }
@@ -61,7 +61,16 @@ const SC=(x:number,y:number,z:number)=>new THREE.Matrix4().makeScale(x,y,z);
 const fillMat=new THREE.MeshLambertMaterial({color:PAPER,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:2});
 // Light for the paper surfaces and people: a sky/ground fill keeps tops at paper brightness and lets sides
 // fall about 10-15% darker with a warm bounce; a soft sun from the front left separates the faces.
-{S.add(new THREE.HemisphereLight(0xFFFFFF,0xF0E9D8,Math.PI*.88));const sun=new THREE.DirectionalLight(0xFFF3DC,Math.PI*.15);sun.position.set(-.45,1,.55);S.add(sun)}
+// Late-afternoon warmth: a warm sky/ground fill plus a low golden sun from the front left.
+{S.add(new THREE.HemisphereLight(0xFFF6E8,0xF1E6CF,Math.PI*.8));const sun=new THREE.DirectionalLight(0xFFDDA8,Math.PI*.3);sun.position.set(-.75,.8,.6);S.add(sun)}
+/** Warm materials shared by every desk top, planting and glass pane (merged per material like the paper fills). */
+const WOOD=new THREE.MeshLambertMaterial({color:0xE2C79A,side:THREE.DoubleSide,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:2});
+const BARK=new THREE.MeshLambertMaterial({color:0x8C6B4A});
+const LEAF=[0x6F9E68,0x86B077,0x5E8C5C].map(c=>new THREE.MeshLambertMaterial({color:c,flatShading:true}));
+const GLASS=new THREE.MeshBasicMaterial({color:0xA9D3BF,transparent:true,opacity:.2,depthWrite:false,side:THREE.DoubleSide});
+const ICO=new THREE.IcosahedronGeometry(1,0),CYL8=new THREE.CylinderGeometry(1,1,1,8);
+// Outdoor planting is already there when the company starts to assemble, so it keeps its own (never cut) materials.
+const LEAFO=LEAF.map(m=>{const c=m.clone();c.userData.noClip=1;return c}),BARKO=BARK.clone();BARKO.userData.noClip=1;
 function amat(a:Area,color:THREE.ColorRepresentation,base=1,map:THREE.Texture|null=null){const m=new THREE.MeshBasicMaterial({color,map,transparent:true,opacity:0,side:THREE.DoubleSide,depthWrite:base>=1,polygonOffset:true,polygonOffsetFactor:.5,polygonOffsetUnits:1});m.userData.base=base;a.mats.push(m);return m}
 const Gm=(a:Area)=>a._g||(a._g=amat(a,INK)),Ym=(a:Area)=>a._y||(a._y=amat(a,GOLD)),GLm=(a:Area)=>a._gl||(a._gl=amat(a,GOLD,.14));
 const factoryG=new THREE.Group();factoryG.matrixAutoUpdate=false;S.add(factoryG);let TG=factoryG;
@@ -73,7 +82,7 @@ const EDGES=[[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[
 function box(a:Area,x:number,y:number,z:number,w:number,h:number,d:number,o:BoxOpts={}){
   const m=(o.p?o.p.clone():new THREE.Matrix4()).multiply(M(x,y+h/2,z,o.rx||0,o.ry||0,o.rz||0)).multiply(SC(w,h,d));
   const s=o.solid;
-  if(s!=='none')addS(BOX,s==='green'?Gm(a):s==='gold'?Ym(a):fillMat,m);
+  if(s!=='none')addS(BOX,s==='green'?Gm(a):s==='gold'?Ym(a):s==='wood'?WOOD:fillMat,m);
   const t=o.tone!==undefined?o.tone:(s==='green'||s==='gold'?null:'ink');
   if(t){const c:THREE.Vector3[]=[];for(let i=0;i<8;i++)c.push(V(i&1?.5:-.5,i&2?.5:-.5,i&4?.5:-.5).applyMatrix4(m));EDGES.forEach(([i,j])=>seg(a,t,c[i],c[j]))}
 }
@@ -120,7 +129,15 @@ function figure(a:Area,pose:Pose,x:number,y:number,z:number,ry=0,flip=1,h=1.75,t
 }
 const face=(x:number,z:number,c:number[])=>Math.atan2(c[0]-x,c[2]-z);
 function chair(a:Area,x:number,y:number,z:number,dir:number){box(a,x,y+.4,z,.48,.05,.48,{tone:'fine'});line(a,'fine',[x,y,z],[x,y+.4,z]);line(a,'fine',[x-.28,y,z],[x+.28,y,z]);line(a,'fine',[x,y,z-.28],[x,y,z+.28]);const bx=x-dir*.25;line(a,'fine',[bx,y+.43,z-.2],[bx-dir*.04,y+1.05,z-.2]);line(a,'fine',[bx,y+.43,z+.2],[bx-dir*.04,y+1.05,z+.2]);line(a,'fine',[bx-dir*.04,y+1.05,z-.2],[bx-dir*.04,y+1.05,z+.2])}
-function desk(a:Area,x:number,y:number,z:number,w=1.3,d=.9){box(a,x,y+.7,z,w,.05,d,{});[[-1,-1],[1,-1],[1,1],[-1,1]].forEach(([i,j])=>line(a,'fine',[x+i*(w/2-.05),y,z+j*(d/2-.05)],[x+i*(w/2-.05),y+.7,z+j*(d/2-.05)]))}
+/** A low-poly tree or potted plant: trunk, two or three faceted leaf clumps, a soft shadow, optionally a pot. */
+function plant(x:number,y:number,z:number,s=1,pot=false,out=false){const LF=out?LEAFO:LEAF,BK=out?BARKO:BARK;
+  let hv=Math.sin(x*91.7+z*47.3)*9631.7;hv-=Math.floor(hv);const th=(pot?.5:1.7)*s,py=pot?.45*s:0;
+  if(pot){addS(CYL8,fillMat,M(x,y+.22*s,z).multiply(SC(.32*s,.44*s,.32*s)));addS(CYL8,WOOD,M(x,y+.45*s,z).multiply(SC(.34*s,.04*s,.34*s)))}
+  addS(CYL8,BK,M(x,y+py+th/2,z).multiply(SC(.09*s,th,.09*s)));
+  const r=(pot?.55:1.25)*s,n=pot?2:3;
+  for(let i=0;i<n;i++){const k=i/n*Math.PI*2+hv*6,o=i===0?0:r*.55;addS(ICO,LF[(i+Math.floor(hv*3))%3],M(x+Math.cos(k)*o,y+py+th+r*(i===0?.75:.45),z+Math.sin(k)*o,hv*3,k,0).multiply(SC(r*(i===0?1:.78),r*(i===0?.9:.7),r*(i===0?1:.78))))}
+  contact(x,y,z,(pot?1.1:3.2)*s,(pot?1.1:3.2)*s)}
+function desk(a:Area,x:number,y:number,z:number,w=1.3,d=.9){box(a,x,y+.7,z,w,.05,d,{solid:'wood'});[[-1,-1],[1,-1],[1,1],[-1,1]].forEach(([i,j])=>line(a,'fine',[x+i*(w/2-.05),y,z+j*(d/2-.05)],[x+i*(w/2-.05),y+.7,z+j*(d/2-.05)]))}
 function monitor(a:Area,x:number,y:number,z:number,ry:number){box(a,x,y+.8,z,.7,.42,.04,{ry});line(a,'fine',[x,y+.75,z],[x,y+.8,z])}
 function sitAt(a:Area,x:number,y:number,z:number,dir=1){figure(a,'sit',x,y,z,0,dir);chair(a,x+dir*.02,y,z,dir);desk(a,x+dir*1.05,y,z);monitor(a,x+dir*1.45,y,z,dir>0?-Math.PI/2:Math.PI/2)}
 function dataPanel(a:Area,x:number,y:number,z:number,w:number,h:number,ry=0,kind='bars'){
@@ -165,6 +182,8 @@ for(let x=-27.5;x<=27.5;x+=2.5){if(Math.abs(Math.round(x)%10)===0&&Number.isInte
 line(ext,'fine',[-30,11,0],[30,11,0]);
 [-3,0,3].forEach(x=>line(ext,'fine',[x,0,-.1],[x,4.2,-.1]));line(ext,'fine',[-6,4.2,-.1],[6,4.2,-.1]);
 plane(ext,0,12.4,.3,22,2.75,{mat:amat(ext,0xffffff,1,signTex),tone:'ink'});
+// Tinted glass across the front, leaving the entrance itself open.
+plane(ext,-18.15,7.7,.04,23.7,15.4,{mat:GLASS});plane(ext,18.15,7.7,.04,23.7,15.4,{mat:GLASS});plane(ext,0,12.05,.04,12.6,7.3,{mat:GLASS});
 
 
 // ATRIUM
@@ -184,6 +203,9 @@ figure(atr,'walk',-4,0,-3,face(-4,-3,ST[1]));figure(atr,'walk',4.5,0,-8,face(4.5
 for(let z=-6;z>-60;z-=6)line(atr,'faint',[-30,15.2,z],[30,15.2,z]);for(let x=-30;x<=30;x+=6)line(atr,'faint',[x,15.2,-2],[x,15.2,-60]);
 [-15,0,15].forEach(x=>[-10,-18].forEach(z=>{line(atr,'fine',[x,16,z],[x,12.5,z]);box(atr,x,12.2,z,.8,.3,.8,{solid:'gold'})}));
 
+// Planting: potted plants in the atrium and along the mezzanine edge, like a working garden office.
+[[-27,-3],[27,-3],[-27,-19],[27,-19],[-9.5,-4],[9.5,-4],[-17,-14],[17,-14]].forEach(([x,z])=>plant(x,0,z,1.3,true));
+[-26,-18,-10,10,18,26].forEach(x=>plant(x,6,-23,1,true));
 // MEZZANINE
 beam(mez,V(-30,7.1,-22.1),V(-2.8,7.1,-22.1),.14);beam(mez,V(2.8,7.1,-22.1),V(30,7.1,-22.1),.14);
 for(let x=-30;x<=30;x+=2){if(Math.abs(x)<2.8)continue;line(mez,'fine',[x,6,-22.1],[x,7.1,-22.1])}
@@ -259,7 +281,7 @@ const brand=buildBrand({
   ctex:(w,h,d)=>ctex(w,h,d),
   figure:(a,p,x,y,z,ry,fl,h)=>figure(a as Area,p,x,y,z,ry,fl,h),
   into:(g,fn)=>{const prev=TG;TG=g as THREE.Group;try{fn()}finally{TG=prev}},
-  root:factoryG,cam:()=>C,
+  root:factoryG,cam:()=>C,plant:(x,y,z,sc,pot)=>plant(x,y,z,sc,pot,!pot),glass:GLASS,
 },innerWidth<=700||((navigator as Navigator&{deviceMemory?:number}).deviceMemory??8)<=4);
 // GLOBE (AI for Everyone)
 TG=globeG;
@@ -361,10 +383,15 @@ function msnAlertAt(cond:number,revised:boolean,u:number):boolean{const [v]=msnS
  const ma=area('msnMachine',{manual:1,parent:MS.g});
  const mach=MS.mach;MS.g.add(mach);TG=mach;const mm=area('msnMach',{manual:1,parent:mach});
  // Base, enclosure with a window, control panel and chip tray.
- box(mm,mx,0,mz,3.1,.9,1.9);contact(mx,0,mz,4.2,2.8);box(mm,mx,.9,mz,3.1,2,1.9,{tone:'ink'});box(mm,mx,2.9,mz,3.1,.18,1.9);
+ box(mm,mx,0,mz,3.1,.9,1.9);contact(mx,0,mz,4.2,2.8);box(mm,mx,.9,mz,3.1,2,1.9,{solid:'none',tone:'ink'});box(mm,mx,2.9,mz,3.1,.18,1.9);
+ // Enclosure: paper back and sides, a glass front so the spindle and the cut stay visible.
+ plane(mm,mx,1.9,mz-.95,3.1,2,{fill:true});plane(mm,mx-1.55,1.9,mz,1.9,2,{ry:Math.PI/2,fill:true});plane(mm,mx+1.55,1.9,mz,1.9,2,{ry:Math.PI/2,fill:true});
+ plane(mm,mx-.25,1.9,mz+.95,2,1.3,{mat:GLASS});plane(mm,mx+1.25,1.9,mz+.95,.6,2,{fill:true});plane(mm,mx-1.4,1.9,mz+.95,.3,2,{fill:true});plane(mm,mx-.25,1.05,mz+.95,2,.3,{fill:true});plane(mm,mx-.25,2.72,mz+.95,2,.36,{fill:true});
  plane(mm,mx-.25,1.9,mz+.96,2,1.3,{tone:'fine'});line(mm,'fine',[mx-1.25,1.25,mz+.97],[mx+.75,1.25,mz+.97]);
  box(mm,mx+1.85,.4,mz+.35,.5,1.6,.4);plane(mm,mx+1.85,1.75,mz+.56,.36,.42,{tone:'ink'});box(mm,mx+1.85,1.65,mz+.57,.26,.3,.02,{solid:'gold'});
  box(mm,mx-.25,.9,mz+.2,1.9,.12,1);
+ // Forest-green frame posts and a gold trim line: the hero machine reads as the subject of the room.
+ [mx-1.5,mx+1.0,mx+1.5].forEach(x=>box(mm,x,.9,mz+.93,.1,2,.08,{solid:'green'}));box(mm,mx,2.86,mz+.93,3.1,.08,.08,{solid:'green'});box(mm,mx-.25,1.2,mz+.98,2,.04,.03,{solid:'gold'});box(mm,mx,.86,mz+.96,3.1,.04,.03,{solid:'gold'});
  // Sensor hub on the side, with cables to the two sensors.
  box(mm,mx+1.55,2.95,mz-.4,.5,.36,.4,{tone:'ink'});
  // The moving spindle head: its own area so its lines move with it.
@@ -769,14 +796,50 @@ const tetM=new THREE.LineBasicMaterial({color:INK,transparent:true,opacity:0}),t
  const ord=tops.map((t,i)=>[Math.atan2(t.x,t.z+30),i]).sort((a,b)=>a[0]-b[0]).map(o=>tops[o[1]]);ord.forEach((t,i)=>arc(t,ord[(i+1)%ord.length],6));}
 
 const FOGU={value:new THREE.Vector2(45,190)};
+/** Company assembly (opening): everything above the build height is cut away; a gold edge marks the cut. */
+const BUILDY={value:1e4},NOBUILD={value:1e4},CLIP=new THREE.Plane(V(0,-1,0),1e4),PEOPLE:THREE.Mesh[]=[];
+
+// OPENING WORKBENCH: a learner and a peer with the source notebook, on the plaza beside the entrance.
+// Built in its own group (outside factoryG) so the assembly cut never hides it.
+const OPG=new THREE.Group();S.add(OPG);let opState=0;
+const opA=area('opening',{fixed:1,parent:OPG});
+const OPX=-6.5,OPZ=12;
+const noteTex=ctex(768,512,(x,w,h)=>{x.fillStyle='#FBF8EE';x.fillRect(0,0,w,h);x.fillStyle='#E6DFC9';x.fillRect(w/2-3,0,6,h);
+  x.fillStyle='#1E4632';x.font='800 34px Manrope, sans-serif';x.fillText('Machine 3 notes',28,56);
+  x.font='500 26px Inter, sans-serif';const rows=[['Spindle hum louder','09:40 · J. schedule'],['Vibration after tool change','11:15 · J. schedule'],['Warm housing, long cut',opState>=1?'14:05 · job 2217':'source ?']];
+  rows.forEach(([a,b],i)=>{const y=120+i*92,miss=i===2&&opState<1;x.fillStyle='#1E4632';x.fillText(a,28,y);x.fillStyle=miss?'#B5481F':'#3E6B54';x.fillText(b,28,y+36);
+    x.strokeStyle='#D8D0B8';x.lineWidth=2;x.beginPath();x.moveTo(24,y+56);x.lineTo(w/2-20,y+56);x.stroke();
+    if(miss){x.strokeStyle='#C9A33A';x.lineWidth=5;x.setLineDash([12,8]);x.strokeRect(16,y-34,w/2-36,84);x.setLineDash([])}});
+  x.fillStyle='#1E4632';x.font='700 26px Inter, sans-serif';x.fillText(opState>=2?'Reviewed: context added':'Questions',w/2+30,56);
+  x.font='500 24px Inter, sans-serif';x.fillStyle='#3E6B54';
+  (opState>=2?['Heavy cut on job 2217','explains the warm housing.','Linked to the POD record.']:['Which job was running?','Who can confirm it?']).forEach((t,i)=>x.fillText(t,w/2+30,110+i*40));
+  if(opState>=2){x.strokeStyle='#2E8B57';x.lineWidth=6;x.beginPath();x.moveTo(w-90,h-90);x.lineTo(w-66,h-62);x.lineTo(w-30,h-112);x.stroke()}});
+{const prev=TG;TG=OPG;
+ box(opA,OPX,0,OPZ,2.6,.72,1.05,{tone:'fine'});box(opA,OPX,.72,OPZ,2.7,.06,1.12,{solid:'wood'});
+ figure(opA,'sit',OPX-.35,0,OPZ-.95,-Math.PI/2,1);cyl(opA,OPX-.35,.22,OPZ-.95,.24,.44,{tone:'fine'});
+ figure(opA,'point',OPX+1.75,0,OPZ-.55,face(OPX+1.75,OPZ-.55,[OPX-.3,0,OPZ+.1]));
+ plane(opA,OPX-.3,.785,OPZ+.08,1.15,.78,{rx:-Math.PI/2,mat:amat(opA,0xffffff,1,noteTex),tone:'ink'});
+ box(opA,OPX-1.05,.75,OPZ+.02,.56,.03,.4,{ry:.5,solid:'green',tone:null});plane(opA,OPX-1.15,.93,OPZ-.15,.56,.38,{rx:-.3,ry:.5,mat:amat(opA,0x2B4A3C),tone:'fine'});
+ cyl(opA,OPX+.95,.86,OPZ-.25,.08,.2,{tone:'fine'});[[-.02,.02],[.03,-.01],[0,.04]].forEach(([dx,dz])=>line(opA,'gold',[OPX+.95+dx,.9,OPZ-.25+dz],[OPX+.95+dx*2,1.08,OPZ-.25+dz*2]));
+ plant(OPX+2.6,0,OPZ+.9,1.1,true);
+ TG=prev}
+/** The physical gap tab and the source card the peer brings (opening beat 1). */
+const opTab=new THREE.Mesh(new THREE.BoxGeometry(.06,.012,.16),new THREE.MeshBasicMaterial({color:0xC9A33A}));opTab.position.set(OPX-.9,.79,OPZ+.3);OPG.add(opTab);
+const srcCard=new THREE.Mesh(new THREE.PlaneGeometry(.34,.24),new THREE.MeshBasicMaterial({map:ctex(256,180,(x,w,h)=>{x.fillStyle='#FFFDF5';x.fillRect(0,0,w,h);x.strokeStyle='#C9A33A';x.lineWidth=6;x.strokeRect(3,3,w-6,h-6);x.fillStyle='#1E4632';x.font='800 26px Manrope, sans-serif';x.fillText('JOB SCHEDULE',16,40);x.font='500 22px Inter, sans-serif';x.fillText('14:00  job 2217',16,90);x.fillText('heavy cut · 40 min',16,126)})}));
+srcCard.rotation.x=-Math.PI/2;srcCard.rotation.z=.25;srcCard.position.set(OPX+.55,.79,OPZ+.3);srcCard.visible=false;OPG.add(srcCard);
+const setOpState=(n:number)=>{opState=n;noteTex.redraw();srcCard.visible=n>=1;(opTab.material as THREE.MeshBasicMaterial).color.set(n>=2?0x2E8B57:0xC9A33A)};
+function setBuild(p:number){if(p>=1){BUILDY.value=1e4;CLIP.constant=1e4;PEOPLE.forEach(m=>m.visible=true);return}
+  // Meshes added after the build (opening doors, brand extras) join the cut too.
+  factoryG.traverse(o=>{const mm=(o as THREE.Mesh).material;if(!mm||o instanceof THREE.LineSegments)return;(Array.isArray(mm)?mm:[mm]).forEach(x=>{if(!x.clippingPlanes&&!x.userData.noClip)x.clippingPlanes=[CLIP]})});
+  const h=1.3+Math.pow(Math.max(0,p),1.15)*34;BUILDY.value=h;CLIP.constant=h;PEOPLE.forEach(m=>m.visible=p>.9)}
 // BUILD LINE GEOMETRY (merged per area and tone)
-const VS=`attribute float lineU;attribute float delay;varying float vU;varying float vD;varying float vDepth;
-void main(){vU=lineU;vD=delay;vec4 mv=modelViewMatrix*vec4(position,1.0);vDepth=-mv.z;gl_Position=projectionMatrix*mv;}`;
-const FS=`uniform vec3 uColor;uniform vec3 uPaper;uniform float uReveal;uniform vec2 uFog;uniform float uDim;varying float vU;varying float vD;varying float vDepth;
-void main(){float r=clamp((uReveal-vD)/0.55,0.0,1.0);if(r<=0.0||vU>r)discard;float f=max(smoothstep(uFog.x,uFog.y,vDepth)*0.92,uDim);gl_FragColor=vec4(mix(uColor,uPaper,f),1.0);
+const VS=`attribute float lineU;attribute float delay;varying float vU;varying float vD;varying float vDepth;varying float vY;
+void main(){vU=lineU;vD=delay;vY=(modelMatrix*vec4(position,1.0)).y;vec4 mv=modelViewMatrix*vec4(position,1.0);vDepth=-mv.z;gl_Position=projectionMatrix*mv;}`;
+const FS=`uniform vec3 uColor;uniform vec3 uPaper;uniform float uReveal;uniform vec2 uFog;uniform float uDim;uniform float uBuild;varying float vU;varying float vD;varying float vDepth;varying float vY;
+void main(){float r=clamp((uReveal-vD)/0.55,0.0,1.0);if(r<=0.0||vU>r)discard;vec3 c=vY>uBuild?mix(uPaper,uColor,0.2):vY>uBuild-0.35?vec3(0.79,0.64,0.23):uColor;float f=max(smoothstep(uFog.x,uFog.y,vDepth)*0.92,uDim);gl_FragColor=vec4(mix(c,uPaper,f),1.0);
 #include <colorspace_fragment>
 }`;
-VXQ.forEach(({tg,a,c,ms})=>{const g=mergeGeometries(ms.map(m=>BOX.clone().applyMatrix4(m)),false);if(!g)return;const o=new THREE.Mesh(g,vmat(a,c));tg.add(o)});VXQ.clear();
+VXQ.forEach(({tg,a,c,ms})=>{const g=mergeGeometries(ms.map(m=>BOX.clone().applyMatrix4(m)),false);if(!g)return;const o=new THREE.Mesh(g,vmat(a,c));tg.add(o);if(tg!==OPG)PEOPLE.push(o)});VXQ.clear();
 {const geo=new THREE.PlaneGeometry(1,1).rotateX(-Math.PI/2),m4=new THREE.Matrix4(),q0=new THREE.Quaternion();
  SHQ.forEach((q,tg)=>{const n=q.length/5,o=new THREE.InstancedMesh(geo,SHADOW_MAT,n);for(let i=0;i<n;i++){const k=i*5;m4.compose(V(q[k],q[k+1],q[k+2]),q0,V(q[k+3],1,q[k+4]));o.setMatrixAt(i,m4)}o.userData.noRay=true;o.renderOrder=-1;tg.add(o)});SHQ.clear()}
 // Batch static helper meshes per (parent, material): ~1000 draws become ~150.
@@ -788,10 +851,14 @@ AREAS.forEach(a=>{
     for(let i=0;i<n;i++){if(a.LU){u[i*2]=a.LU[i*2];u[i*2+1]=a.LU[i*2+1]}else u[i*2+1]=1;const d=(a.name==='grid'||a.grow)?0:((arr[i*6+1]+arr[i*6+4])/2-lo)/span*.3+Math.random()*.15;dl[i*2]=dl[i*2+1]=d}
     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(arr,3));g.setAttribute('lineU',new THREE.BufferAttribute(u,1));g.setAttribute('delay',new THREE.BufferAttribute(dl,1));
     const glb=a===gA||a===gRim||a===gArc;
-    (a.parent||factoryG).add(new THREE.LineSegments(g,new THREE.ShaderMaterial({uniforms:{uColor:{value:glb?GLC[t as Tone]:TONES[t as Tone]},uPaper:{value:glb?GLP:PAPER},uReveal:a.u,uFog:FOGU,uDim:(a.dimU||(a.dimU={value:0}))},vertexShader:VS,fragmentShader:FS})));
+    (a.parent||factoryG).add(new THREE.LineSegments(g,new THREE.ShaderMaterial({uniforms:{uColor:{value:glb?GLC[t as Tone]:TONES[t as Tone]},uPaper:{value:glb?GLP:PAPER},uReveal:a.u,uFog:FOGU,uDim:(a.dimU||(a.dimU={value:0})),uBuild:a===opA||glb?NOBUILD:BUILDY},vertexShader:VS,fragmentShader:FS})));
   });a.L=null;
 });
 grd.u.value=1;grd.r=1;
+if(import.meta.env.DEV)(window as unknown as {__S:THREE.Scene}).__S=S;
+// Assembly clipping: the opening workbench keeps its own (unclipped) materials; everything in the company is cut.
+{const own=new Map<THREE.Material,THREE.Material>();OPG.traverse(o=>{const m=o as THREE.Mesh;if(!m.isMesh||m.material===opTab.material||m.material===srcCard.material)return;const mt=m.material as THREE.Material;if(opA.mats.includes(mt))return;let c=own.get(mt);if(!c){c=mt.clone();own.set(mt,c)}m.material=c});
+ R.localClippingEnabled=true;const cl=new Set<THREE.Material>();factoryG.traverse(o=>{const mm=(o as THREE.Mesh).material;if(!mm||o instanceof THREE.LineSegments)return;(Array.isArray(mm)?mm:[mm]).forEach(x=>{if(!x.userData.noClip)cl.add(x)})});cl.forEach(x=>{x.clippingPlanes=[CLIP]})}
 
 // ROUTES
 const EXTP=V(22,10,48),EXTL=V(0,6,-8),DOL=EXTP.clone().sub(EXTL).normalize();
@@ -838,7 +905,7 @@ window.FACTORY={
   fromSnap(e){const p=C.position.clone(),l=look.clone();C.position.lerpVectors(snapP,p,e);look.lerpVectors(snapL,l,e)},
   poseIntro(d=0){C.position.copy(EXTP).addScaledVector(DOL,d*12);C.position.y+=d*2;look.copy(EXTL)},
   poseFly(r,e){const w=ROUTES[r].wp[0];C.position.lerpVectors(EXTP,V(...w[0]),e);look.lerpVectors(EXTL,V(...w[1]),e)},
-  setHover(k){G.hover=k},poseAt(p,l){C.position.set(p[0],p[1],p[2]);look.set(l[0],l[1],l[2])},
+  setHover(k){G.hover=k},poseAt(p,l){C.position.set(p[0],p[1],p[2]);look.set(l[0],l[1],l[2])},build(p){setBuild(p)},opNote(n){setOpState(n)},
   setWf(on){G.wf=on},setBays(hv,sel,dim){G.bayHv=hv;G.baySel=sel;G.bayDim=dim},setUnits(u){G.units=u},setTeam(n){if(teamName.v!==n){teamName.v=n;teamTex.redraw()}},wfStop(i){G.stop=i},campusIn(r){if(G.cam.t0<0||r){G.cam.t0=performance.now();G.cc.t0=-1}},podCross(){G.cc.t0=Math.max(performance.now(),G.cam.t0+2700)},setCampus(a,c){G.act=a;G.con=c},setActor(i){G.actor=i},setNet(o){G.net=o},
   pod(on){if(on&&!G.pod.on)G.pod.t0=performance.now();G.pod.on=on},setPodLead(l){G.podLead=l},globeZoom(i){if(i>=0&&!DIOS.some(D=>D.node===i))i=-1;if(i>=0&&i!==G.zoom){G.dioStep=-1;G.dioT0=performance.now()}G.zoom=i;if(i>=0){G.zoomL=i;/* Profession on top, the company (NF) behind it, away from the camera. */const n=NODES[i].n,fb=NF.clone().sub(n.clone().multiplyScalar(NF.dot(n))).normalize(),r=fb.clone().cross(n).normalize(),L=new THREE.Matrix4().makeBasis(r,n,fb),W=new THREE.Matrix4().makeBasis(V(1,0,0),V(0,1,0),V(0,0,-1));G.focus={q0:Rcur.clone(),q1:new THREE.Quaternion().setFromRotationMatrix(W.multiply(L.transpose())),t0:performance.now()}}},dioStep(k){G.dioStep=k;if(k<0)G.dioT0=performance.now()},dioAt(){return G.dioCur},stats(){return {ms:+STATS.ms.toFixed(2),calls:STATS.calls,tris:STATS.tris,dpr:R.getPixelRatio()}},podSelect(i){MSN.sel=i},podRun(c,revised){MSN.cond=c;MSN.revised=revised;MSN.t0=performance.now();MSN.u=0},podReset(){MSN.t0=-1;MSN.u=0;MSN.revised=false},podMission(i){if(i===MSN.mi)return;MSN.mi=i;MSN.t0=-1;MSN.u=0;MSN.revised=false;MS.mach.visible=i===0;IC.g.visible=i===1;AS.g.visible=i===2;MSN.last='';MS.traceT?.redraw();MS.alertT?.redraw()},podState(){const ran=MSN.t0>=0;return{ran,u:MSN.u,done:ran&&MSN.u>=1,alert:msnFlag(),cond:MSN.cond,revised:MSN.revised,mi:MSN.mi}},podLabels(l){MSN.labels=l;MS.traceT?.redraw();MS.alertT?.redraw();MSN_DOCTEX.forEach(t=>t.redraw())},gallery(){return GALLERY.map(g=>({at:g.at,face:g.face}))},dioDebug(){const D=DIOS.find(x=>x.node===G.zoomL);if(!D)return null;return{yaw:D.g.rotation.y,cam:C.position.toArray().map(v=>+v.toFixed(2)),labels:D.labels.map(m=>{const p=m.getWorldPosition(new THREE.Vector3());const q=p.clone().project(C);return [p.toArray().map(v=>+v.toFixed(2)),[Math.round((q.x+1)/2*innerWidth),Math.round((1-q.y)/2*innerHeight)]]})}},hasDio(i){return DIOS.some(D=>D.node===i)},podJump(i){G.pod.on=true;G.pod.t0=performance.now()-(4200+i*2600)},podG(){return G.pod.on?G.podGv:-1},podTime(){return G.pod.on?(performance.now()-G.pod.t0)/1000:0},setCrate(g){G.crate=g},setTicks(a){G.ticks=a},setWalk(on){G.walk=on},
   rayWhat(a,b){const A=V(...a),dir=V(...b).sub(A),len=dir.length();dir.normalize();factoryG.updateMatrixWorld(true);const rc=new THREE.Raycaster(A,dir,0,len);rc.camera=C;const nm=new THREE.Vector3();return rc.intersectObject(factoryG,true).filter(h=>(h.object as THREE.Mesh).isMesh&&h.face).slice(0,4).map(h=>{const m=h.object as THREE.Mesh;let vis=true;for(let o:THREE.Object3D|null=m;o;o=o.parent)if(!o.visible)vis=false;nm.copy(h.face!.normal).transformDirection(m.matrixWorld);const mat=m.material as THREE.MeshBasicMaterial;return {name:(()=>{let o:THREE.Object3D|null=m,n='';for(;o&&!n;o=o.parent)n=o.name;return n})(),parentKids:m.parent?.children.length,p:[h.point.x,h.point.y,h.point.z].map(v=>+v.toFixed(2)),vis,ny:+nm.y.toFixed(2),geo:(m.geometry as THREE.BufferGeometry).type,op:mat.opacity,tr:mat.transparent,cw:mat.colorWrite,dw:mat.depthWrite,size:(()=>{(m.geometry as THREE.BufferGeometry).computeBoundingBox();const b=(m.geometry as THREE.BufferGeometry).boundingBox!;return [b.max.x-b.min.x,b.max.y-b.min.y,b.max.z-b.min.z].map(v=>+v.toFixed(1))})()}})},
@@ -910,6 +977,7 @@ window.FACTORY={
       // The civic city ring is part of the visible city now (its paper fills always occluded anyway).
       else if(a===city)a.r=Math.max(G.dist,1-sm(.75,1,G.gV));
       else if(a===cityArcs)a.r=G.dist;
+      else if(a===opA)a.r=im?0:1;
       else if(a.at!==undefined)a.r=mode==='intro'?(reduce?(introS>=a.at-.6?1:0):sm(a.at-.95,a.at-.05,introS)):1;
       else if(a.hy){const tg=im?0:sm(a.hy[0],a.hy[1],C.position.y);a.r=reduce?tg:a.r+(tg-a.r)*Math.min(1,dt*2.2)}
       else{const tg=im?0:1-sm(a.full!,a.start!,C.position.distanceTo(a.c!));

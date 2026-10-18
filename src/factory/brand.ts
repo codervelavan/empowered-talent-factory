@@ -25,6 +25,10 @@ export interface BrandKit {
   into(g: THREE.Object3D, fn: () => void): void;
   root: THREE.Group;
   cam(): THREE.Camera;
+  /** A low-poly tree (or a potted plant) in the shared lit leaf/bark materials. */
+  plant(x: number, y: number, z: number, s?: number, pot?: boolean): void;
+  /** Tinted glass shared by façade panes. */
+  glass: THREE.Material;
 }
 
 export interface Brand {
@@ -139,8 +143,7 @@ export function buildBrand(k: BrandKit, mobile: boolean): Brand {
 
   // ---- Exterior: crown, signage, plaza ----------------------------------------
   const bx = k.area('brandExt', { at: 0.35 });
-  const glass = k.amat(bx, 0xbfd9c6, 0.16);
-  glass.depthWrite = false;
+  const glass = k.glass;
   // Stepped glass crown on the roof: the company-HQ silhouette.
   ([[30, 22, 16, 6], [20, 15, 22, 5.5], [11, 9, 27.5, 4.5]] as [number, number, number, number][]).forEach(([w, d, y, h], i) => {
     const cz = -36;
@@ -160,8 +163,7 @@ export function buildBrand(k: BrandKit, mobile: boolean): Brand {
   k.plane(bx, 0, 9.35, 4.08, 13.6, 0.95, { mat: k.amat(bx, 0xffffff, 1, plate('HOME OF THE AI TALENT FACTORY', { w: 1536, h: 110 })) });
   // Plaza: cube trees and planters, clear of the two entrance lanes.
   const tree = (x: number, z: number, s = 1) => {
-    k.box(bx, x, 0, z, 0.3 * s, 1.5 * s, 0.3 * s, { solid: 'green' });
-    k.box(bx, x, 1.3 * s, z, 2.4 * s, 2.5 * s, 2.4 * s, { solid: 'green' });
+    k.plant(x, 0, z, s * 1.15);
     k.box(bx, x, 0, z, 3 * s, 0.25, 3 * s, { tone: 'fine' });
   };
   for (const z of [12, 24, 36]) { tree(-11, z); tree(-22, z); }
