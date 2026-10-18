@@ -67,7 +67,26 @@ export interface Mission {
   develop: DevelopTask;
   reports: Record<string, SampleReport>;
   employer: { demo: string; review: string; delivery: string };
+  /** The six delivery stages as an about-12-second overview: who leads each one, what happens and what can be inspected. */
+  stages: DeliveryStage[];
 }
+
+/** One delivery stage in the overview. `run` replays the prepared finding (first version or reviewed). */
+export interface DeliveryStage { by: number; run?: 'first' | 'revised'; event: string; artifact: string }
+export const STAGE_NAMES = ['Discover', 'Design', 'Build', 'Test & Secure', 'Deploy & Operate', 'Demo & Validate'];
+
+/** Develop's other four areas (the project bench is the record task itself). Optional close-ups. */
+export interface DevelopArea { name: string; see: string; act: string; result: string; at: P3 }
+export const DEVELOP_AREAS: DevelopArea[] = [
+  { name: 'Foundations', see: 'Paired practice: a notebook, a laptop and a sample table.', act: 'Inspect an example',
+    result: 'The notebook observation now matches its table entry: same day, same machine, same reading.', at: [-11.2, 6, -44.6] },
+  { name: 'AI practice', see: 'A learner checks a prepared AI draft against its source material.', act: 'Check the draft',
+    result: 'One claim isn’t in the source. The reviewed correction removes it and cites the line the rest came from.', at: [-5.8, 6, -46.4] },
+  { name: 'Collaboration', see: 'Two peers and a mentor compare the same piece of work.', act: 'Ask why it was revised',
+    result: 'They pause on the changed record. The review note explains what was missing and who confirmed it.', at: [-2.8, 6, -43.8] },
+  { name: 'Career readiness', see: 'A learner explains one piece of work to a peer.', act: 'See the explanation',
+    result: 'The contribution, the feedback it received and one open question are highlighted. The captions work without sound.', at: [-3.4, 6, -39.4] },
+];
 
 export const MAINTENANCE: Mission = {
   id: 'maintenance',
@@ -139,6 +158,14 @@ export const MAINTENANCE: Mission = {
   },
   employer: { demo: 'The alert screen, run on example data with the technician’s view.', review: 'The false alert on a heavy cut, and the change that fixed it.',
     delivery: 'Team demo of the alert service (team-level evidence, not individual)' },
+  stages: [
+    { by: 1, event: 'The technician describes unexpected downtime; the team agrees what must be understood.', artifact: 'Problem brief, operating need and open questions' },
+    { by: 2, event: 'Sensor, context, detection and technician-response connections are planned.', artifact: 'System flow and design choices' },
+    { by: 0, event: 'Individual contributions join into the working example.', artifact: 'Organised records, prepared readings and integration work' },
+    { by: 0, run: 'first', event: 'A heavy cut triggers the prepared false alert; context and review expose it. Access tests run as a separate responsibility.', artifact: 'Validation finding, review note and security tests' },
+    { by: 4, event: 'The prepared service reaches its demonstration environment; monitoring and handoff become visible.', artifact: 'Deployment, monitoring and operating instructions' },
+    { by: 3, run: 'revised', event: 'The technician and the team check the result against the original need.', artifact: 'Demo record, limitations and reviewed delivery' },
+  ],
 };
 
 export const INSPECTION: Mission = {
@@ -200,6 +227,14 @@ export const INSPECTION: Mission = {
   },
   employer: { demo: 'The inspection cell, run on example images with the review lane.', review: 'The uncertain part that was rejected, and the change that sends it to a person.',
     delivery: 'Team demo of the inspection cell (team-level evidence, not individual)' },
+  stages: [
+    { by: 0, event: 'The line lead explains which defects matter and what a missed one costs.', artifact: 'Problem brief, defect definitions and open questions' },
+    { by: 1, event: 'Camera, lighting, edge device and the review lane are planned together.', artifact: 'System flow and handling design' },
+    { by: 2, event: 'The model, camera interface and review screen join into the working example.', artifact: 'Model version, camera integration and review-lane build' },
+    { by: 2, run: 'first', event: 'An uncertain part is run; the first version rejects it instead of sending it to review. Update and access tests run separately.', artifact: 'Validation finding, threshold review and security tests' },
+    { by: 4, event: 'The prepared service reaches the demonstration line; model updates and monitoring are recorded.', artifact: 'Deployment, model-update record and monitoring' },
+    { by: 3, run: 'revised', event: 'The line lead checks the review lane against the original need.', artifact: 'Demo record, limitations and reviewed delivery' },
+  ],
 };
 
 export const ASSISTANT: Mission = {
@@ -263,6 +298,14 @@ export const ASSISTANT: Mission = {
   },
   employer: { demo: 'The assistant, run on example documents, with each answer’s sources shown.', review: 'The restricted document that reached a draft, and the change that keeps it out.',
     delivery: 'Team demo of the assistant (team-level evidence, not individual)' },
+  stages: [
+    { by: 1, event: 'A planner explains the questions they need answered and what they are allowed to see.', artifact: 'Problem brief, approved sources and open questions' },
+    { by: 4, event: 'Permissions, retrieval, citations and human review are planned before any drafting.', artifact: 'Permission model and system flow' },
+    { by: 0, event: 'Sources, retrieval and the interface join into the working example.', artifact: 'Source catalogue, retrieval build and interface' },
+    { by: 4, run: 'first', event: 'A planner’s question pulls a restricted contract into the first version; permission tests expose it.', artifact: 'Validation finding and access-denial tests' },
+    { by: 3, event: 'The prepared assistant reaches its demonstration environment with monitoring and an audit trail.', artifact: 'Deployment, monitoring and audit record' },
+    { by: 1, run: 'revised', event: 'The reviewer checks cited drafts against the sources and the original need.', artifact: 'Demo record, limitations and reviewed delivery' },
+  ],
 };
 
 export const MISSIONS: Mission[] = [MAINTENANCE, INSPECTION, ASSISTANT];

@@ -6,7 +6,7 @@ import { Tour, type TourRoute, type TourStop } from '../company/tour';
 import { Story, lobbyPose, setRoomFocus, type PathId, type RoomDef, type RoomId } from '../story/guide';
 import { PodMission, podLabels } from '../pod/mission';
 import { i18n, translateDom } from '../app/i18n';
-import { POD_PLACE } from '../pod/missions';
+import { POD_PLACE, DEVELOP_AREAS } from '../pod/missions';
 import { Opening, BEATS } from '../story/opening';
 import { currentPath, currentRoute, legacyHashPath, onPathChange, setPath } from '../app/router';
 import { routeFor, type Dest } from '../app/routes';
@@ -600,7 +600,8 @@ export function initController(replayStory: () => void): ControllerApi {
     entrance:{label:'Welcome'},
     intake:{label:'Intake',hotspots:[{at:[9.5,2.2,-11],label:'Entry Assessment',run:open('career',1)}]},
     pro:{label:'Specialise',hotspots:[{at:[7,9,-40.5],label:'Specialisation pods',run:open('career',4)}]},
-    develop:{label:'Develop',hotspots:[{at:[-11.4,9,-40.5],label:'Evidence Passport',run:open('career',3)}]},
+    // Develop: the project bench (the record task) and four optional area close-ups.
+    develop:{label:'Develop',hotspots:[{at:[-10.4,7.9,-39.3],label:'Project record',run:()=>mission.act('records','check')},...DEVELOP_AREAS.map((a,i)=>({at:[a.at[0],8.4,a.at[2]] as P3,label:a.name,run:()=>mission.act('records','area:'+i)}))]},
     engineer:{label:'Engineer',hotspots:[{at:[14.5,3.2,-32.4],label:'The project',run:()=>mission.act('pod','view:machine')},...POD_PLACE.at.map((p,i)=>({at:[p[0],2.25,p[2]] as P3,label:['Data work','Hands-on work','System build','User screen','Deploy & access'][i],run:()=>mission.act('pod','p:'+i)}))]},
     delivery:{label:'Delivery',hotspots:[{at:[2.8,4.1,-35],label:'Stage boards',run:open('career',5)}]},
     verify:{label:'Verify',hotspots:[{at:[21,9.2,-43.8],label:'ETAF™ assurance core',run:open('career',6)}]},
@@ -617,11 +618,11 @@ export function initController(replayStory: () => void): ControllerApi {
   const CATS:Record<PathId,string>={student:'For students',founder:'For startups',hr:'For organisations',university:'For universities',professional:'For professionals'};
   let pendSide=-1,pendView:'work'|'path'='path';
   /** The POD mission at the Engineer stop (src/pod). */
-  const mission=new PodMission({factory:()=>window.FACTORY,focus:p=>setRoomFocus('engineer',p),
+  const mission=new PodMission({factory:()=>window.FACTORY,focus:(p,room)=>setRoomFocus((room??'engineer') as RoomId,p),
     goRoom:room=>{if(mode!=='tour'||tour.route!=='story'||!story.audience)return;const i=story.indexOfRoom(story.audience,room as RoomId);if(i>=0){story.scrollToActivity();tour.travel(i)}},
-    enquire:label=>openDrawer('ph',label,'Product Engineering PODs')});let podAt=-1;
+    enquire:label=>openDrawer('ph',label,'Product Engineering PODs')});let podAt=-1,roomAt='';
   // Text on the 3D trace panel and alert screen follows the language.
-  const paintPodLabels=()=>window.FACTORY?.podLabels(podLabels());i18n.on(paintPodLabels);
+  const paintPodLabels=()=>window.FACTORY?.podLabels(podLabels());i18n.on(paintPodLabels);i18n.on(()=>mission.syncDev());
   // A labelled example of an ETAF review: gates light one by one as evidence is reviewed, then go dark again.
   let etafDemoUntil=0;
   const etafNote=document.createElement('p');etafNote.id='etafNote';etafNote.hidden=true;etafNote.setAttribute('role','status');etafNote.innerHTML='<b>Example review</b> Gates light as each piece of evidence is reviewed. This is an illustration, not a real result.';document.body.appendChild(etafNote);
@@ -662,7 +663,9 @@ export function initController(replayStory: () => void): ControllerApi {
     onRoute:(r)=>{closeDrawer();route=r},
     onStop:(r,i,settled)=>{const F=window.FACTORY;if(!F)return;
       if(!settled&&cd.classList.contains('open'))closeDrawer();
-      tourSettled=settled;const sroom=r==='story'?story.roomAt(i):undefined;if(settled&&sroom==='engineer'&&podAt!==i){podAt=i;paintPodLabels();mission.enter()}else if(sroom!=='engineer')podAt=-1;tourCar=r==='career'?CEQ[i]:r==='story'?(sroom?ROOMEQ[sroom]??-1:-1):-1;tourWf=r==='story'?(sroom?ROOMWF[sroom]??-1:-1):r==='career'?(TOURS.career[i]?.id==='showroom'?1:-1):r==='evidence'?-1:(i>=1?i-1:-1);
+      tourSettled=settled;const sroom=r==='story'?story.roomAt(i):undefined;if(settled&&sroom==='engineer'&&podAt!==i){podAt=i;paintPodLabels();mission.enter()}else if(sroom!=='engineer'){if(podAt>=0)mission.leave();podAt=-1}
+      // Develop and Specialise frame their activity on arrival.
+      if(settled&&(sroom==='develop'||sroom==='pro')&&roomAt!==sroom+i){roomAt=sroom+i;if(sroom==='develop')mission.enterDevelop();else mission.enterSpecialise()}else if(sroom!=='develop'&&sroom!=='pro'&&roomAt){if(roomAt.startsWith('pro'))F.specPod(-1);roomAt=''}tourCar=r==='career'?CEQ[i]:r==='story'?(sroom?ROOMEQ[sroom]??-1:-1):-1;tourWf=r==='story'?(sroom?ROOMWF[sroom]??-1:-1):r==='career'?(TOURS.career[i]?.id==='showroom'?1:-1):r==='evidence'?-1:(i>=1?i-1:-1);
       if(tourWf>=0&&tourWf!==wfAt){wfAt=tourWf;setBayHv(-1);F.pod(wfAt===2);if(wfAt===2)F.podJump(-1.62);F.wfStop(wfAt);if(wfAt===3||wfAt===4)F.campusIn()}
       if(tourWf<0&&wfAt!==0){wfAt=0;F.pod(false)}
       wfArr=settled;

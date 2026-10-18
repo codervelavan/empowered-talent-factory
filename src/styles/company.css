@@ -390,3 +390,9 @@ html.opening #hud>*:not(#opening),html.opening #resumeTour{visibility:hidden}
 @media (max-width:420px){#storyPanel .pmRow{grid-template-columns:1fr;gap:2px}}
 #storyPanel .pmPick{display:flex;flex-direction:column;gap:6px;padding-bottom:10px;border-bottom:1px solid rgba(15,43,34,.14)}
 html[lang="ta"] #opening .opHint,html[lang="ta"] #opening .opStep{letter-spacing:0;text-transform:none}
+/* Optional depth inside an activity: contributors, the six stages, the other Develop areas. */
+#storyPanel .pmMore{border-top:1px solid rgba(20,62,46,.15);padding-top:6px;margin-top:8px}
+#storyPanel .pmMore>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font:800 16px/1.3 Manrope,sans-serif;color:#1E4632}
+#storyPanel .pmMore>summary:focus-visible{outline:3px solid #C9A33A;outline-offset:2px}
+#storyPanel .pmMore>.pmAct{margin:4px 0 8px}
+#storyPanel .pmStages{flex-wrap:wrap}

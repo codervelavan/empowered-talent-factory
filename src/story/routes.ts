@@ -134,6 +134,7 @@ export function makeRoutes(x: RouteActions): Record<'student' | 'founder' | 'hr'
           concern: 'What if I already know which role I want?',
           guide: 'Then you can go deep. On Career Pro you work in a specialisation pod, building depth in one role with work that’s specific to it. The final list of specialisations is being confirmed.',
           exhibit: () => board('Career Pro pods', rows([['Focus', 'Depth in one role'], ['The work', 'Role-specific pieces, reviewed by a mentor'], ['Evidence', 'Collects in your Evidence Passport'], ['Specialisations', 'Final list being confirmed']])),
+          activity: 'tasks',
           show: { label: 'Specialisation pods', open: 'career:4' },
           asks: [{ q: 'How do I know which role is mine?', a: 'The Entry Assessment points to the roles that fit your strengths today, and the gaps show what it would take to move toward another.' }],
           bridge: 'You’ve seen how to go deep in one role. Let’s see a full product team at work.' },

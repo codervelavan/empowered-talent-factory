@@ -230,18 +230,41 @@ figure(mez,'walk',-13.5,6,-27,face(-13.5,-27,ST[2]));figure(mez,'stand',13.5,6,-
  figure(rA,'stand',c,6.18,-41,f(c,-41));
  box(rA,c-4.2,6,-38.5,1.6,1,.7,{});dataPanel(rA,c-4.2,8.1,-38.8,1.8,1.1,f(c-4.2,-38.8),'bars');
  sitAt(rA,c+2.6,6,-44,1);dataPanel(rA,c+3.6,9.1,-40,2.2,1.3,f(c+3.6,-40),'ring');dataPanel(rA,c-3,9.7,-45,1.8,1,0,'lines');}
+/** The active project's record, as a notebook page (Develop bench and the Engineer data bench).
+ *  state 0: as found; 1: the gap is marked; 2: fixed and linked to the POD. */
+let devNote:{title:string;head:string[];rows:string[][];row:number;col:number;fix:string;state:number;linked:string;missing:string}={title:'',head:[],rows:[],row:-1,col:-1,fix:'',state:0,linked:'',missing:''};
+const devTex=ctex(1024,640,(x,w,h)=>{const d=devNote;x.fillStyle='#FBF8EE';x.fillRect(0,0,w,h);x.fillStyle='#E6DFC9';x.fillRect(0,0,w,8);
+  x.fillStyle='#1E4632';x.font='800 40px Manrope, sans-serif';x.fillText(d.title,36,66);
+  const cols=d.head.length||1,cw=(w-72)/cols,y0=124,rh=80;x.font='700 26px Inter, sans-serif';x.fillStyle='#4E6A5C';d.head.forEach((c,j)=>x.fillText(c,36+j*cw,y0));
+  d.rows.forEach((r,i)=>{const y=y0+66+i*rh;x.strokeStyle='#D8D0B8';x.lineWidth=2;x.beginPath();x.moveTo(30,y+26);x.lineTo(w-30,y+26);x.stroke();
+    r.forEach((c,j)=>{const bad=i===d.row&&j===d.col;let v=c;let col='#1E4632';
+      if(bad&&d.state===2){v=d.fix;col='#1F7A4A'}else if(bad&&!c){v=d.state>=1?d.missing:'';col='#B5481F'}else if(bad&&d.state===1)col='#B5481F';
+      x.fillStyle=col;x.font=(bad&&d.state>=1?'800 ':'600 ')+'31px Inter, sans-serif';let t=v;while(t.length>2&&x.measureText(t).width>cw-14)t=t.slice(0,-2);if(t!==v)t=t.slice(0,-1)+'…';x.fillText(t,36+j*cw,y)});
+    if(i===d.row&&d.state>=1){x.strokeStyle=d.state===2?'#2E8B57':'#C9A33A';x.lineWidth=5;if(d.state===1)x.setLineDash([14,9]);x.strokeRect(22,y-36,w-44,56);x.setLineDash([])}});
+  if(d.state===2){x.fillStyle='#2E8B57';x.font='800 28px Manrope, sans-serif';x.fillText('✓ '+d.linked,36,h-34)}});
+/** Gold connection from the Develop bench toward the engineering floor (shown once the record is fixed). */
+const devLink=(()=>{const c=new THREE.CatmullRomCurve3([V(-9.7,6.79,-39.1),V(-9.15,6.79,-39.15),V(-8.98,6.4,-39.15),V(-8.95,6.04,-38.8),V(-8.3,6.04,-36.6),V(-7,6.04,-34.3),V(-6,6.04,-30),V(-3,6.04,-24)]);const m=new THREE.Mesh(new THREE.TubeGeometry(c,80,.022,5,false),new THREE.MeshBasicMaterial({color:0xC9A33A,transparent:true,opacity:.9}));m.visible=false;m.userData.noRay=true;factoryG.add(m);return m})();
 // LAUNCH: Foundation Hall
 {const c=-7,f=(x:number,z:number)=>face(x,z,ST[4]);
  plane(rS,-10.5,8.3,-47.8,3.4,1.9,{fill:true,tone:'ink'});[[8.9,1.6],[8.6,1.1],[8.3,1.4],[7.9,.8]].forEach(([y,w])=>line(rS,'fine',[-12,y,-47.75],[-12+w,y,-47.75]));poly(rS,'gold',[[-10,7.7,-47.75],[-9.6,8.2,-47.75],[-9.2,8,-47.75],[-8.9,8.8,-47.75]]);
  sitAt(rS,-12.3,6,-44.6,1);sitAt(rS,-10.1,6,-44.6,1);figure(rS,'point',-12.2,6,-46.9,f(-12.2,-46.9));hring(rS,'gold',-10.8,6.02,-45.4,1.6);
  desk(rS,-5.8,6,-46.6,2.6,.9);[-6.7,-5.8,-4.9].forEach(x=>monitor(rS,x,6.1,-46.9,0));dataPanel(rS,-5.8,9.3,-47.4,2.6,1.1,0,'bars');figure(rS,'stand',-5.1,6,-45.4,f(-5.1,-45.4));hring(rS,'gold',-5.8,6.02,-46.2,1.4);
  cyl(rS,-2.8,6.72,-43.8,.9,.06);line(rS,'fine',[-2.8,6,-43.8],[-2.8,6.7,-43.8]);figure(rS,'stand',-3.9,6,-43.2,f(-3.9,-43.2));figure(rS,'point',-1.8,6,-44.4,f(-1.8,-44.4),-1);figure(rS,'stand',-3,6,-45.1,f(-3,-45.1));hring(rS,'gold',-2.8,6.02,-43.8,1.5);
- box(rS,-10.4,6,-39,2.8,.8,.9,{});box(rS,-11.2,6.8,-39,.4,.3,.4,{});box(rS,-10.5,6.8,-38.9,.5,.2,.5,{solid:'gold'});box(rS,-9.7,6.8,-39.1,.3,.45,.3,{});figure(rS,'stand',-10.6,6,-40.1,f(-10.6,-40.1));hring(rS,'gold',-10.4,6.02,-39.4,1.6);
+ // Project bench: the learner and a peer with the project's record notebook (it changes as the record is checked and fixed).
+ box(rS,-10.4,6,-39.2,2.6,.72,1,{tone:'fine'});box(rS,-10.4,6.72,-39.2,2.7,.06,1.08,{solid:'wood'});
+ figure(rS,'sit',-10.75,6,-40.1,-Math.PI/2,1);cyl(rS,-10.75,6.22,-40.1,.24,.44,{tone:'fine'});
+ figure(rS,'point',-8.85,6,-39.75,f(-8.85,-39.75));
+ box(rS,-11.45,6.75,-39.25,.5,.03,.36,{ry:-.4,solid:'green',tone:null});plane(rS,-11.55,6.93,-39.45,.5,.34,{rx:-.3,ry:-.4,mat:amat(rS,0x2B4A3C),tone:'fine'});
+ plane(rS,-10.4,6.785,-39.05,1.4,.875,{rx:-Math.PI/2,mat:amat(rS,0xffffff,1,devTex),tone:'ink'});
+ hring(rS,'gold',-10.4,6.02,-39.4,1.6);
  box(rS,-3.4,6,-39.9,2.8,2,.06,{solid:'none',tone:'fine'});figure(rS,'sit',-4.2,6,-38.8,0,1);chair(rS,-4.18,6,-38.8,1);figure(rS,'sit',-2.6,6,-38.8,0,-1);chair(rS,-2.62,6,-38.8,-1);box(rS,-3.4,6,-38.8,.5,.7,.5,{tone:'fine'});hring(rS,'gold',-3.4,6.02,-39,1.5);
  line(rS,'gold',[-2,6.03,-41.5],[3,6.03,-41.5]);}
+/** Specialise: pod positions, and a gold marker over the pod whose task is being looked at. */
+const SPEC_P:number[][]=[];
+const specMark=new THREE.Mesh(new THREE.OctahedronGeometry(.26,0),new THREE.MeshBasicMaterial({color:0xC9A33A}));specMark.visible=false;specMark.userData.noRay=true;factoryG.add(specMark);
 // PRO: specialisation pods
 {const f=(x:number,z:number)=>face(x,z,ST[5]);
- const P=[...Array(7)].map((_,i)=>{const a=(-33+i*41/6)*Math.PI/180;return [7+10.5*Math.sin(a),-31.5-10.5*Math.cos(a)]});
+ const P=[...Array(7)].map((_,i)=>{const a=(-33+i*41/6)*Math.PI/180;return [7+10.5*Math.sin(a),-31.5-10.5*Math.cos(a)]});SPEC_P.push(...P);
  P.forEach(([x,z])=>{hring(rB,'gold',x,6.02,z,.5);hring(rB,'fine',x,6.02,z,.6)});
  {const [x,z]=P[0],L=[[6.7,7.2,7.7],[6.5,6.95,7.4,7.85],[6.95,7.45]];box(rB,x,6,z,.3,.3,.3,{});L.forEach((ys,j)=>ys.forEach(y=>{ring(rB,j===1?'gold':'ink',M(x-.6+j*.6,y,z),.1,16);if(j<2)L[j+1].forEach(y2=>line(rB,'fine',[x-.6+j*.6,y,z],[x+j*.6,y2,z]))}));}
  {const [x,z]=P[1];[6.25,6.75,7.25].forEach(y=>cyl(rB,x,y,z,.55,.4));hring(rB,'gold',x,7.47,z,.55);}
@@ -412,7 +435,8 @@ function msnAlertAt(cond:number,revised:boolean,u:number):boolean{const [v]=msnS
  // The records bench (data), with the cream source notebook: clipped corner, three green rows.
  const da=POD_PLACE.art[0];box(ma,da[0],0,da[2],1.7,.78,.85);contact(da[0],0,da[2],2.3,1.4);
  const nb=ctex(256,180,(x,w,h)=>{x.fillStyle='#F2EFE2';x.beginPath();x.moveTo(0,0);x.lineTo(w-46,0);x.lineTo(w,46);x.lineTo(w,h);x.lineTo(0,h);x.closePath();x.fill();x.strokeStyle='#0F2B22';x.lineWidth=6;x.stroke();x.fillStyle='#1E4632';[54,96,138].forEach(y=>x.fillRect(26,y,w-60,16));x.fillStyle='#C9A33A';x.fillRect(w-40,8,24,24)});
- const nbm=new THREE.Mesh(PL,new THREE.MeshBasicMaterial({map:nb,transparent:true,side:THREE.DoubleSide}));nbm.scale.set(.62,.44,1);nbm.rotation.x=-Math.PI/2;nbm.rotation.z=.3;nbm.position.set(da[0]-.25,.8,da[2]);MS.g.add(nbm);
+ // The data bench shows the same record notebook as Develop (the reviewed version once it is fixed).
+ const nbm=new THREE.Mesh(PL,new THREE.MeshBasicMaterial({map:devTex,side:THREE.DoubleSide}));void nb;nbm.scale.set(.62,.39,1);nbm.rotation.x=-Math.PI/2;nbm.rotation.z=.3;nbm.position.set(da[0]-.25,.8,da[2]);MS.g.add(nbm);
  box(ma,da[0]+.45,.78,da[2]-.15,.5,.32,.04,{tone:'ink'});
  // Ops console (cloud/MLOps & security): a small server box with a status light.
  const oa=POD_PLACE.art[4];box(ma,oa[0],0,oa[2],.6,1.1,.6);box(ma,oa[0],1.1,oa[2]+.31,.36,.08,.02,{solid:'gold'});
@@ -906,7 +930,7 @@ window.FACTORY={
   fromSnap(e){const p=C.position.clone(),l=look.clone();C.position.lerpVectors(snapP,p,e);look.lerpVectors(snapL,l,e)},
   poseIntro(d=0){C.position.copy(EXTP).addScaledVector(DOL,d*12);C.position.y+=d*2;look.copy(EXTL)},
   poseFly(r,e){const w=ROUTES[r].wp[0];C.position.lerpVectors(EXTP,V(...w[0]),e);look.lerpVectors(EXTL,V(...w[1]),e)},
-  setHover(k){G.hover=k},poseAt(p,l){C.position.set(p[0],p[1],p[2]);look.set(l[0],l[1],l[2])},build(p){setBuild(p)},opNote(n){setOpState(n)},
+  setHover(k){G.hover=k},poseAt(p,l){C.position.set(p[0],p[1],p[2]);look.set(l[0],l[1],l[2])},build(p){setBuild(p)},opNote(n){setOpState(n)},devNote(d){devNote=d;devTex.redraw();devLink.visible=d.state===2},specPod(i){const q=SPEC_P[i];if(!q){specMark.visible=false;return null}specMark.position.set(q[0],8.6,q[1]);specMark.visible=true;return [q[0],6,q[1]]},
   setWf(on){G.wf=on},setBays(hv,sel,dim){G.bayHv=hv;G.baySel=sel;G.bayDim=dim},setUnits(u){G.units=u},setTeam(n){if(teamName.v!==n){teamName.v=n;teamTex.redraw()}},wfStop(i){G.stop=i},campusIn(r){if(G.cam.t0<0||r){G.cam.t0=performance.now();G.cc.t0=-1}},podCross(){G.cc.t0=Math.max(performance.now(),G.cam.t0+2700)},setCampus(a,c){G.act=a;G.con=c},setActor(i){G.actor=i},setNet(o){G.net=o},
   pod(on){if(on&&!G.pod.on)G.pod.t0=performance.now();G.pod.on=on},setPodLead(l){G.podLead=l},globeZoom(i){if(i>=0&&!DIOS.some(D=>D.node===i))i=-1;if(i>=0&&i!==G.zoom){G.dioStep=-1;G.dioT0=performance.now()}G.zoom=i;if(i>=0){G.zoomL=i;/* Profession on top, the company (NF) behind it, away from the camera. */const n=NODES[i].n,fb=NF.clone().sub(n.clone().multiplyScalar(NF.dot(n))).normalize(),r=fb.clone().cross(n).normalize(),L=new THREE.Matrix4().makeBasis(r,n,fb),W=new THREE.Matrix4().makeBasis(V(1,0,0),V(0,1,0),V(0,0,-1));G.focus={q0:Rcur.clone(),q1:new THREE.Quaternion().setFromRotationMatrix(W.multiply(L.transpose())),t0:performance.now()}}},dioStep(k){G.dioStep=k;if(k<0)G.dioT0=performance.now()},dioAt(){return G.dioCur},stats(){return {ms:+STATS.ms.toFixed(2),calls:STATS.calls,tris:STATS.tris,dpr:R.getPixelRatio()}},podSelect(i){MSN.sel=i},podRun(c,revised){MSN.cond=c;MSN.revised=revised;MSN.t0=performance.now();MSN.u=0},podReset(){MSN.t0=-1;MSN.u=0;MSN.revised=false},podMission(i){if(i===MSN.mi)return;MSN.mi=i;MSN.t0=-1;MSN.u=0;MSN.revised=false;MS.mach.visible=i===0;IC.g.visible=i===1;AS.g.visible=i===2;MSN.last='';MS.traceT?.redraw();MS.alertT?.redraw()},podState(){const ran=MSN.t0>=0;return{ran,u:MSN.u,done:ran&&MSN.u>=1,alert:msnFlag(),cond:MSN.cond,revised:MSN.revised,mi:MSN.mi}},podLabels(l){MSN.labels=l;MS.traceT?.redraw();MS.alertT?.redraw();MSN_DOCTEX.forEach(t=>t.redraw())},gallery(){return GALLERY.map(g=>({at:g.at,face:g.face}))},dioDebug(){const D=DIOS.find(x=>x.node===G.zoomL);if(!D)return null;return{yaw:D.g.rotation.y,cam:C.position.toArray().map(v=>+v.toFixed(2)),labels:D.labels.map(m=>{const p=m.getWorldPosition(new THREE.Vector3());const q=p.clone().project(C);return [p.toArray().map(v=>+v.toFixed(2)),[Math.round((q.x+1)/2*innerWidth),Math.round((1-q.y)/2*innerHeight)]]})}},hasDio(i){return DIOS.some(D=>D.node===i)},podJump(i){G.pod.on=true;G.pod.t0=performance.now()-(4200+i*2600)},podG(){return G.pod.on?G.podGv:-1},podTime(){return G.pod.on?(performance.now()-G.pod.t0)/1000:0},setCrate(g){G.crate=g},setTicks(a){G.ticks=a},setWalk(on){G.walk=on},
   rayWhat(a,b){const A=V(...a),dir=V(...b).sub(A),len=dir.length();dir.normalize();factoryG.updateMatrixWorld(true);const rc=new THREE.Raycaster(A,dir,0,len);rc.camera=C;const nm=new THREE.Vector3();return rc.intersectObject(factoryG,true).filter(h=>(h.object as THREE.Mesh).isMesh&&h.face).slice(0,4).map(h=>{const m=h.object as THREE.Mesh;let vis=true;for(let o:THREE.Object3D|null=m;o;o=o.parent)if(!o.visible)vis=false;nm.copy(h.face!.normal).transformDirection(m.matrixWorld);const mat=m.material as THREE.MeshBasicMaterial;return {name:(()=>{let o:THREE.Object3D|null=m,n='';for(;o&&!n;o=o.parent)n=o.name;return n})(),parentKids:m.parent?.children.length,p:[h.point.x,h.point.y,h.point.z].map(v=>+v.toFixed(2)),vis,ny:+nm.y.toFixed(2),geo:(m.geometry as THREE.BufferGeometry).type,op:mat.opacity,tr:mat.transparent,cw:mat.colorWrite,dw:mat.depthWrite,size:(()=>{(m.geometry as THREE.BufferGeometry).computeBoundingBox();const b=(m.geometry as THREE.BufferGeometry).boundingBox!;return [b.max.x-b.min.x,b.max.y-b.min.y,b.max.z-b.min.z].map(v=>+v.toFixed(1))})()}})},

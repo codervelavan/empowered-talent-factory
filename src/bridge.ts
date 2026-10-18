@@ -36,6 +36,10 @@ export interface FactoryApi {
   build(p: number): void;
   /** Opening notebook state: 0 gap, 1 source shown, 2 reviewed. */
   opNote(n: number): void;
+  /** The project record notebook (Develop bench and Engineer data bench). state: 0 as found, 1 gap marked, 2 fixed and linked. */
+  devNote(d: { title: string; head: string[]; rows: string[][]; row: number; col: number; fix: string; state: number; linked: string; missing: string }): void;
+  /** Mark Specialise pod i (-1 clears); returns its floor position. */
+  specPod(i: number): P3 | null;
   poseRoute(r: string, k: number): void;
   snapshot(): void;
   poseBack(t: number): void;

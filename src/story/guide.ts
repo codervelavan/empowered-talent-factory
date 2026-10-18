@@ -110,9 +110,9 @@ const SPOTS: Record<RoomId, Spot> = {
   // "Your route": closer to the entrance, the building still in view.
   preview: { guide: [-1, 0, 10], you: [1.6, 0, 11.2], cam: [[3, 3.2, 20], [-0.5, 4, -2]] },
   intake: { guide: [6.5, 0, -9], you: [4.1, 0, -7.1], cam: [[-0.8, 3.4, 2.6], [6.4, 1.9, -11]] },
-  develop: { guide: [-9.5, 6, -37.6], you: [-6.6, 6, -36], cam: [[-3.2, 8.8, -27.4], [-9, 7.4, -42]] },
+  develop: { guide: [-12.5, 6, -38.1], you: [-6.6, 6, -36], cam: [[-3.2, 8.8, -27.4], [-9, 7.4, -42]] },
   // Upstairs at the Develop · Pro room: the Career Pro specialisation pods.
-  pro: { guide: [5.6, 6, -37.6], you: [8.4, 6, -36.2], cam: [[11, 8.8, -27.4], [6.5, 7.4, -42]] },
+  pro: { guide: [11.2, 6, -38.2], you: [11.9, 6, -35.9], cam: [[11, 8.8, -27.4], [6.5, 7.4, -42]] },
   engineer: { guide: [13.6, 0, -25.6], you: [16.5, 0, -24.4], cam: [[21.6, 3.6, -17.4], [13.4, 1.6, -31]] },
   // Further along the POD floor, by the six stage boards.
   delivery: { guide: [2.2, 0, -25.6], you: [4.4, 0, -26.2], cam: [[7.5, 3.8, -15.5], [0, 1.4, -32]] },
@@ -181,9 +181,11 @@ const camBase = (room: RoomId): [P3, P3] => {
 const PATHS: Record<string, P3[]> = {
   'entrance>preview': [[-1.6, 0, 25], [-1, 0, 10]],
   'preview>intake': [[-1, 0, 10], [6.5, 0, -9]],
-  'intake>develop': [[6.5, 0, -9], [4, 0, -5.5], [2.5, 0, -5], [0, 0, -5.6], [0, 6, -22], [-9.5, 6, -37.6]],
-  'develop>pro': [[-9.5, 6, -37.6], [5.6, 6, -37.6]],
-  'pro>engineer': [[5.6, 6, -37.6], [0, 6, -22], [0, 0, -5.6], [3.5, 0, -5], [6, 0, -8], [9, 0, -20.5], [13.6, 0, -25.6]],
+  // Into Develop through its doorway; the guide waits beside the project bench, clear of the camera.
+  'intake>develop': [[6.5, 0, -9], [4, 0, -5.5], [2.5, 0, -5], [0, 0, -5.6], [0, 6, -22], [-7, 6, -30], [-7, 6, -35.5], [-12.5, 6, -38.1]],
+  // Specialise: the guide stands to the right of the pods so each pod can be framed from the front.
+  'develop>pro': [[-12.5, 6, -38.1], [-9.5, 6, -37.6], [5.6, 6, -37.6], [11.2, 6, -38.2]],
+  'pro>engineer': [[11.2, 6, -38.2], [5.6, 6, -37.6], [0, 6, -22], [0, 0, -5.6], [3.5, 0, -5], [6, 0, -8], [9, 0, -20.5], [13.6, 0, -25.6]],
   'engineer>verify': [[13.6, 0, -25.6], [3.5, 0, -13.5], [3.5, 0, -5], [0, 0, -5.6], [0, 6, -22], [13, 6, -35], [18.6, 6, -38.6]],
   'verify>deploy': [[18.6, 6, -38.6], [11.5, 6, -34], [0, 6, -22], [0, 0, -5.6], [-3.5, 0, -5], [-3.5, 0, -33.5], [-1, 0, -36], [-2, 0, -76.5], [-1.6, 0, -77]],
   'preview>dock': [[-1, 0, 10], [14.5, 0, 4.5], [30, 0, 4], [34.5, 0, -1], [39, 0, -12]],
@@ -723,7 +725,10 @@ export class Story {
     }
     this.panel.removeAttribute('tabindex');
     const keep = changedStop ? 0 : this.panel.querySelector('.spBody')?.scrollTop ?? 0;
+    // Sections the visitor opened inside an activity stay open across re-renders at the same stop.
+    const wasOpen = changedStop ? [] : [...this.panel.querySelectorAll<HTMLDetailsElement>('details.pmMore')].map((d) => d.open);
     this.panel.innerHTML = idx === 0 ? this.welcomeHtml() : idx === 1 ? this.previewHtml() : this.stopHtml(idx);
+    this.panel.querySelectorAll<HTMLDetailsElement>('details.pmMore').forEach((d, k) => { if (wasOpen[k]) d.open = true; });
     this.pinNav(keep);
     translateDom(this.panel);
     if (this.actScroll && changedStop) { this.actScroll = false; const pm = this.panel.querySelector<HTMLElement>('.pm'), body = this.panel.querySelector<HTMLElement>('.spBody'); if (pm && body) body.scrollTop = pm.offsetTop - body.offsetTop - 8; }
