@@ -7,7 +7,7 @@ import { Story, lobbyPose, setRoomFocus, type PathId, type RoomDef, type RoomId 
 import { PodMission, podLabels } from '../pod/mission';
 import { i18n, translateDom } from '../app/i18n';
 import { POD_PLACE } from '../pod/missions';
-import { Opening } from '../story/opening';
+import { Opening, BEATS } from '../story/opening';
 import { currentPath, currentRoute, legacyHashPath, onPathChange, setPath } from '../app/router';
 import { routeFor, type Dest } from '../app/routes';
 import { Passport } from '../app/passport';
@@ -66,7 +66,7 @@ export function initController(replayStory: () => void): ControllerApi {
   function choose(r:string){if(mode!=='intro'||!window.FACTORY)return;stCat=stWho||(r==='career'?'For students':'For startups');stWho=null;window.FACTORY.setHover(null);spine(false);window.FACTORY.snapshot();podFly=true;route=r;mode='fly';flyT0=performance.now();buildRail(r);setTrack(r==='workforce'?0:(LABELS[r].length-1+HL(r))*SEG+.6);jump(0)}
   /** Where the visitor came from when they entered the globe (null: opened directly), so Back returns there. */
   let gReturn:{route:TourRoute;index:number}|null=null;
-  function toGlobe(){const F=window.FACTORY;if(!F||(mode!=='intro'&&mode!=='route'&&mode!=='hub'&&mode!=='tour'))return;gReturn=mode==='tour'?{route:tour.route,index:TOURS_ALL()[tour.route][tour.index]?.id==='world'?Math.max(0,tour.index-1):tour.index}:null;paintGlobeBack();syncPath('ai-for-everyone/');tour.stop();story.hide();closeDrawer();F.setHover(null);spine(false);F.globeBegin('in');mode='gIn';gT0=performance.now();route=null;buildRail('globe');setTrack(0);jump(0);closeSide()}
+  function toGlobe(){const F=window.FACTORY;if(!F||(mode!=='intro'&&mode!=='route'&&mode!=='hub'&&mode!=='tour'))return;gReturn=mode==='tour'?{route:tour.route,index:tour.route!=='story'&&TOURS_ALL()[tour.route][tour.index]?.id==='world'?Math.max(0,tour.index-1):tour.index}:null;paintGlobeBack();syncPath('ai-for-everyone/');tour.stop();story.hide();closeDrawer();F.setHover(null);spine(false);F.globeBegin('in');mode='gIn';gT0=performance.now();route=null;buildRail('globe');setTrack(0);jump(0);closeSide()}
   function leaveGlobe(next:string|null){const F=window.FACTORY!;if(mode!=='globe'&&mode!=='gIn')return;closeWho();closeSide();F.globeBegin('out');mode='gOut';gT0=performance.now();gNext=next}
   function back(){if(menuOpen){closeMenu();return}if(cd.classList.contains('open')){closeDrawer();return}if(!$('handoff').hidden){hideHandoff();return}if(flatOpen&&!flatAuto){closeFlat();return}if(whoOpen){closeWho();return}if(side.classList.contains('open')){closeSide();return}const F=window.FACTORY;if(!F)return;if(mode==='tour'){if(tour.index>0)tour.travel(tour.index-1);return}if(mode==='globe'||mode==='gIn'){leaveGlobe(null);return}if(mode==='hub'){if(wfAt!==0){wfGo(0);return}F.pod(false);F.snapshot();mode='back';backT0=performance.now();return}if(mode!=='route'&&mode!=='fly')return;F.snapshot();mode='back';backT0=performance.now()}
   /** The globe's back button names where it goes. */
@@ -340,7 +340,7 @@ export function initController(replayStory: () => void): ControllerApi {
     const sRaw=(v-B1)/SEG;let s=-9,last=0,liftO=0,xfO=0;
     if(F){
       if(intro){if(!window.__storyShowing&&!entered)beginEntry()}
-      else if(mode==='opening'){while(pendWorld.length)F.addWorld(pendWorld.shift()!);const tNow=performance.now(),dt=openLast?Math.min(.1,Math.max(0,(tNow-openLast)/1000)):0;openLast=tNow;const o=opening.frame(tNow,tour.reduce);F.poseAt(o.pos,o.look);story.openingPose(o,o.pos,dt);F.render('route',0);if(o.done)opening.finish()}
+      else if(mode==='opening'){while(pendWorld.length)F.addWorld(pendWorld.shift()!);const tNow=performance.now(),dt=openLast?Math.min(.1,Math.max(0,(tNow-openLast)/1000)):0;openLast=tNow;const o=opening.frame(tNow,innerWidth<=760&&innerHeight>innerWidth?'phone':innerHeight<=500?'land':'desk');F.build(o.build);F.poseAt(o.pos,o.look);story.openingPose(o,o.pos,dt);F.render('route',0)}
       else if(mode==='gIn'||mode==='gOut'){const gi=mode==='gIn',raw=Math.min(1,(now-gT0)/(gi?(reduce?1400:GIN):2600)),t=reduce&&!gi?1:raw;if(gi&&reduce){liftO=1-Math.abs(raw*2-1);xfO=liftO;F.globeStep(raw<.5?0:1)}else{if(gi)liftO=sm(.04,.16,raw)*(1-sm(.8,.94,raw));F.globeStep(t)}F.render('globe',0);
         if(t>=1){if(mode==='gIn'){F.globeArrive();mode='globe';document.body.style.cursor='grab';if(pendSide>=0){const k=pendSide,v=pendView;pendSide=-1;pendView='path';openSide(k,v);if(v==='path'){lvl=2;paintLv()}}}else{F.globeReset();document.body.style.cursor='';const n=gNext,ret=gReturn;gNext=null;gReturn=null;paintGlobeBack();
           if(n){const p=n==='career'?'career/':'workforce/';setPath(p,true);go(routeFor(p)!.dest)}
@@ -580,7 +580,7 @@ export function initController(replayStory: () => void): ControllerApi {
         action:{label:'Explore engineering PODs',run:open('career',5)},hotspots:[{at:[21.6,2.4,-28.4],label:'Six POD stages',run:open('career',5)},{at:[18,5.2,-33],label:'Career Pro pods',run:open('career',4)}]},
       {id:'verify',label:'Verify',eyebrow:'VERIFY',title:'Evidence in. Readiness out.',copy:'ETAF™, our readiness framework, checks assessments, project work and reviewed delivery. After that review, your Evidence Passport becomes your Readiness Passport: evidence of what you can actually do.',pose:()=>FX().routePose('career',CK[4]),
         action:{label:'Explore the Readiness Passport',run:open('career',6)},hotspots:[{at:[21,9.2,-43.8],label:'ETAF™ assurance core',run:open('career',6)},{at:[17.5,8.6,-41.5],label:'Play an example review',run:()=>playEtafDemo()}]},
-      {id:'deploy',label:'Deploy',eyebrow:'DEPLOY',title:'Get placed in industry.',copy:'Verified talent connects with companies. Products go live. Career-specific placement support helps people take their next step.',pose:()=>DEPLOY,
+      {id:'deploy',label:'Deploy',eyebrow:'DEPLOY',title:'Show what you can do.',copy:'Verified talent meets companies and products go live. Placement support depends on your track; an interview or hire remains the employer’s decision.',pose:()=>DEPLOY,
         action:{label:'Explore opportunity pathways',run:open('career',7)},hotspots:[{at:[0,6.4,-72],label:'ETAF™ gate · opportunity pathways',run:open('career',7)}]},
       showroom,
       {id:'world',label:'World',eyebrow:'AI FOR EVERYONE',title:'AI for every profession.',copy:'From this company to a connected world. Explore practical AI across industries and professions.',pose:():[P3,P3]=>[[6,46,58],[0,0,-30]]}],
@@ -685,12 +685,19 @@ export function initController(replayStory: () => void): ControllerApi {
   const passport=new Passport(p=>{const r=routeFor(p);if(r)go(r.dest)},currentPath,()=>closeMenu());
   function syncPath(path:string){if(!entered||flatOpen)return;passport.visit(path);if(popping){popping=false;setPath(path,false);return}setPath(path,path!==currentPath())}
   // ---- The 3D opening, the lobby and routing ----
-  const opening=new Opening(o=>{if(window.FACTORY)window.FACTORY.addWorld(o);else pendWorld.push(o)},()=>lobbyPose());
+  const opening=new Opening(o=>{if(window.FACTORY)window.FACTORY.addWorld(o);else pendWorld.push(o)},()=>lobbyPose(),()=>{const F=window.FACTORY;return F?{note:n=>F.opNote(n),select:i=>F.podSelect(i),run:(c,r)=>F.podRun(c,r),reset:()=>{F.podReset();F.podMission(0)}}:null});
   let openLast=0;
   const openedKey='ee-opened';
   const opened=()=>{try{return sessionStorage.getItem(openedKey)==='1'}catch{return true}};
   function playOpening(){closeMenu();closeDrawer();closeFlat();if(mode==='globe'||mode==='gIn'||mode==='gOut'){window.FACTORY?.globeReset();document.body.style.cursor=''}tour.stop();story.hide();tour.setStops('story',story.reset());openLast=0;mode='opening';
-    opening.start(()=>{try{sessionStorage.setItem(openedKey,'1')}catch{/* storage blocked */}enterLobby()})}
+    opening.start(end=>{try{sessionStorage.setItem(openedKey,'1')}catch{/* storage blocked */}
+      // Construction completes as soon as a destination is chosen; the project returns to the visitor's own choice.
+      window.FACTORY?.build(1);mission.sync();
+      if(end==='career'){enterLobby();story.startAt('student','intake')}
+      else if(end==='workforce'){resetToIntro('workforce',1)}
+      else if(end==='ai'){enterLobby();toGlobe();gReturn=null;paintGlobeBack()}
+      else if(end==='path'){const r=routeFor(currentPath())??routeFor('')!;if(r.dest.k==='home')enterLobby();else go(r.dest)}
+      else enterLobby()},tour.reduce)}
   /** The lobby: the guide's three-journey question on the plaza. */
   function enterLobby(){if(mode==='tour'&&tour.route==='story'&&!story.audience){tour.jump(0);return}tour.setStops('story',story.reset());resetToIntro('story',0)}
   /** Open a destination (from the address bar, the menu or Back). */
@@ -711,7 +718,9 @@ export function initController(replayStory: () => void): ControllerApi {
     const path=currentPath(),sv=story.savedState();
     if(sv&&path&&sv.path===path){enterLobby();story.resumeSaved();return}
     go(currentRoute().dest)}
-  onPathChange(path=>{if(!window.FACTORY||mode==='opening')return;
+  onPathChange(path=>{if(!window.FACTORY)return;
+    // Back/Forward during the opening leaves it for the requested place (the home address stays in it).
+    if(mode==='opening'){if(path)opening.finish('path');return}
     // Back and Forward within the guided route step between its stops.
     if(mode==='tour'&&tour.route==='story'&&story.audience){const k=story.indexNear(path,tour.index);if(k>=0){popping=true;tour.travel(k);return}}
     popping=true;const r=routeFor(path)??routeFor('')!;if(r.dest.k==='home')enterLobby();else go(r.dest)});
@@ -737,7 +746,7 @@ export function initController(replayStory: () => void): ControllerApi {
   function closeMenu(){if(!menuOpen)return;const f=menu.contains(document.activeElement);menu.hidden=true;menuOpen=false;menuBtn.setAttribute('aria-expanded','false');if(f)menuBtn.focus()}
   menuBtn.onclick=()=>menuOpen?closeMenu():openMenu();
   addEventListener('pointerdown',e=>{if(menuOpen&&!(e.target as Element).closest('#menu,#menuBtn'))closeMenu()});
-  function resetToIntro(r:TourRoute='story',at=0){if(side.classList.contains('open'))closeSide();if(whoOpen)closeWho();if(mode==='globe'||mode==='gIn'||mode==='gOut'){window.FACTORY&&window.FACTORY.globeReset();document.body.style.cursor=''}gNext=null;pending=null;startTour(r,at)}
+  function resetToIntro(r:TourRoute='story',at=0){if(side.classList.contains('open'))closeSide();if(whoOpen)closeWho();if(mode==='globe'||mode==='gIn'||mode==='gOut'){window.FACTORY&&window.FACTORY.globeReset();document.body.style.cursor='';gReturn=null;paintGlobeBack()}gNext=null;pending=null;startTour(r,at)}
   const HASH:Record<string,string>={career:'career',workforce:'workforce',globe:'ai-for-everyone',evidence:'evidence',skip:'skip-3d'},ANCH:Record<string,string>={career:'fCareer',workforce:'fWork',globe:'fGlobe',evidence:'fEvidence',skip:'fTop'};
   let flatTour:{route:TourRoute;index:number}|null=null;
   function openFlat(auto:boolean,anchor:string){
@@ -760,8 +769,10 @@ export function initController(replayStory: () => void): ControllerApi {
   function paintLang(){const ta=i18n.lang==='ta',b=$('langBtn'),m=menu.querySelector<El>('[data-go="lang"]');b.textContent=ta?'English':'தமிழ்';b.lang=ta?'en':'ta';b.setAttribute('aria-label',ta?'Switch to English':'தமிழுக்கு மாறவும்');if(m)m.innerHTML=(ta?'<span lang="en">English</span>':'<span lang="ta">தமிழ்</span>')+' <span>→</span>';
     ['menu','hdrBack','menuBtn'].forEach(id=>translateDom($(id)))}
   $('langBtn').onclick=()=>i18n.set(i18n.lang==='ta'?'en':'ta');paintLang();i18n.on(paintLang);
-  function nav(k:string){if(k==='lang'){i18n.set(i18n.lang==='ta'?'en':'ta');return}if(k==='light'){quality.set(!quality.light);return}closeMenu();if(k==='story'){replayStory();return}if(k==='opening'){setPath('',true);playOpening();return}
+  function nav(k:string){if(k==='lang'){i18n.set(i18n.lang==='ta'?'en':'ta');return}if(k==='light'){quality.set(!quality.light);return}closeMenu();if(k==='opening'){setPath('',true);playOpening();return}
     if(k==='skip'||flatAuto||!window.FACTORY){history.replaceState(history.state,'',location.pathname+location.search+'#skip-3d');const inStory=mode==='tour'&&tour.route==='story'&&!!story.audience;$('fBack').textContent=inStory?'← Back to your guided tour':'← Back to the 3D company';openFlat(false,inStory&&k==='skip'?STORYANCH[story.audience!]:ANCH[k]);return}
+    // From a tour or guided stop, the globe remembers where the visitor was, so both Back buttons return there.
+    if(k==='globe'&&window.FACTORY&&mode==='tour'){toGlobe();return}
     const p=({career:'career/',workforce:'workforce/',globe:'ai-for-everyone/',evidence:'evidence-impact/'} as Record<string,string>)[k];if(p===undefined)return;setPath(p,true);go(routeFor(p)!.dest)}
   menu.querySelectorAll<El>('[data-go]').forEach(b=>b.onclick=()=>nav(b.dataset.go!));
   document.querySelectorAll<El>('.logo').forEach(a=>a.onclick=e=>{e.preventDefault();closeMenu();closeFlat();setPath('',true);enterLobby()});
@@ -773,7 +784,8 @@ export function initController(replayStory: () => void): ControllerApi {
     const reg=$('regForm').outerHTML.replace(' id="regForm"',' data-f="reg"');
     
     flat.innerHTML='<div class="fw"><div class="fbar"><p class="fnote" id="fNote" hidden>The 3D view is not available on this device, so EmpowerED is shown as a page.</p><button class="backBtn" id="fBack" type="button">← Back to the 3D company</button></div>'
-     +'<section id="fTop"><h1>EmpowerED Careers</h1><p class="fsub">Home of the AI Talent Factory. Develop capability. Engineer for real. Verify readiness. Deploy with confidence.</p><p>Product Engineering · ETAF™ · Enterprise Deployment</p><p class="fbig">Learning ≠ Getting Hired</p><p class="fbig">What can you actually do?</p><p>Enterprise-ready capability, built through real engineering.</p><h3>What are you here to build?</h3><nav class="fjump" aria-label="Sections"><a href="#fCareer">Build My Career →</a><a href="#fWork">Build My Workforce →</a><a href="#fGlobe">AI for Everyone →</a><a href="#fEvidence">Evidence &amp; Impact →</a></nav></section>'
+     +'<section id="fTop"><h1>EmpowerED Careers</h1><p class="fsub">Home of the AI Talent Factory. Develop capability. Engineer for real. Verify readiness. Deploy with confidence.</p><p>Product Engineering · ETAF™ · Enterprise Deployment</p><p class="fbig">Learning ≠ Getting Hired</p><p class="fbig">What can you actually do?</p><p>Enterprise-ready capability, built through real engineering.</p><h3>What are you here to build?</h3><nav class="fjump" aria-label="Sections"><a href="#fStory">Follow the work →</a><a href="#fCareer">Build My Career →</a><a href="#fWork">Build My Workforce →</a><a href="#fGlobe">AI for Everyone →</a><a href="#fEvidence">Evidence &amp; Impact →</a></nav></section>'
+     +'<section id="fStory"><h2>Follow the work</h2><p>The opening of the 3D company, as text. It follows one illustrative project; exploring it is not an assessment.</p><ol>'+BEATS.map(b=>'<li><h4>'+esc(b.cap)+'</h4><p>'+esc(b.line)+'</p>'+(b.done?'<p>'+esc(b.done)+'</p>':'')+'</li>').join('')+'</ol><p>The Career route then has six stops: Intake, Develop, Specialise, Engineer, Verify and Deploy.</p></section>'
      +'<section id="fCareer"><h2>Build My Career</h2><ol>'+car+'</ol><p>Before an assessment result exists, every career path starts with the Entry Assessment.</p><h3>Register for the Weekend Assessment Drive</h3>'+reg+'</section>'
      +'<section id="fWork"><h2>Build My Workforce</h2><ol>'+wf+'</ol></section>'
      +'<section id="fGlobe"><h2>AI for Everyone</h2><p>AI for every profession. Explore how AI is reshaping the work people already do.</p><ol class="finds">'+inds+'</ol></section>'

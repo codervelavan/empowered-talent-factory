@@ -821,16 +821,17 @@ const noteTex=ctex(768,512,(x,w,h)=>{x.fillStyle='#FBF8EE';x.fillRect(0,0,w,h);x
  plane(opA,OPX-.3,.785,OPZ+.08,1.15,.78,{rx:-Math.PI/2,mat:amat(opA,0xffffff,1,noteTex),tone:'ink'});
  box(opA,OPX-1.05,.75,OPZ+.02,.56,.03,.4,{ry:.5,solid:'green',tone:null});plane(opA,OPX-1.15,.93,OPZ-.15,.56,.38,{rx:-.3,ry:.5,mat:amat(opA,0x2B4A3C),tone:'fine'});
  cyl(opA,OPX+.95,.86,OPZ-.25,.08,.2,{tone:'fine'});[[-.02,.02],[.03,-.01],[0,.04]].forEach(([dx,dz])=>line(opA,'gold',[OPX+.95+dx,.9,OPZ-.25+dz],[OPX+.95+dx*2,1.08,OPZ-.25+dz*2]));
- plant(OPX+2.6,0,OPZ+.9,1.1,true);
+ plant(OPX-1.7,0,OPZ-2.6,1.1,true);
  TG=prev}
 /** The physical gap tab and the source card the peer brings (opening beat 1). */
 const opTab=new THREE.Mesh(new THREE.BoxGeometry(.06,.012,.16),new THREE.MeshBasicMaterial({color:0xC9A33A}));opTab.position.set(OPX-.9,.79,OPZ+.3);OPG.add(opTab);
 const srcCard=new THREE.Mesh(new THREE.PlaneGeometry(.34,.24),new THREE.MeshBasicMaterial({map:ctex(256,180,(x,w,h)=>{x.fillStyle='#FFFDF5';x.fillRect(0,0,w,h);x.strokeStyle='#C9A33A';x.lineWidth=6;x.strokeRect(3,3,w-6,h-6);x.fillStyle='#1E4632';x.font='800 26px Manrope, sans-serif';x.fillText('JOB SCHEDULE',16,40);x.font='500 22px Inter, sans-serif';x.fillText('14:00  job 2217',16,90);x.fillText('heavy cut · 40 min',16,126)})}));
 srcCard.rotation.x=-Math.PI/2;srcCard.rotation.z=.25;srcCard.position.set(OPX+.55,.79,OPZ+.3);srcCard.visible=false;OPG.add(srcCard);
 const setOpState=(n:number)=>{opState=n;noteTex.redraw();srcCard.visible=n>=1;(opTab.material as THREE.MeshBasicMaterial).color.set(n>=2?0x2E8B57:0xC9A33A)};
+let clipKids=-1;
 function setBuild(p:number){if(p>=1){BUILDY.value=1e4;CLIP.constant=1e4;PEOPLE.forEach(m=>m.visible=true);return}
   // Meshes added after the build (opening doors, brand extras) join the cut too.
-  factoryG.traverse(o=>{const mm=(o as THREE.Mesh).material;if(!mm||o instanceof THREE.LineSegments)return;(Array.isArray(mm)?mm:[mm]).forEach(x=>{if(!x.clippingPlanes&&!x.userData.noClip)x.clippingPlanes=[CLIP]})});
+  if(factoryG.children.length!==clipKids){clipKids=factoryG.children.length;factoryG.traverse(o=>{const mm=(o as THREE.Mesh).material;if(!mm||o instanceof THREE.LineSegments)return;(Array.isArray(mm)?mm:[mm]).forEach(x=>{if(!x.clippingPlanes&&!x.userData.noClip)x.clippingPlanes=[CLIP]})});}
   const h=1.3+Math.pow(Math.max(0,p),1.15)*34;BUILDY.value=h;CLIP.constant=h;PEOPLE.forEach(m=>m.visible=p>.9)}
 // BUILD LINE GEOMETRY (merged per area and tone)
 const VS=`attribute float lineU;attribute float delay;varying float vU;varying float vD;varying float vDepth;varying float vY;

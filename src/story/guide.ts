@@ -337,7 +337,8 @@ const JOURNEY_OF: Record<PathId, Journey> = { student: 'career', founder: 'workf
 /** The site path (relative to the base) for a guided stop, so the address bar follows the tour. */
 export function storyPath(a: PathId | null, i: number, room: RoomId): string {
   if (!a || i === 0) return '';
-  if (a === 'professional') return 'ai-for-everyone/';
+  // The professional guided route has its own address, distinct from the globe itself.
+  if (a === 'professional') return 'ai-for-everyone/guide/';
   if (a === 'student') {
     if (i === 1) return 'career/';
     return ({ intake: 'career/assessment/', develop: 'career/launch/', pro: 'career/specialisation/', engineer: 'career/accelerate/', verify: 'career/assurance/', deploy: 'career/opportunities/' } as Partial<Record<RoomId, string>>)[room] ?? 'career/';
@@ -441,7 +442,7 @@ export class Story {
   }
 
   /** Choose a goal. A new choice walks on to "Your route"; a resumed one returns to its stop. */
-  private pick(a: Audience, resume?: Saved) {
+  private pick(a: Audience, resume?: Saved, to?: RoomId) {
     if (a === 'explore') { this.host.explore(); return; }
     this.audience = a;
     this.path = this.paths[a];
@@ -456,7 +457,8 @@ export class Story {
     this.host.onAudience(a);
     const n = this.all().length;
     this.host.setStops(this.toStops(), resume ? Math.min(n - 1, resume.i) : 0);
-    if (!resume) this.host.travel(1);
+    const go = to ? Math.max(1, this.indexOfRoom(a, to)) : 1;
+    if (!resume) this.host.travel(go);
     this.save(resume ? resume.i : 0);
   }
 
@@ -468,6 +470,9 @@ export class Story {
 
   /** Start a path directly (e.g. from the menu). */
   choose(a: Audience) { this.pick(a); }
+
+  /** Start a route and walk straight to its first useful room (the opening's one-click choices). */
+  startAt(a: PathId, room: RoomId) { this.pick(a, undefined, room); }
 
   /** Start a route at stop i directly (a deep link such as /career/assurance/). */
   chooseAt(a: PathId, i: number) { this.pick(a, { a, i, p: this.ctx.profession }); }
@@ -629,7 +634,7 @@ export class Story {
   }
 
   /** During the opening: the guide comes out through the doors and waves; the visitor waits in the lobby. */
-  openingPose(o: { guide: P3; walking: boolean; wave: number; guideVisible: boolean }, cam: P3, dt: number) {
+  openingPose(o: { guide: P3; walking: boolean; wave: number; guideVisible: boolean; youVisible?: boolean }, cam: P3, dt: number) {
     this.panel.hidden = true;
     this.board?.show(false);
     this.boardKey = '';
@@ -638,7 +643,7 @@ export class Story {
     const y = SPOTS.entrance.you;
     if (o.walking) this.walkT += dt * 9;
     this.guide.root.visible = o.guideVisible;
-    this.you.root.visible = true;
+    this.you.root.visible = o.youVisible !== false;
     this.pose(this.guide, o.guide, y, this.last?.g, cam, o.walking, dt, false, false, o.wave);
     this.pose(this.you, y, o.guide, undefined, cam, false, dt, false, false, 0);
     this.last = { g: o.guide, y };
