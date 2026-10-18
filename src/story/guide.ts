@@ -690,13 +690,21 @@ export class Story {
     if (detail) return;
     const moving = !arrived && Math.abs(v - idx) > 0.04;
     const changedStop = !moving && this.at !== idx;
-    if (!moving && this.at !== idx) { this.at = idx; this.save(idx); }
+    if (!moving && this.at !== idx) { this.at = idx; this.save(idx); this.askOpen = false; }
+    { const d = this.panel.querySelector<HTMLDetailsElement>('details.spAsk'); if (d && !changedStop) this.askOpen = d.open; }
     const key = i18n.lang + (moving ? 'walk' + Math.floor(v) + '>' + (Math.floor(v) + 1) : 'stop' + idx + '|' + (this.ask?.stop === idx ? this.ask.k : -1) + '|' + this.mapOpen + '|' + this.wfAsk + '|' + this.ctx.profession + '|' + (this.audience ?? '') + '|' + this.host.reduced() + '|' + compact() + '|' + (this.all()[idx]?.activity ? this.host.activity?.(this.all()[idx].activity!)?.key() ?? '' : ''));
     this.panel.classList.toggle('moving', moving);
     if (key === this.shownKey) return;
     this.shownKey = key;
     // Keep keyboard focus with the panel while it re-renders.
-    if (this.panel.contains(document.activeElement)) this.keepFocus = true;
+    let wasOn = '';
+    if (this.panel.contains(document.activeElement)) {
+      this.keepFocus = true;
+      const ds = (document.activeElement as HTMLElement).dataset ?? {};
+      const k = ['pod', 'act', 'ask', 'prof', 'goal', 'end', 'go'].find((x) => ds[x] !== undefined);
+      if (k) wasOn = `[data-${k}="${CSS.escape(ds[k]!)}"]`;
+      else if ((document.activeElement as HTMLElement).tagName === 'SUMMARY') wasOn = '.spAsk summary';
+    }
     const all = this.all();
     if (moving) {
       // On the way: say why the next room matters; the explanation appears after arrival.
@@ -722,13 +730,17 @@ export class Story {
     if (all[idx]?.pick === 'profession') this.paintProfessions();
     if (this.keepFocus) {
       this.keepFocus = false;
-      const to = [this.focusSel, '.spNext', '.spGoals button', 'button'].filter(Boolean).map((q) => this.panel.querySelector<HTMLElement>(q)).find(Boolean);
+      const to = [this.focusSel, changedStop ? '' : wasOn, changedStop ? '' : '.pm .pmFind button', changedStop ? '' : '.pm', '.spNext', '.spGoals button', 'button'].filter(Boolean).map((q) => this.panel.querySelector<HTMLElement>(q)).find(Boolean);
+      // The activity region holds focus while its result is still running (the result's own action takes it next).
+      if (to?.classList.contains('pm')) to.tabIndex = -1;
       to?.focus({ preventScroll: true });
       this.focusSel = '';
     }
   }
 
   private actScroll = false;
+  /** "Ask your guide" stays open across re-renders at the same stop once the visitor opens it. */
+  private askOpen = false;
   /** After the next arrival, open the panel scrolled to the stop's activity (a mission action led here). */
   scrollToActivity() { this.actScroll = true; }
 
@@ -741,11 +753,9 @@ export class Story {
     body.scrollTop = scrollTop;
   }
 
+  /** Where you are. Chapters live in "Your journey"; motion and free exploring live in the menu. */
   private topHtml(eye: string): string {
-    const map = this.audience ? `<button type="button" class="spLink" data-act="map" aria-expanded="${this.mapOpen}">Tour map</button>` : '';
-    const motion = `<button type="button" class="spLink" data-act="motion" aria-pressed="${this.host.reduced()}">Reduce motion</button>`;
-    return `<div class="spTop"><span class="spEye">${esc(eye)}</span><span class="spCtl">${map}${motion}<button type="button" class="spLink" data-act="exit">Exit tour</button></span></div>` +
-      (this.mapOpen && this.audience ? this.mapHtml() : '');
+    return `<div class="spTop"><span class="spEye">${esc(eye)}</span></div>`;
   }
 
   private mapHtml(): string {
@@ -807,17 +817,18 @@ export class Story {
     const you = picked ? this.txt(picked.q) : this.txt(s.concern);
     const said = picked ? this.txt(picked.a) : this.txt(s.guide);
     let h = this.topHtml(`${s.title} · Stop ${num} of ${n}`);
-    h += `<p class="spYou"><small>You</small>${esc(you)}</p><p class="spGuide"><small>Your EmpowerED guide</small>${esc(said)}</p>`;
-    if (picked) h += `<button type="button" class="spLink" data-act="unask">Back to ${esc(s.title)}</button>`;
-    if (s.activity && !picked) { const A = this.host.activity?.(s.activity); if (A) h += A.html(); }
+    // At arrival: the guide's line and one primary action. The visitor's question, other questions,
+    // the extra example and (on phones) the example board open on request under "Ask your guide".
+    h += `<p class="spGuide"><small>Your EmpowerED guide</small>${esc(this.txt(s.guide))}</p>`;
+    if (s.activity) { const A = this.host.activity?.(s.activity); if (A) h += A.html(); }
     if (s.pick === 'profession') h += `<div class="spPick"><label class="spSearch"><span>Find your profession</span><input type="search" data-search placeholder="Search professions" value="${esc(this.filter)}" autocomplete="off"></label><div class="spProfs" role="group" aria-label="Professions"></div></div>`;
-    h += this.inlineBoard(s);
     if (s.show) h += `<button type="button" class="spShow" data-act="show">${esc(this.txt(s.show.label))} <span aria-hidden="true">↗</span></button>`;
-    if (s.extra) h += `<button type="button" class="spShow spExtra" data-act="extra">${esc(this.txt(s.extra.label))} <span aria-hidden="true">▶</span></button>`;
-    if (asks.length) {
-      h += `<details class="spAsk"${picked ? ' open' : ''}><summary>Ask your guide</summary><div>` +
-        asks.map((q, k) => `<button type="button" data-ask="${k}"${picked === q ? ' aria-pressed="true"' : ''}>${esc(this.txt(q.q))}</button>`).join('') + '</div></details>';
-    }
+    const more = `<p class="spYou"><small>You</small>${esc(this.txt(s.concern))}</p>` +
+      (asks.length ? `<div class="spAsks">${asks.map((q, k) => `<button type="button" data-ask="${k}"${picked === q ? ' aria-pressed="true"' : ''}>${esc(this.txt(q.q))}</button>`).join('')}</div>` : '') +
+      (picked ? `<p class="spGuide spAns"><small>Your EmpowerED guide</small>${esc(said)}</p>` : '') +
+      (s.extra ? `<button type="button" class="spShow spExtra" data-act="extra">${esc(this.txt(s.extra.label))} <span aria-hidden="true">▶</span></button>` : '') +
+      this.inlineBoard(s);
+    if (you || asks.length || s.extra) h += `<details class="spAsk"${picked || this.askOpen ? ' open' : ''}><summary>Ask your guide</summary><div>${more}</div></details>`;
     const back = `<button type="button" class="spLink" data-go="${idx - 1}"><span aria-hidden="true">←</span> ${esc(all[idx - 1].title)}</button>`;
     if (!last) {
       h += `<div class="spNav">${back}<button type="button" class="spNext" data-go="${idx + 1}">${esc(this.nextText(idx + 1))} <span aria-hidden="true">→</span></button></div>`;

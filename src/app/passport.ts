@@ -63,6 +63,7 @@ export class Passport {
       const b = (e.target as Element).closest<HTMLElement>('[data-j]');
       if (!b) return;
       if (b.dataset.j === 'continue' && this.data.last) { this.close(); this.onContinue(this.data.last); }
+      else if (b.dataset.j === 'go' && b.dataset.p) { this.close(); this.onContinue(b.dataset.p); }
       else if (b.dataset.j === 'clear') { this.data = { seen: [], tracks: [], last: '' }; this.save(); this.close(); }
     });
     addEventListener('pointerdown', (e) => { if (this.open && !(e.target as Element).closest('#jPop,#jBtn,.jItem')) this.close(); });
@@ -116,24 +117,25 @@ export class Passport {
 
   private paint() {
     const d = this.data;
-    this.btn.hidden = d.seen.length === 0;
+    // Your journey is also the chapter navigator, so it is always available.
     const c = this.btn.querySelector('#jCount');
     if (c) c.textContent = `${d.seen.length}/${STAGES.length}`;
-    this.item.hidden = d.seen.length === 0;
+
     const c2 = this.item.querySelector('#jCount2');
     if (c2) c2.textContent = `${d.seen.length}/${STAGES.length}`;
     this.btn.setAttribute('aria-label', `Your journey: ${d.seen.length} of ${STAGES.length} career stages explored`);
     const last = d.last !== this.here() ? STAGES.find((s) => s.path === d.last) : undefined;
     const stages = STAGES.map((s) => {
       const on = d.seen.includes(s.path);
-      return `<li class="${on ? 'on' : ''}"><i aria-hidden="true">${on ? '✓' : ''}</i>${esc(s.name)}<span class="sr">${on ? ' (explored)' : ' (not yet explored)'}</span></li>`;
+      const cur = s.path === this.here();
+      return `<li class="${on ? 'on' : ''}"><button type="button" data-j="go" data-p="${esc(s.path)}"${cur ? ' aria-current="step"' : ''}><i aria-hidden="true">${on ? '✓' : ''}</i>${esc(s.name)}<span class="sr">${on ? ' (explored)' : ' (not yet explored)'}</span></button></li>`;
     }).join('');
     const tracks = d.tracks.length
       ? d.tracks.map((t) => `<span class="jChip">${esc(TRACKS[t])}</span>`).join('')
       : '<span class="jNone">None yet</span>';
     this.pop.innerHTML =
       `<h2>Your journey</h2><p class="jNote">This shows where you’ve explored, not your programme progress.</p>`
-      + `<small>Career stages explored</small><ol class="jStages">${stages}</ol>`
+      + `<small>Career stages · choose one to go there</small><ol class="jStages">${stages}</ol>`
       + `<small>Tracks you looked at</small><div class="jTracks">${tracks}</div>`
       + `<div class="jActs">${last ? `<button type="button" class="cta" data-j="continue">Continue: ${esc(last.name)} <span>→</span></button>` : ''}`
       + `<button type="button" class="jClear" data-j="clear">Clear</button></div>`;

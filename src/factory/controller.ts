@@ -651,10 +651,7 @@ export function initController(replayStory: () => void): ControllerApi {
   }),PROFESSIONS);
   (TOURS as Record<TourRoute,TourStop[]>).story=story.entranceStops();
   // After "Exit tour", one button brings the visitor back to the guided route where they left it.
-  const resume=document.createElement('button');resume.type='button';resume.id='resumeTour';resume.hidden=true;resume.innerHTML='Resume guided tour <span aria-hidden="true">→</span>';document.body.appendChild(resume);
-  let resumeAt=1;
-  resume.onclick=()=>{closeDrawer();resetToIntro('story',resumeAt)};
-  setInterval(()=>{const onStory=mode==='tour'&&tour.route==='story';if(onStory)resumeAt=Math.max(1,story.stopIndex);resume.hidden=onStory||!story.audience||flatOpen||menuOpen||whoOpen||side.classList.contains('open')||cd.classList.contains('open')},300);
+  // "Your journey" (with its chapter list) is the one way back into the guided route; no separate resume button.
   const tour=new Tour({
     project:(x,y,z)=>FX().project(x,y,z),
     paused:()=>cd.classList.contains('open')||flatOpen||menuOpen||!!window.__storyShowing,
@@ -765,11 +762,14 @@ export function initController(replayStory: () => void): ControllerApi {
   }
   function paintLight(){const b=menu.querySelector<El>('[data-go="light"]');if(b){b.setAttribute('aria-pressed',String(quality.light));b.innerHTML='Lighter 3D <span>'+(quality.light?'On':'Off')+'</span>'}}
   paintLight();quality.on(paintLight);
+  function paintMotion(){const b=menu.querySelector<El>('[data-go="motion"]');if(b){b.setAttribute('aria-pressed',String(motion.reduced));b.innerHTML='Reduce motion <span>'+(motion.reduced?'On':'Off')+'</span>';translateDom(b)}}
+  paintMotion();motion.on(paintMotion);
   // Language: English or Tamil (draft). The switch shows the other language's name in its own script.
   function paintLang(){const ta=i18n.lang==='ta',b=$('langBtn'),m=menu.querySelector<El>('[data-go="lang"]');b.textContent=ta?'English':'தமிழ்';b.lang=ta?'en':'ta';b.setAttribute('aria-label',ta?'Switch to English':'தமிழுக்கு மாறவும்');if(m)m.innerHTML=(ta?'<span lang="en">English</span>':'<span lang="ta">தமிழ்</span>')+' <span>→</span>';
     ['menu','hdrBack','menuBtn'].forEach(id=>translateDom($(id)))}
   $('langBtn').onclick=()=>i18n.set(i18n.lang==='ta'?'en':'ta');paintLang();i18n.on(paintLang);
-  function nav(k:string){if(k==='lang'){i18n.set(i18n.lang==='ta'?'en':'ta');return}if(k==='light'){quality.set(!quality.light);return}closeMenu();if(k==='opening'){setPath('',true);playOpening();return}
+  function nav(k:string){if(k==='lang'){i18n.set(i18n.lang==='ta'?'en':'ta');return}if(k==='light'){quality.set(!quality.light);return}if(k==='motion'){motion.set(!motion.reduced);return}
+    if(k==='free'){closeMenu();if(!window.FACTORY)return;story.hide();resetToIntro('career',0);return}closeMenu();if(k==='opening'){setPath('',true);playOpening();return}
     if(k==='skip'||flatAuto||!window.FACTORY){history.replaceState(history.state,'',location.pathname+location.search+'#skip-3d');const inStory=mode==='tour'&&tour.route==='story'&&!!story.audience;$('fBack').textContent=inStory?'← Back to your guided tour':'← Back to the 3D company';openFlat(false,inStory&&k==='skip'?STORYANCH[story.audience!]:ANCH[k]);return}
     // From a tour or guided stop, the globe remembers where the visitor was, so both Back buttons return there.
     if(k==='globe'&&window.FACTORY&&mode==='tour'){toGlobe();return}

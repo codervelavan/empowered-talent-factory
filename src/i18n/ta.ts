@@ -974,6 +974,7 @@ export const TA: Record<string, string> = {
   "Replay opening": "தொடக்கத்தை மீண்டும் இயக்கு",
   "Show what you can do.": "உங்களால் என்ன செய்ய முடியும் என்று காட்டுங்கள்.",
   "Verified talent meets companies and products go live. Placement support depends on your track; an interview or hire remains the employer’s decision.": "சரிபார்க்கப்பட்ட திறமையாளர்கள் நிறுவனங்களைச் சந்திக்கிறார்கள்; தயாரிப்புகள் நேரலைக்கு வருகின்றன. வேலைவாய்ப்பு ஆதரவு உங்கள் பாதையைப் பொறுத்தது; நேர்காணலும் பணியமர்த்தலும் வேலை வழங்குநரின் முடிவு.",
+  "Career stages · choose one to go there": "தொழில் நிலைகள் · அங்கே செல்ல ஒன்றைத் தேர்ந்தெடுங்கள்",
 };
 
 type Tr = (s: string) => string;
