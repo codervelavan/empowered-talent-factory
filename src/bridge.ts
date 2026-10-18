@@ -40,6 +40,10 @@ export interface FactoryApi {
   devNote(d: { title: string; head: string[]; rows: string[][]; row: number; col: number; fix: string; state: number; linked: string; missing: string }): void;
   /** Mark Specialise pod i (-1 clears); returns its floor position. */
   specPod(i: number): P3 | null;
+  /** Verify: trace evidence source i (-1 clears) from an origin (the person's work) into its ETAF gate. */
+  etafTrace(i: number, from: P3 | null): void;
+  /** Deploy courtyard: what the demonstration screen shows. */
+  demoScreen(title: string, lines: string[], note: string): void;
   poseRoute(r: string, k: number): void;
   snapshot(): void;
   poseBack(t: number): void;

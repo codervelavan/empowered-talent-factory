@@ -620,7 +620,7 @@ export function initController(replayStory: () => void): ControllerApi {
   /** The POD mission at the Engineer stop (src/pod). */
   const mission=new PodMission({factory:()=>window.FACTORY,focus:(p,room)=>setRoomFocus((room??'engineer') as RoomId,p),
     goRoom:room=>{if(mode!=='tour'||tour.route!=='story'||!story.audience)return;const i=story.indexOfRoom(story.audience,room as RoomId);if(i>=0){story.scrollToActivity();tour.travel(i)}},
-    enquire:label=>openDrawer('ph',label,'Product Engineering PODs')});let podAt=-1,roomAt='';
+    enquire:label=>openDrawer('ph',label,'Product Engineering PODs')});let podAt=-1,roomAt='';const ROOMHOOK=['develop','pro','verify','deploy'];
   // Text on the 3D trace panel and alert screen follows the language.
   const paintPodLabels=()=>window.FACTORY?.podLabels(podLabels());i18n.on(paintPodLabels);i18n.on(()=>mission.syncDev());
   // A labelled example of an ETAF review: gates light one by one as evidence is reviewed, then go dark again.
@@ -664,8 +664,10 @@ export function initController(replayStory: () => void): ControllerApi {
     onStop:(r,i,settled)=>{const F=window.FACTORY;if(!F)return;
       if(!settled&&cd.classList.contains('open'))closeDrawer();
       tourSettled=settled;const sroom=r==='story'?story.roomAt(i):undefined;if(settled&&sroom==='engineer'&&podAt!==i){podAt=i;paintPodLabels();mission.enter()}else if(sroom!=='engineer'){if(podAt>=0)mission.leave();podAt=-1}
-      // Develop and Specialise frame their activity on arrival.
-      if(settled&&(sroom==='develop'||sroom==='pro')&&roomAt!==sroom+i){roomAt=sroom+i;if(sroom==='develop')mission.enterDevelop();else mission.enterSpecialise()}else if(sroom!=='develop'&&sroom!=='pro'&&roomAt){if(roomAt.startsWith('pro'))F.specPod(-1);roomAt=''}tourCar=r==='career'?CEQ[i]:r==='story'?(sroom?ROOMEQ[sroom]??-1:-1):-1;tourWf=r==='story'?(sroom?ROOMWF[sroom]??-1:-1):r==='career'?(TOURS.career[i]?.id==='showroom'?1:-1):r==='evidence'?-1:(i>=1?i-1:-1);
+      // Develop, Specialise, Verify and Deploy set up their activity on arrival and tidy it on leaving.
+      {const hooked=!!sroom&&ROOMHOOK.includes(sroom),tidy=()=>{if(roomAt.startsWith('pro'))F.specPod(-1);if(roomAt.startsWith('verify'))mission.leaveVerify()};
+       if(settled&&hooked&&roomAt!==sroom+i){tidy();roomAt=sroom+i;({develop:()=>mission.enterDevelop(),pro:()=>mission.enterSpecialise(),verify:()=>mission.enterVerify(),deploy:()=>mission.enterDeploy()} as Record<string,()=>void>)[sroom!]()}
+       else if(!hooked&&roomAt){tidy();roomAt=''}}tourCar=r==='career'?CEQ[i]:r==='story'?(sroom?ROOMEQ[sroom]??-1:-1):-1;tourWf=r==='story'?(sroom?ROOMWF[sroom]??-1:-1):r==='career'?(TOURS.career[i]?.id==='showroom'?1:-1):r==='evidence'?-1:(i>=1?i-1:-1);
       if(tourWf>=0&&tourWf!==wfAt){wfAt=tourWf;setBayHv(-1);F.pod(wfAt===2);if(wfAt===2)F.podJump(-1.62);F.wfStop(wfAt);if(wfAt===3||wfAt===4)F.campusIn()}
       if(tourWf<0&&wfAt!==0){wfAt=0;F.pod(false)}
       wfArr=settled;

@@ -29,6 +29,11 @@ export interface MissionHost {
 /** The default room camera looks from here; person close-ups are framed from the same side. */
 const VIEW_FROM: P3 = [21.6, 3.6, -17.4];
 const SAVE = 'ee-mission';
+/** Verify: the six evidence sources; which can be traced in this example (assessments and credentials can't). */
+const SOURCES = ['Assessments', 'Artifacts and code', 'Project delivery', 'Performance data', 'Observed behaviour', 'Credentials'];
+const TRACEABLE = [1, 2, 3, 4];
+/** Deploy courtyard: the demonstration table with the employer. */
+const DEMO_POSE: [P3, P3] = [[-0.6, 2.8, -88.2], [-3.3, 1.3, -80.6]];
 /** Develop: the project bench framed so the notebook reads; area close-ups from the room's open side. */
 const BENCH: [P3, P3] = [[-9.8, 8.1, -36.5], [-10.9, 6.7, -39.4]];
 const areaPose = (i: number): [P3, P3] => { const a = DEVELOP_AREAS[i].at; return [[a[0] + 0.7, 8.3, a[2] + 4.3], [a[0], 6.9, a[2]]]; };
@@ -60,6 +65,11 @@ export class PodMission {
   dev = [0, 0, 0];
   /** Verify: whose report is open. */
   reportOf = 0;
+  /** Each project keeps its own selected person and open report (never another project's evidence). */
+  selOf = [-1, -1, -1];
+  repOf = [0, 0, 0];
+  /** Verify: the evidence source being traced to its origin (-1 none). */
+  trace = -1;
   /** Develop: the area close-up being looked at, and which ones have played their result. */
   area = -1;
   areaDone = new Set<number>();
@@ -77,13 +87,18 @@ export class PodMission {
       if (Number.isInteger(d.sel) && d.sel >= -1 && d.sel < 5) this.sel = d.sel;
       if (Array.isArray(d.dev)) this.dev = [0, 1, 2].map((i) => (d.dev[i] === 2 ? 2 : 0));
       if (Number.isInteger(d.reportOf) && d.reportOf >= 0 && d.reportOf < 5) this.reportOf = d.reportOf;
+      const ok = (v: unknown, lo: number) => Number.isInteger(v) && (v as number) >= lo && (v as number) < 5;
+      if (Array.isArray(d.selOf)) this.selOf = [0, 1, 2].map((i) => (ok(d.selOf[i], -1) ? d.selOf[i] : -1));
+      if (Array.isArray(d.repOf)) this.repOf = [0, 1, 2].map((i) => (ok(d.repOf[i], 0) ? d.repOf[i] : 0));
+      this.selOf[this.mi] = this.sel; this.repOf[this.mi] = this.reportOf;
     } catch { /* storage blocked or bad data */ }
   }
 
   get m(): Mission { return MISSIONS[this.mi]; }
 
   private save() {
-    try { localStorage.setItem(SAVE, JSON.stringify({ mi: this.mi, chosen: this.chosen, sel: this.sel, dev: this.dev.map((v) => (v === 2 ? 2 : 0)), reportOf: this.reportOf })); } catch { /* storage blocked */ }
+    this.selOf[this.mi] = this.sel; this.repOf[this.mi] = this.reportOf;
+    try { localStorage.setItem(SAVE, JSON.stringify({ mi: this.mi, chosen: this.chosen, sel: this.sel, dev: this.dev.map((v) => (v === 2 ? 2 : 0)), reportOf: this.reportOf, selOf: this.selOf, repOf: this.repOf })); } catch { /* storage blocked */ }
   }
 
   /** Make the scene show the active project (call once the 3D is ready, and on arrival). */
@@ -98,7 +113,8 @@ export class PodMission {
   /** Switch project. Keeps the stop; resets the example and the selection. */
   setMission(i: number, byUser: boolean) {
     if (byUser) this.chosen = true;
-    if (i !== this.mi) { this.mi = i; this.sel = -1; this.cond = -1; this.revised = false; this.view = 'team'; this.h.factory()?.podReset(); }
+    // Switching restores that project's own person and report; the example run starts fresh.
+    if (i !== this.mi) { this.selOf[this.mi] = this.sel; this.repOf[this.mi] = this.reportOf; this.mi = i; this.sel = this.selOf[i]; this.reportOf = this.repOf[i]; this.cond = -1; this.revised = false; this.view = this.sel >= 0 ? 'person' : 'team'; this.stage = -1; this.trace = -1; this.h.factory()?.podReset(); this.h.factory()?.etafTrace(-1, null); }
     this.sync();
     this.save();
   }
@@ -145,7 +161,7 @@ export class PodMission {
   key(id: string): string {
     const st = this.h.factory()?.podState();
     const run = st ? (st.done ? 'd' : st.ran ? 'r' : '-') + (st.alert ? 'A' : '') : '';
-    return [id, i18n.lang, this.mi, this.sel, this.cond, this.revised, this.view, this.dev.join(''), this.reportOf, this.area, [...this.areaDone].join(''), this.task, this.stage, this.stageTimer ? 'p' : '', motion.reduced, id === 'pod' ? run : ''].join('|');
+    return [id, i18n.lang, this.mi, this.sel, this.cond, this.revised, this.view, this.dev.join(''), this.reportOf, this.area, [...this.areaDone].join(''), this.task, this.stage, this.trace, this.stageTimer ? 'p' : '', motion.reduced, id === 'pod' ? run : ''].join('|');
   }
 
   act(id: string, a: string) {
@@ -167,7 +183,8 @@ export class PodMission {
       return;
     }
     if (id === 'report') {
-      if (k === 'r') this.reportOf = +v;
+      if (k === 'r') { this.reportOf = +v; this.trace = -1; this.h.factory()?.etafTrace(-1, null); }
+      else if (k === 'tr') { const i = +v; this.trace = this.trace === i ? -1 : i; this.h.factory()?.etafTrace(TRACEABLE.includes(this.trace) ? this.trace : -1, this.trace === 4 ? POD_PLACE.centre : POD_PLACE.art[this.reportOf]); }
       else if (k === 'work') { this.sel = this.reportOf; this.view = 'person'; this.save(); this.h.goRoom('engineer'); return; }
       this.save();
       return;
@@ -188,6 +205,17 @@ export class PodMission {
     else if (k === 'stages') { this.playStages(); return; }
     this.save();
     this.h.focus(this.pose());
+  }
+
+  /** Arriving at Verify: the report opens on the person selected at the POD (if any). */
+  enterVerify() { if (this.sel >= 0) this.reportOf = this.sel; this.trace = -1; this.h.factory()?.etafTrace(-1, null); }
+  /** Leaving Verify clears the trace. */
+  leaveVerify() { this.trace = -1; this.h.factory()?.etafTrace(-1, null); }
+  /** Arriving at Deploy: the courtyard demonstration shows this project's reviewed version. */
+  enterDeploy() {
+    const m = this.m, c = m.conditions[1];
+    this.h.factory()?.demoScreen(tr('Demonstration · reviewed version').toUpperCase(), [tr(m.short), tr(c.revised ?? m.finding.revisedTitle)], tr('Example data · not a live system'));
+    this.h.focus(fitPhone(DEMO_POSE), 'deploy');
   }
 
   /** Arriving at Develop: show the project's record on the bench, framed so the notebook reads. */
@@ -327,7 +355,20 @@ export class PodMission {
     h += `</dl><dl class="pmReport">`;
     h += row('Still to show', t(r.gaps));
     h += row('Readiness', t('Not evaluated in this example. A real report shows a reviewer, a date and a status only from approved ETAF data.'), ' pmNone');
-    h += `</dl><button type="button" class="pmLink" data-pod="work">${t('See this person’s work at the POD')} →</button>`;
+    h += `</dl>`;
+    // Trace one source back to where it comes from; sources this example doesn't have say so.
+    h += `<small class="pmL">${t('Trace an evidence source to its origin')}</small><div class="pmConds" role="group" aria-label="${t('Evidence sources')}">` +
+      SOURCES.map((n, k) => `<button type="button" data-pod="tr:${k}" ${pressed(this.trace === k)}>${t(n)}</button>`).join('') + '</div>';
+    if (this.trace >= 0) {
+      const origin = [t('No assessment evidence in this example. A real report links the assessment record itself.'),
+        `${t(p.role)}: ${t(p.artifact)}. ${t('The gold line runs from their work at the POD into this gate.')}`,
+        `${t(m.employer.delivery)} ${t('Team output is not proof of every individual’s skill.')}`,
+        `${t(r.performance)} ${t('Measured in the prepared example only; not a benchmark.')}`,
+        `${t(r.observed)} ${t('From the team’s review discussion at the POD.')}`,
+        t('Kept separate. This example creates no qualification.')][this.trace];
+      h += `<p class="pmOut" role="status">${origin}</p>`;
+    }
+    h += `<button type="button" class="pmLink" data-pod="work">${t('See this person’s work at the POD')} →</button>`;
     return h + '</section>';
   }
 
@@ -340,6 +381,7 @@ export class PodMission {
     h += `<li><b>${t('Individual reports')}</b><span class="pmChips">${m.people.map((p, k) => `<button type="button" class="pmChip" data-pod="report:${k}">${t(p.role)}</button>`).join('')}</span></li></ul>`;
     h += `<div class="pmEnd"><button type="button" class="pmAct" data-pod="pod">${t('Consider the POD')}</button><button type="button" class="pmAct pmAlt" data-pod="people">${t('Review individual contributions')}</button></div>`;
     h += `<p class="pmGoal">${t('Hiring and engagement are the employer’s decision. Nothing here is an offer.')}</p>`;
+    h += `<h4 class="pmH">${t('How to start')}</h4><p class="pmP">${t('Every career path starts with the Entry Assessment. It informs a recommended path; exploring this site is not an assessment or an eligibility decision. Mentored POD experience is not an internship or placement guarantee.')}</p>`;
     return h + '</section>';
   }
 }

@@ -1043,6 +1043,17 @@ export const TA: Record<string, string> = {
   "The prepared assistant reaches its demonstration environment with monitoring and an audit trail.": "தயாரிக்கப்பட்ட உதவியாளர் கண்காணிப்பு, தணிக்கைத் தடத்துடன் அதன் செயல்விளக்கச் சூழலை அடைகிறது.",
   "Deployment, monitoring and audit record": "வெளியீடு, கண்காணிப்பு, தணிக்கைப் பதிவு",
   "The reviewer checks cited drafts against the sources and the original need.": "மேற்கோள் உள்ள வரைவுகளை மூலங்களுடனும் அசல் தேவையுடனும் மதிப்பாய்வாளர் ஒப்பிட்டுச் சரிபார்க்கிறார்.",
+  "How to start": "எப்படித் தொடங்குவது",
+  "Every career path starts with the Entry Assessment. It informs a recommended path; exploring this site is not an assessment or an eligibility decision. Mentored POD experience is not an internship or placement guarantee.": "ஒவ்வொரு தொழில் பாதையும் நுழைவு மதிப்பீட்டிலிருந்து (Entry Assessment) தொடங்குகிறது. அது பரிந்துரைக்கப்படும் பாதையை வழிநடத்துகிறது; இந்தத் தளத்தை ஆராய்வது ஒரு மதிப்பீடோ தகுதி முடிவோ அல்ல. வழிகாட்டலுடன் கூடிய POD அனுபவம் பயிற்சிப் பணிக்கோ வேலைவாய்ப்புக்கோ உத்தரவாதம் அல்ல.",
+  "Trace an evidence source to its origin": "ஒரு சான்று மூலத்தை அதன் தொடக்கம் வரை பின்தொடருங்கள்",
+  "No assessment evidence in this example. A real report links the assessment record itself.": "இந்த எடுத்துக்காட்டில் மதிப்பீட்டுச் சான்று இல்லை. உண்மையான அறிக்கை மதிப்பீட்டுப் பதிவையே இணைக்கும்.",
+  "The gold line runs from their work at the POD into this gate.": "தங்கக் கோடு POD-இல் உள்ள அவர்களுடைய வேலையிலிருந்து இந்த வாயிலுக்குள் செல்கிறது.",
+  "Team output is not proof of every individual’s skill.": "குழுவின் வெளியீடு ஒவ்வொருவரின் திறனுக்குமான சான்று அல்ல.",
+  "Measured in the prepared example only; not a benchmark.": "தயாரிக்கப்பட்ட எடுத்துக்காட்டில் மட்டுமே அளக்கப்பட்டது; இது ஓர் அளவுகோல் அல்ல.",
+  "From the team’s review discussion at the POD.": "POD-இல் நடந்த குழுவின் மதிப்பாய்வு உரையாடலிலிருந்து.",
+  "Kept separate. This example creates no qualification.": "தனியாக வைக்கப்படுகிறது. இந்த எடுத்துக்காட்டு எந்தத் தகுதிச் சான்றையும் உருவாக்குவதில்லை.",
+  "Demonstration · reviewed version": "செயல்விளக்கம் · மதிப்பாய்வு செய்யப்பட்ட பதிப்பு",
+  "Example data · not a live system": "எடுத்துக்காட்டுத் தரவு · நேரடி அமைப்பு அல்ல",
 };
 
 type Tr = (s: string) => string;
