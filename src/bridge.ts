@@ -2,7 +2,7 @@
 // guide expose to each other. They're attached to `window` (as in the prototype) so
 // each module can call the others lazily without import cycles; this file is the
 // single place that documents them.
-import type { Object3D, PerspectiveCamera, Vector3 } from 'three';
+import type { Object3D, PerspectiveCamera, Vector3, Scene } from 'three';
 import type { CSS3DObject } from 'three/examples/jsm/renderers/CSS3DRenderer.js';
 
 export type LineKey = 'career' | 'build' | 'workforce';
@@ -64,6 +64,8 @@ export interface FactoryApi {
   obstacles(y0: number, y1: number): { walls: number[]; floor: number[]; low: number[]; high: number[]; highY: number[] };
   cam(): PerspectiveCamera;
   render(mode: string, introS: number): void;
+  /** Isolated comic stage, sharing the factory renderer and quality settings. */
+  renderOpening(scene: Scene, camera: PerspectiveCamera, overlay?: boolean): void;
   // intro / career floor
   setHover(k: string | null): void;
   setSpine(on: boolean): void;

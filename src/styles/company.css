@@ -396,3 +396,83 @@ html[lang="ta"] #opening .opHint,html[lang="ta"] #opening .opStep{letter-spacing
 #storyPanel .pmMore>summary:focus-visible{outline:3px solid #C9A33A;outline-offset:2px}
 #storyPanel .pmMore>.pmAct{margin:4px 0 8px}
 #storyPanel .pmStages{flex-wrap:wrap}
+/* Hand-led comic prologue. The art owns the right side; type stays on quiet paper. */
+html.opening,html.opening body{overflow:hidden!important;overscroll-behavior:none}
+html.opening #c3d{visibility:hidden;pointer-events:none}
+html.opening #top{z-index:45}
+html.opening #hdrLogo,html.opening #crumb,html.opening #hdrBack{visibility:hidden}
+#opening{z-index:30;isolation:isolate;touch-action:pan-x}
+#opening .opMast{position:absolute;left:5vw;top:30px;display:flex;align-items:center;gap:15px;color:#1E4632;font:800 25px/1 Manrope,sans-serif;letter-spacing:-.06em}
+#opening .opMastDot{color:#B4902C;padding-left:12px;font-weight:500}
+#opening .opMastLabel{max-width:110px;font:700 9px/1.5 Inter,sans-serif;letter-spacing:.16em}
+#opening .opGrain{position:absolute;inset:0;pointer-events:none;opacity:.18;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.86' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath fill='%231e4632' opacity='.2' filter='url(%23n)' d='M0 0h180v180H0z'/%3E%3C/svg%3E")}
+#opening .opIndex{position:absolute;left:3.5vw;top:12vh;font:800 clamp(140px,22vw,350px)/1 Manrope,sans-serif;letter-spacing:-.1em;color:rgba(30,70,50,.035);user-select:none}
+#opening .opCard{left:5vw;top:50%;bottom:auto;transform:translateY(-47%);width:min(440px,34vw);max-height:calc(100dvh - 210px);padding:0 6px 8px 0;border-radius:0;background:none;box-shadow:none;gap:18px;scrollbar-width:thin;overscroll-behavior:contain}
+#opening .opStep{font:800 10px/1.4 Inter,sans-serif;letter-spacing:.2em;color:#826614;display:flex;align-items:center;gap:10px}
+#opening .opStep::before{content:'';display:inline-block;width:26px;height:2px;background:#B4902C;flex:none}
+#opening .opCap{font:800 clamp(32px,3.6vw,58px)/1.04 Manrope,sans-serif;letter-spacing:-.055em;color:#1E4632;text-wrap:balance}
+#opening .opLine{font:400 clamp(15px,1.25vw,18px)/1.7 Inter,sans-serif;color:#455D4B;max-width:37ch;text-wrap:pretty}
+#opening .opNav{margin-top:10px;padding-top:18px;border-top:1px solid rgba(30,70,50,.18);justify-content:flex-start;align-items:center;gap:12px}
+#opening .opNav button{border-radius:4px;font-size:13px;min-height:46px;padding:12px 18px}
+#opening .opNav .opNext{margin-left:0;background:#1E4632;color:#F2EFE2;min-width:128px;text-align:center}
+#opening .opNav .opBack{border:0;padding-left:0;padding-right:20px;color:#1E4632}
+#opening .opNav button:disabled{opacity:.35;cursor:default}
+#opening .opAct{min-height:48px;border-radius:4px;padding:14px 20px;font-size:14px;box-shadow:3px 3px 0 rgba(30,70,50,.13)}
+#opening .opAct:disabled{opacity:.65;cursor:default;box-shadow:none}
+#opening .opDone{font:500 14px/1.6 Inter,sans-serif;padding-left:12px;border-left:2px solid #B4902C}
+#opening .opNote{font:400 11px/1.5 Inter,sans-serif;max-width:42ch}
+#opening .opHint{left:5vw;transform:none;bottom:36px;font:600 9px/1.5 Inter,sans-serif;letter-spacing:.2em;color:#52634F;display:block}
+#opening .opHint::before{content:'↓';font-size:16px;margin-right:12px;vertical-align:middle;color:#B4902C}
+#opening .opSkip{right:4vw;bottom:24px;border:0;background:none;border-radius:0;font:600 12px/1.3 Inter,sans-serif;padding:12px 0;letter-spacing:.02em}
+#opening .opSkip:hover{color:#1E4632;background:none;text-decoration:underline;text-underline-offset:5px}
+#opening .opRail{position:absolute;bottom:0;left:0;width:100%;height:3px;background:rgba(30,70,50,.1)}
+#opening .opRail i{display:block;height:100%;background:#B4902C;transition:width .4s ease}
+#opening .opWorkbench{position:absolute;left:57%;top:65%;width:33%;display:flex;justify-content:space-between;gap:28px;pointer-events:auto;align-items:center}
+#opening .opWorkbench[hidden]{display:none}
+#opening .opEnquiry{display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;gap:14px;min-width:105px;min-height:120px;padding:14px;border:1px solid #1E4632;background:#FFFBEF;box-shadow:5px 6px 0 rgba(30,70,50,.12);font:700 11px/1.4 Inter,sans-serif;color:#1E4632;cursor:grab;touch-action:none;user-select:none}
+#opening .opEnquiry:active{cursor:grabbing}
+#opening .opSheetIcon{font-size:30px;font-weight:400;color:#B4902C}
+#opening .opDrop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:126px;min-width:150px;padding:16px;border:1.5px dashed #1E4632;background:rgba(242,239,226,.92);font:600 11px/1.5 Inter,sans-serif;color:#1E4632;text-align:center}
+#opening .opDrop>span{font-size:30px;font-weight:400;color:#B4902C}
+#opening .opDrop.over,#opening.isConnected .opDrop{background:#1E4632;color:#F2EFE2;border-color:#C9A33A}
+#opening.isConnected .opEnquiry{opacity:.5;cursor:default}
+#opFade{z-index:50;opacity:0;pointer-events:none}
+#opFade.opWipe{animation:opWipe .44s cubic-bezier(.65,0,.35,1) forwards}
+#opFade.opReveal{animation:opReveal .65s ease-out forwards}
+@keyframes opWipe{from{opacity:1;clip-path:inset(0 100% 0 0)}to{opacity:1;clip-path:inset(0 0 0 0)}}
+@keyframes opReveal{from{opacity:1}to{opacity:0}}
+@media(max-width:1000px) and (min-width:761px){#opening .opCap{font-size:35px}#opening .opCard{width:36vw}#opening .opWorkbench{left:54%;width:40%}}
+@media(max-width:760px) and (orientation:portrait){
+  #opening .opMast{top:26px;left:22px;font-size:22px}#opening .opMastLabel{font-size:8px;max-width:90px}
+  #opening .opIndex{top:8vh;left:10px;font-size:42vw}
+  #opening .opCard{left:24px;right:24px;top:auto;bottom:75px;transform:none;width:auto;max-height:45dvh;padding:16px 0 0;gap:10px;background:linear-gradient(to bottom,rgba(242,239,226,.9),#F2EFE2 32%)}
+  #opening .opStep{font-size:9px;letter-spacing:.12em}#opening .opCap{font-size:clamp(26px,7.6vw,38px);line-height:1.08;max-width:20ch}
+  #opening .opLine{font-size:14px;line-height:1.55;max-width:44ch}#opening .opNav{padding-top:10px;margin-top:3px}
+  #opening .opNav button{min-height:44px;font-size:13px}#opening .opAct{min-height:44px;padding:11px 16px;font-size:13px}
+  #opening .opDone{font-size:12px}#opening .opNote{font-size:10px}#opening .opHint{bottom:28px;left:24px;font-size:8px;max-width:48%;letter-spacing:.1em}
+  #opening .opSkip{bottom:19px;right:24px;font-size:11px}
+  #opening .opWorkbench{left:12%;top:33%;width:76%;gap:12px}
+  #opening .opEnquiry{min-width:85px;min-height:87px;padding:10px;font-size:10px;gap:4px}
+  #opening .opDrop{min-width:128px;min-height:89px;padding:10px;font-size:10px}#opening .opDrop>span,#opening .opSheetIcon{font-size:23px}
+  #opening[data-beat="5"] .opCard{max-height:40dvh}
+}
+@media(max-height:500px) and (orientation:landscape){
+  #opening .opMast{top:19px;left:24px;font-size:20px}#opening .opMastLabel{font-size:8px}
+  #opening .opCard{left:24px;top:75px;bottom:56px;transform:none;width:40vw;max-height:none;padding:0 8px 0 0;gap:8px}
+  #opening .opCap{font-size:26px}#opening .opLine{font-size:12px;line-height:1.5}#opening .opStep{font-size:8px}
+  #opening .opNav{margin-top:2px;padding-top:6px}#opening .opNav button,#opening .opAct{font-size:12px;min-height:44px;padding:10px 13px}
+  #opening .opDone{font-size:11px}#opening .opNote{font-size:10px}#opening .opHint{left:24px;bottom:17px;font-size:8px}
+  #opening .opSkip{bottom:8px;font-size:11px}#opening .opWorkbench{left:57%;top:62%;width:37%;gap:12px}
+  #opening .opEnquiry{min-width:85px;min-height:78px;padding:8px;font-size:9px;gap:3px}#opening .opSheetIcon{font-size:20px}
+  #opening .opDrop{min-width:118px;min-height:78px;font-size:9px;padding:8px}#opening .opDrop>span{font-size:20px}
+}
+html[lang="ta"] #opening .opCap{letter-spacing:-.025em;line-height:1.2;font-size:clamp(26px,2.9vw,44px)}
+html[lang="ta"] #opening .opStep,html[lang="ta"] #opening .opHint{letter-spacing:0}
+@media(max-width:760px){html[lang="ta"] #opening .opCap{font-size:25px}html[lang="ta"] #opening .opCard{max-height:48dvh}}
+@media(prefers-reduced-motion:reduce){#opening .opRail i{transition:none}}
+#opFade.opSceneReveal{animation:opSceneReveal .55s ease-out forwards}
+@keyframes opSceneReveal{0%{opacity:1}100%{opacity:0}}
+#opening::before{content:'';position:absolute;inset:0 auto 0 0;width:43%;background:linear-gradient(90deg,#F2EFE2 86%,rgba(242,239,226,0));pointer-events:none}
+@media(max-width:760px) and (orientation:portrait){#opening::before{display:none}}
+@media(max-height:500px) and (orientation:landscape){#opening::before{width:47%}}
+@media(max-width:360px){#opening .opMastLabel,#opening .opMastDot{display:none}}

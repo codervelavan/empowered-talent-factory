@@ -51,6 +51,7 @@ const S=new THREE.Scene();S.fog=new THREE.Fog(PAPER,45,190);
 /** Soft contact shadow (radial falloff), shared by every shadow patch. */
 const SHADOW_MAT=(()=>{const c=document.createElement('canvas');c.width=c.height=64;const x=c.getContext('2d')!;const g=x.createRadialGradient(32,32,2,32,32,31);g.addColorStop(0,'rgba(15,43,34,.34)');g.addColorStop(.55,'rgba(15,43,34,.16)');g.addColorStop(1,'rgba(15,43,34,0)');x.fillStyle=g;x.fillRect(0,0,64,64);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;return new THREE.MeshBasicMaterial({map:t,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1})})();
 const C=new THREE.PerspectiveCamera(50,innerWidth/innerHeight,.1,600);
+let openingPrepared=false;
 const CR=new CSS3DRenderer();CR.setSize(innerWidth,innerHeight);CR.domElement.id='c3d';CR.domElement.style.overflow='clip';document.body.insertBefore(CR.domElement,document.getElementById('hud'));const CAMEL=CR.domElement.firstChild!.firstChild as HTMLElement;
 const V=(x?:number,y?:number,z?:number)=>new THREE.Vector3(x,y,z);
 const AREAS:Area[]=[];
@@ -970,6 +971,14 @@ window.FACTORY={
   poseRoute(r,k){const Q=ROUTES[r],u=Math.min(1,Math.max(0,k/(Q.wp.length-1)));Q.pc!.getPoint(u,C.position);Q.lc!.getPoint(u,look)},
   snapshot(){snapP.copy(C.position);snapL.copy(look)},
   poseBack(t){const e=sm(0,1,t);const q=podCam(G.podK);C.position.lerpVectors(snapP,q.p,e);C.position.y+=Math.sin(Math.PI*e)*8;look.lerpVectors(snapL,q.l,e)},
+  renderOpening(scene,camera,overlay=false){
+    if(!openingPrepared){openingPrepared=true;void R.compileAsync(S,C).catch(()=>{/* Normal render remains the fallback. */})}
+    const dpr=quality.pixelRatio();if(R.getPixelRatio()!==dpr)R.setPixelRatio(dpr);
+    const size=R.getSize(new THREE.Vector2());
+    if(size.x!==innerWidth||size.y!==innerHeight){R.setSize(innerWidth,innerHeight,false);CR.setSize(innerWidth,innerHeight)}
+    if(overlay){R.autoClear=false;R.clearDepth();R.render(scene,camera);R.autoClear=true}
+    else{R.setClearColor(PAPER,1);R.render(scene,camera)}
+  },
   render(mode,introS){
     if(innerHeight>0&&!(Math.abs(C.aspect-innerWidth/innerHeight)<=1e-4)){fitExt();R.setPixelRatio(quality.pixelRatio());C.aspect=innerWidth/innerHeight;C.updateProjectionMatrix();R.setSize(innerWidth,innerHeight,false);CR.setSize(innerWidth,innerHeight)}
     const now=performance.now(),dt=Math.min(.1,(now-lastT)/1000);lastT=now;podsTick(mode,dt);
